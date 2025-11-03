@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase";
-import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, query, where, orderBy, limit as firestoreLimit, deleteField } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, query, where, orderBy, limit as firestoreLimit, deleteField, startAfter } from "firebase/firestore";
 import { Player, LeaderboardEntry, DownloadEntry, Category, Platform } from "@/types/database";
 import { calculatePoints } from "@/lib/utils";
 
@@ -1355,7 +1355,8 @@ export const getPlayersByPointsFirestore = async (limit: number = 100): Promise<
 };
 
 /**
- * Backfill points for all existing verified runs that don't have points
+ * Backfill points for all existing verified runs
+ * Recalculates points for all verified runs using the current formula and updates player totals
  * Returns summary of the operation
  */
 export const backfillPointsForAllRunsFirestore = async (): Promise<{
@@ -1374,79 +1375,90 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
   };
 
   try {
-    // Get all verified runs
-    const q = query(
-      collection(db, "leaderboardEntries"),
-      where("verified", "==", true),
-      firestoreLimit(5000) // Get a large batch
-    );
-    const querySnapshot = await getDocs(q);
-
-    // Get all categories and platforms for lookup
+    // Get all categories and platforms for lookup (do this once at the start)
     const categories = await getCategoriesFirestore();
     const platforms = await getPlatformsFirestore();
     const categoryMap = new Map(categories.map(c => [c.id, c.name]));
     const platformMap = new Map(platforms.map(p => [p.id, p.name]));
 
-    // Track runs that need points and player totals
-    const runsToUpdate: { id: string; points: number; playerId: string }[] = [];
-    const playerPointsMap = new Map<string, number>(); // playerId -> total points (recalculated from all runs)
+    // Get all verified runs - use a single query with high limit
+    // Note: Firestore has a limit of 10,000 documents per query, but for most use cases this should be sufficient
+    // If needed, we can implement pagination later for databases with >10k verified runs
+    const q = query(
+      collection(db, "leaderboardEntries"),
+      where("verified", "==", true),
+      firestoreLimit(10000)
+    );
+    const querySnapshot = await getDocs(q);
+    const allRuns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
+    
+    if (querySnapshot.docs.length === 10000) {
+      result.errors.push("Warning: Hit Firestore query limit of 10,000 runs. Some runs may not have been processed. Consider implementing pagination for databases with more than 10,000 verified runs.");
+    }
+
+    // Track unique player IDs
+    const playerIdsSet = new Set<string>();
 
     // Process each run - recalculate ALL runs (even ones with existing points)
-    for (const runDoc of querySnapshot.docs) {
+    const runsToUpdate: { id: string; points: number; playerId: string }[] = [];
+
+    for (const runData of allRuns) {
       try {
-        const runData = runDoc.data() as LeaderboardEntry;
-        
         // Skip obsolete runs - they don't count for points
         if (runData.isObsolete) {
           continue;
         }
 
-        // Recalculate points for all runs with the new formula
+        if (!runData.playerId) {
+          result.errors.push(`Run ${runData.id} has no playerId`);
+          continue;
+        }
+
+        // Recalculate points for all runs with the current formula
         const categoryName = categoryMap.get(runData.category) || "Unknown";
         const platformName = platformMap.get(runData.platform) || "Unknown";
         const points = calculatePoints(runData.time, categoryName, platformName);
         
         runsToUpdate.push({
-          id: runDoc.id,
+          id: runData.id,
           points,
           playerId: runData.playerId,
         });
 
-        // Accumulate points for each player (recalculating totals from scratch)
-        const currentTotal = playerPointsMap.get(runData.playerId) || 0;
-        playerPointsMap.set(runData.playerId, currentTotal + points);
+        // Track player IDs for later recalculation
+        playerIdsSet.add(runData.playerId);
       } catch (error) {
-        result.errors.push(`Error processing run ${runDoc.id}: ${error instanceof Error ? error.message : String(error)}`);
+        result.errors.push(`Error processing run ${runData.id}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
-    // Update all runs
-    for (const run of runsToUpdate) {
-      try {
-        const runDocRef = doc(db, "leaderboardEntries", run.id);
-        await updateDoc(runDocRef, { points: run.points });
-        result.runsUpdated++;
-      } catch (error) {
-        result.errors.push(`Error updating run ${run.id}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    // Get all unique player IDs from all verified runs (not just the ones we updated)
-    const allPlayerIds = new Set<string>();
-    for (const runDoc of querySnapshot.docs) {
-      const runData = runDoc.data() as LeaderboardEntry;
-      if (runData.playerId) {
-        allPlayerIds.add(runData.playerId);
-      }
+    // Update all runs in batches to avoid overwhelming Firestore
+    const batchSize = 100;
+    for (let i = 0; i < runsToUpdate.length; i += batchSize) {
+      const batch = runsToUpdate.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async (run) => {
+          try {
+            const runDocRef = doc(db, "leaderboardEntries", run.id);
+            await updateDoc(runDocRef, { points: run.points });
+            result.runsUpdated++;
+          } catch (error) {
+            result.errors.push(`Error updating run ${run.id}: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        })
+      );
     }
 
     // Recalculate total points for each player from all their verified runs
-    for (const playerId of allPlayerIds) {
+    // This ensures accuracy even if we missed some runs due to pagination
+    const playerIdsArray = Array.from(playerIdsSet);
+    for (const playerId of playerIdsArray) {
       try {
         const success = await recalculatePlayerPointsFirestore(playerId);
         if (success) {
           result.playersUpdated++;
+        } else {
+          result.errors.push(`Failed to recalculate points for player ${playerId}`);
         }
       } catch (error) {
         result.errors.push(`Error recalculating player ${playerId}: ${error instanceof Error ? error.message : String(error)}`);
@@ -1456,6 +1468,7 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
     return result;
   } catch (error) {
     result.errors.push(`Fatal error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error("Backfill fatal error:", error);
     return result;
   }
 };

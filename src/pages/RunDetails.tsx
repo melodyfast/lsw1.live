@@ -141,18 +141,34 @@ const RunDetails = () => {
 
   useEffect(() => {
     if (leftColumnRef.current && detailsCardRef.current) {
-      const resizeObserver = new ResizeObserver(() => {
+      const updateHeight = () => {
         if (leftColumnRef.current && detailsCardRef.current) {
           // Get the height of the entire left column (video + comment)
           const leftColumnHeight = leftColumnRef.current.offsetHeight;
           // Add extra height to make the details panel slightly taller
           detailsCardRef.current.style.height = `${leftColumnHeight + 264}px`;
         }
+      };
+
+      // Initial height calculation
+      updateHeight();
+
+      // Use ResizeObserver to update height when left column changes
+      const resizeObserver = new ResizeObserver(() => {
+        updateHeight();
       });
+      
       resizeObserver.observe(leftColumnRef.current);
-      return () => resizeObserver.disconnect();
+      
+      // Also update on a short delay to handle async content loading
+      const timeoutId = setTimeout(updateHeight, 100);
+      
+      return () => {
+        resizeObserver.disconnect();
+        clearTimeout(timeoutId);
+      };
     }
-  }, [run]);
+  }, [run, isEditing]);
 
   const handleEditClick = () => {
     setIsEditing(true);
@@ -221,6 +237,13 @@ const RunDetails = () => {
         const updatedRun = await getLeaderboardEntryById(runId);
         if (updatedRun) {
           setRun(updatedRun);
+          // Force height recalculation after run data updates
+          setTimeout(() => {
+            if (leftColumnRef.current && detailsCardRef.current) {
+              const leftColumnHeight = leftColumnRef.current.offsetHeight;
+              detailsCardRef.current.style.height = `${leftColumnHeight + 264}px`;
+            }
+          }, 200);
         }
         setIsEditing(false);
       } else {
