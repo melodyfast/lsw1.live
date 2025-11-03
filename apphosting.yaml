@@ -1,16 +1,42 @@
 env:
--   variable: API_URL
+-   variable: VITE_FIREBASE_API_KEY
+    secret: secretIDforAPI
+    availability:
+      -   BUILD
+      -   RUNTIME
+
+-   variable: VITE_FIREBASE_AUTH_DOMAIN
     value: lsw1live.firebaseapp.com
     availability:
       -   BUILD
-
--   variable: STORAGE_BUCKET
-    value: lsw1live.firebasestorage.app
-    availability:
       -   RUNTIME
 
--   variable: API_KEY
-    secret: secretIDforAPI@1
+-   variable: VITE_FIREBASE_PROJECT_ID
+    value: lsw1live
+    availability:
+      -   BUILD
+      -   RUNTIME
 
--   variable: ADMIN_UID
-    secret: adminUID@1
+-   variable: VITE_FIREBASE_STORAGE_BUCKET
+    value: lsw1live.firebasestorage.app
+    availability:
+      -   BUILD
+      -   RUNTIME
+
+-   variable: VITE_FIREBASE_MESSAGING_SENDER_ID
+    value: 893308064741
+    availability:
+      -   BUILD
+      -   RUNTIME
+
+-   variable: VITE_FIREBASE_APP_ID
+    value: 893308064741:web:6f84714b44c1646507950c
+    availability:
+      -   BUILD
+      -   RUNTIME
+
+-   variable: VITE_ADMIN_UID
+    secret: adminUID
+    availability:
+      -   BUILD
+      -   RUNTIME
