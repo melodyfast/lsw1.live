@@ -476,7 +476,12 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
       const points = calculatePoints(runData.time, categoryName, platformName);
       updateData.points = points;
       
+      // Update the document first to mark it as verified, then recalculate points
+      // This ensures the newly verified run is included in the recalculation
+      await updateDoc(runDocRef, updateData);
+      
       // Always recalculate player points to ensure accuracy (handles re-verification correctly)
+      // Now that the run is verified, it will be included in the recalculation
       try {
         await recalculatePlayerPointsFirestore(runData.playerId);
         
@@ -486,6 +491,8 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
             const player2 = await getPlayerByDisplayNameFirestore(runData.player2Name.trim());
             if (player2) {
               await recalculatePlayerPointsFirestore(player2.uid);
+            } else {
+              console.warn(`Player2 "${runData.player2Name}" not found for co-op run ${runId}`);
             }
           } catch (error) {
             console.error("Error recalculating player2 points on verify:", error);
@@ -495,8 +502,14 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
         console.error("Error recalculating player points on verify:", error);
         // Don't fail verification if points recalculation fails
       }
+      
+      return true;
     } else if (!verified && runData.verified) {
-      // When unverifying, recalculate points for all affected players
+      // When unverifying, update the document first, then recalculate points
+      // This ensures the run is marked as unverified before recalculation
+      await updateDoc(runDocRef, updateData);
+      
+      // Recalculate points for all affected players
       // This will subtract the points since the run is no longer verified
       try {
         await recalculatePlayerPointsFirestore(runData.playerId);
@@ -505,6 +518,8 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
             const player2 = await getPlayerByDisplayNameFirestore(runData.player2Name.trim());
             if (player2) {
               await recalculatePlayerPointsFirestore(player2.uid);
+            } else {
+              console.warn(`Player2 "${runData.player2Name}" not found for co-op run ${runId} during unverify`);
             }
           } catch (error) {
             console.error("Error recalculating player2 points on unverify:", error);
@@ -513,9 +528,11 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
       } catch (error) {
         console.error("Error recalculating player points on unverify:", error);
       }
+    } else {
+      // If just changing verified status without recalculation, update the document
+      await updateDoc(runDocRef, updateData);
     }
     
-    await updateDoc(runDocRef, updateData);
     return true;
   } catch (error) {
     return false;

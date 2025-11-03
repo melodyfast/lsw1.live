@@ -114,13 +114,18 @@ const UserSettings = () => {
         throw new Error("No authenticated user found.");
       }
       
-      if (displayName.trim() !== (currentUser.displayName || "")) {
-        await updateProfile(firebaseUser, { displayName: displayName.trim() });
+      const newDisplayName = displayName.trim();
+      const currentDisplayName = currentUser.displayName || "";
+      
+      if (newDisplayName !== currentDisplayName) {
+        await updateProfile(firebaseUser, { displayName: newDisplayName });
+        // Reload the user to refresh auth state and trigger onAuthStateChanged
+        await firebaseUser.reload();
       }
 
       // Update Firestore player profile (creates document if it doesn't exist)
       const success = await updatePlayerProfile(currentUser.uid, { 
-        displayName: displayName.trim(), 
+        displayName: newDisplayName, 
         nameColor,
         email: currentUser.email || email || ""
       });
@@ -129,20 +134,26 @@ const UserSettings = () => {
         throw new Error("Failed to save profile to database.");
       }
 
+      // Refresh the page data to show updated info immediately
+      // Use the updated firebaseUser after reload
+      const updatedUser = auth.currentUser;
+      const player = await getPlayerByUid(currentUser.uid);
+      if (player) {
+        // Update local state with the saved data
+        setDisplayName(player.displayName || newDisplayName);
+        setNameColor(player.nameColor || nameColor);
+      } else if (updatedUser) {
+        // Fallback to Firebase Auth data if Firestore update hasn't propagated yet
+        setDisplayName(updatedUser.displayName || newDisplayName);
+      }
+
       toast({
         title: "Profile Updated",
         description: "Your profile information has been saved.",
       });
-      
-      // Refresh the page data to show updated info
-      const player = await getPlayerByUid(currentUser.uid);
-      if (player) {
-        setDisplayName(player.displayName || displayName.trim());
-        setNameColor(player.nameColor || nameColor);
-      }
 
-      if (displayName.trim()) {
-        fetchUnclaimedRuns(displayName.trim());
+      if (newDisplayName) {
+        fetchUnclaimedRuns(newDisplayName);
       }
     } catch (error: any) {
       toast({
