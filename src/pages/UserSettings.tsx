@@ -95,20 +95,47 @@ const UserSettings = () => {
     e.preventDefault();
     if (!currentUser) return;
 
+    // Validate displayName
+    if (!displayName || !displayName.trim()) {
+      toast({
+        title: "Invalid Username",
+        description: "Please enter a username.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      if (displayName !== (currentUser.displayName || "")) {
-        await updateProfile(currentUser, { displayName });
+      // Update Firebase Auth profile if displayName changed
+      if (displayName.trim() !== (currentUser.displayName || "")) {
+        await updateProfile(currentUser, { displayName: displayName.trim() });
       }
 
-      await updatePlayerProfile(currentUser.uid, { displayName, nameColor });
+      // Update Firestore player profile (creates document if it doesn't exist)
+      const success = await updatePlayerProfile(currentUser.uid, { 
+        displayName: displayName.trim(), 
+        nameColor,
+        email: currentUser.email || email || ""
+      });
+
+      if (!success) {
+        throw new Error("Failed to save profile to database.");
+      }
 
       toast({
         title: "Profile Updated",
-          description: "Your profile information has been saved.",
-        });
+        description: "Your profile information has been saved.",
+      });
       
-      if (displayName) {
-        fetchUnclaimedRuns(displayName);
+      // Refresh the page data to show updated info
+      const player = await getPlayerByUid(currentUser.uid);
+      if (player) {
+        setDisplayName(player.displayName || displayName.trim());
+        setNameColor(player.nameColor || nameColor);
+      }
+
+      if (displayName.trim()) {
+        fetchUnclaimedRuns(displayName.trim());
       }
     } catch (error: any) {
       toast({
@@ -278,8 +305,13 @@ const UserSettings = () => {
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Enter your username"
                   className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                  required
                 />
+                <p className="text-sm text-[hsl(222,15%,60%)] mt-1">
+                  Choose a username that will be displayed on leaderboards and your profile.
+                </p>
               </div>
               <div>
                 <Label htmlFor="nameColor">Name Color (Hex Code)</Label>

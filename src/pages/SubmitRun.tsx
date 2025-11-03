@@ -50,15 +50,10 @@ const SubmitRun = () => {
   }, []);
 
   // Update playerName when currentUser loads (if field is still empty)
-  // For non-admins, always set to current user's name and lock it
   useEffect(() => {
     if (currentUser?.displayName) {
       setFormData(prev => {
-        // If not admin, always lock to current user's name
-        if (!currentUser.isAdmin) {
-          return { ...prev, playerName: currentUser.displayName || "" };
-        }
-        // For admins, only update if the field is empty or still has the old email-based default
+        // Only update if the field is empty or still has the old email-based default
         if (!prev.playerName || prev.playerName === currentUser.email?.split('@')[0]) {
           return { ...prev, playerName: currentUser.displayName || "" };
         }
@@ -69,10 +64,6 @@ const SubmitRun = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    // Prevent non-admins from changing player name
-    if (name === "playerName" && !currentUser?.isAdmin) {
-      return;
-    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -99,21 +90,6 @@ const SubmitRun = () => {
         variant: "destructive",
       });
       return;
-    }
-
-    // For non-admin users, ensure they can only submit for themselves
-    if (!currentUser.isAdmin) {
-      const currentUserDisplayName = currentUser.displayName || currentUser.email?.split('@')[0] || "";
-      if (formData.playerName.trim() !== currentUserDisplayName) {
-        toast({
-          title: "Invalid Player Name",
-          description: "You can only submit runs for yourself. Please use your own player name.",
-          variant: "destructive",
-        });
-        // Reset to current user's name
-        setFormData(prev => ({ ...prev, playerName: currentUserDisplayName }));
-        return;
-      }
     }
 
     if (!formData.category || !formData.platform || !formData.runType || !formData.time) {
@@ -281,15 +257,8 @@ const SubmitRun = () => {
                       onChange={handleChange}
                       placeholder="Enter your username"
                       required
-                      disabled={!currentUser?.isAdmin}
                       className="bg-[hsl(240,21%,18%)] border-[hsl(235,13%,30%)] h-12 text-base hover:border-[hsl(var(--mocha-mauve))] transition-colors"
                     />
-                    {!currentUser?.isAdmin && (
-                      <p className="text-sm text-[hsl(222,15%,60%)] mt-2 flex items-center gap-1">
-                        <CheckCircle className="h-4 w-4" />
-                        You can only submit runs for yourself
-                      </p>
-                    )}
                   </div>
                   <div>
                     <Label htmlFor="time" className="text-base font-semibold mb-2">Completion Time *</Label>

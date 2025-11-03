@@ -27,7 +27,7 @@ export function LeaderboardTable({ data, platforms = [], categories = [] }: Lead
         <TableHeader>
           <TableRow className="border-b-2 border-[hsl(235,13%,30%)] hover:bg-transparent">
             <TableHead className="py-5 px-6 text-left text-lg font-semibold text-[hsl(220,17%,92%)]">Rank</TableHead>
-            <TableHead className="py-5 px-6 text-left text-lg font-semibold text-[hsl(220,17%,92%)]">Player</TableHead>
+            <TableHead className="py-5 px-6 text-left text-lg font-semibold text-[hsl(220,17%,92%)] min-w-[280px] w-[20%]">Player</TableHead>
             <TableHead className="py-5 px-6 text-left text-lg font-semibold text-[hsl(220,17%,92%)]">Time</TableHead>
             <TableHead className="py-5 px-6 text-left text-lg font-semibold text-[hsl(220,17%,92%)]">Date</TableHead>
             <TableHead className="py-5 px-6 text-left text-lg font-semibold text-[hsl(220,17%,92%)]">Platform</TableHead>
@@ -85,26 +85,28 @@ export function LeaderboardTable({ data, platforms = [], categories = [] }: Lead
                   </div>
                 </Link>
               </TableCell>
-              <TableCell className="py-5 px-6">
-                <Link 
-                  to={`/player/${entry.playerId}`} 
-                  className="hover:opacity-80 transition-all group-hover:scale-105 inline-block"
-                  style={{ color: entry.nameColor || '#cba6f7' }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <span className="font-semibold text-lg">{entry.playerName}</span>
-                </Link>
-                {entry.player2Name && (
-                  <>
-                    <span className="text-[hsl(222,15%,60%)] mx-2"> & </span>
-                    <span 
-                      className="font-semibold text-lg"
-                      style={{ color: entry.player2Color || '#cba6f7' }}
-                    >
-                      {entry.player2Name}
-                    </span>
-                  </>
-                )}
+              <TableCell className="py-5 px-6 min-w-[280px]">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <Link 
+                    to={`/player/${entry.playerId}`} 
+                    className="hover:opacity-80 transition-all group-hover:scale-105 inline-block"
+                    style={{ color: entry.nameColor || '#cba6f7' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="font-semibold text-lg whitespace-nowrap">{entry.playerName}</span>
+                  </Link>
+                  {entry.player2Name && (
+                    <>
+                      <span className="text-[hsl(222,15%,60%)] text-base"> & </span>
+                      <span 
+                        className="font-semibold text-lg whitespace-nowrap"
+                        style={{ color: entry.player2Color || '#cba6f7' }}
+                      >
+                        {entry.player2Name}
+                      </span>
+                    </>
+                  )}
+                </div>
               </TableCell>
               <TableCell className="py-5 px-6">
                 <Link to={`/run/${entry.id}`} className="hover:text-[#cba6f7] transition-all group-hover:scale-105 inline-block">
