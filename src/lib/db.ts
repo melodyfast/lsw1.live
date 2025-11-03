@@ -5,7 +5,7 @@ import {
   getLeaderboardEntryByIdFirestore,
   addLeaderboardEntryFirestore,
   getPlayerByUidFirestore,
-  getPlayerByUsernameFirestore,
+  getPlayerByDisplayNameFirestore,
   createPlayerFirestore,
   updatePlayerProfileFirestore,
   getRecentRunsFirestore,
@@ -122,7 +122,7 @@ export const getLeaderboardEntries = getLeaderboardEntriesFirestore;
 export const getLeaderboardEntryById = getLeaderboardEntryByIdFirestore;
 export const addLeaderboardEntry = addLeaderboardEntryFirestore;
 export const getPlayerByUid = getPlayerByUidFirestore;
-export const getPlayerByUsername = getPlayerByUsernameFirestore;
+export const getPlayerByDisplayName = getPlayerByDisplayNameFirestore;
 export const createPlayer = createPlayerFirestore;
 export const updatePlayerProfile = updatePlayerProfileFirestore;
 export const getRecentRuns = getRecentRunsFirestore;

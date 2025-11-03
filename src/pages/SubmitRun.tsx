@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Upload, Gamepad2, Timer, User, Users, FileText, Sparkles, CheckCircle } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
-import { addLeaderboardEntry, getCategories, getPlatforms, runTypes, getPlayerByUsername } from "@/lib/db";
+import { addLeaderboardEntry, getCategories, getPlatforms, runTypes, getPlayerByDisplayName } from "@/lib/db";
 import { useNavigate } from "react-router-dom";
 
 const SubmitRun = () => {
@@ -135,7 +135,7 @@ const SubmitRun = () => {
       
       // If admin is submitting for a different player, look up that player
       if (currentUser.isAdmin && formData.playerName.trim() !== (currentUser.displayName || currentUser.email?.split('@')[0] || "")) {
-        const targetPlayer = await getPlayerByUsername(formData.playerName.trim());
+        const targetPlayer = await getPlayerByDisplayName(formData.playerName.trim());
         if (targetPlayer) {
           // Player exists, use their UID
           playerId = targetPlayer.uid;

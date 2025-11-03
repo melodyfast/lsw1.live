@@ -17,7 +17,7 @@ import {
   updateRunVerificationStatus, 
   deleteLeaderboardEntry,
   addLeaderboardEntry,
-  getPlayerByUsername,
+  getPlayerByDisplayName,
   getPlayerByUid,
   setPlayerAdminStatus,
   getDownloadEntries,
@@ -101,7 +101,7 @@ const Admin = () => {
   const [hasFetchedData, setHasFetchedData] = useState(false);
   
   const [adminUserInput, setAdminUserInput] = useState("");
-  const [adminSearchType, setAdminSearchType] = useState<"username" | "uid">("username");
+  const [adminSearchType, setAdminSearchType] = useState<"displayName" | "uid">("displayName");
   const [settingAdmin, setSettingAdmin] = useState(false);
   const [foundPlayer, setFoundPlayer] = useState<{ uid: string; displayName: string; email: string; isAdmin: boolean } | null>(null);
   const [searchingPlayer, setSearchingPlayer] = useState(false);
@@ -678,7 +678,7 @@ const Admin = () => {
     if (!adminUserInput.trim()) {
       toast({
         title: "Error",
-        description: "Please enter a username or UID.",
+        description: "Please enter a display name or UID.",
         variant: "destructive",
       });
       return;
@@ -689,8 +689,8 @@ const Admin = () => {
 
     try {
       let player = null;
-      if (adminSearchType === "username") {
-        player = await getPlayerByUsername(adminUserInput.trim());
+      if (adminSearchType === "displayName") {
+        player = await getPlayerByDisplayName(adminUserInput.trim());
       } else {
         player = await getPlayerByUid(adminUserInput.trim());
       }
@@ -705,7 +705,7 @@ const Admin = () => {
       } else {
         toast({
           title: "Player Not Found",
-          description: `No player found with ${adminSearchType === "username" ? "username" : "UID"}: ${adminUserInput.trim()}`,
+          description: `No player found with ${adminSearchType === "displayName" ? "display name" : "UID"}: ${adminUserInput.trim()}`,
           variant: "destructive",
         });
       }
@@ -771,12 +771,12 @@ const Admin = () => {
     
     setAddingManualRun(true);
     try {
-      // Look up the player by username (if provided) or by playerName
+      // Look up the player by display name (if provided) or by playerName
       let playerId: string | null = null;
       
-      // Try to find player by username first (if provided)
+      // Try to find player by display name first (if provided)
       if (manualRun.playerUsername.trim()) {
-        const player = await getPlayerByUsername(manualRun.playerUsername.trim());
+        const player = await getPlayerByDisplayName(manualRun.playerUsername.trim());
         if (player) {
           playerId = player.uid;
           // Use the player's displayName from database if found
@@ -789,9 +789,9 @@ const Admin = () => {
         }
       }
       
-      // If not found by username, try to find by playerName
+      // If not found by display name, try to find by playerName
       if (!playerId && manualRun.playerName.trim()) {
-        const player = await getPlayerByUsername(manualRun.playerName.trim());
+        const player = await getPlayerByDisplayName(manualRun.playerName.trim());
         if (player) {
           playerId = player.uid;
         }
@@ -1668,7 +1668,7 @@ const Admin = () => {
               <div className="flex gap-4 items-end">
                 <div className="flex-1">
                   <Label htmlFor="adminSearchType">Search By</Label>
-                  <Select value={adminSearchType} onValueChange={(value: "username" | "uid") => {
+                  <Select value={adminSearchType} onValueChange={(value: "displayName" | "uid") => {
                     setAdminSearchType(value);
                     setFoundPlayer(null);
                     setAdminUserInput("");
@@ -1677,13 +1677,13 @@ const Admin = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="username">Username</SelectItem>
+                      <SelectItem value="displayName">Display Name</SelectItem>
                       <SelectItem value="uid">UID</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="flex-1">
-                  <Label htmlFor="adminUserInput">{adminSearchType === "username" ? "Username" : "UID"}</Label>
+                  <Label htmlFor="adminUserInput">{adminSearchType === "displayName" ? "Display Name" : "UID"}</Label>
                   <Input
                     id="adminUserInput"
                     value={adminUserInput}
@@ -1694,7 +1694,7 @@ const Admin = () => {
                         handleSearchPlayer();
                       }
                     }}
-                    placeholder={adminSearchType === "username" ? "Enter username" : "Enter UID"}
+                    placeholder={adminSearchType === "displayName" ? "Enter display name" : "Enter UID"}
                     className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                   />
                 </div>

@@ -141,18 +141,18 @@ export const getPlayerByUidFirestore = async (uid: string): Promise<Player | nul
   }
 };
 
-export const getPlayerByUsernameFirestore = async (username: string): Promise<Player | null> => {
+export const getPlayerByDisplayNameFirestore = async (displayName: string): Promise<Player | null> => {
   if (!db) return null;
   try {
     const q = query(collection(db, "players"));
     const querySnapshot = await getDocs(q);
     
-    const normalizedUsername = username.trim().toLowerCase();
+    const normalizedDisplayName = displayName.trim().toLowerCase();
     const player = querySnapshot.docs.find(doc => {
       const data = doc.data();
-      const displayName = (data.displayName || "").toLowerCase();
+      const playerDisplayName = (data.displayName || "").toLowerCase();
       const email = (data.email || "").toLowerCase();
-      return displayName === normalizedUsername || email.split('@')[0] === normalizedUsername;
+      return playerDisplayName === normalizedDisplayName || email.split('@')[0] === normalizedDisplayName;
     });
     
     if (player) {
@@ -416,7 +416,7 @@ export const updateLeaderboardEntryFirestore = async (runId: string, data: Parti
       // Recalculate player's total points
       await recalculatePlayerPointsFirestore(runData.playerId);
       if (runData.player2Name && runData.runType === 'co-op') {
-        const player2 = await getPlayerByUsernameFirestore(runData.player2Name);
+        const player2 = await getPlayerByDisplayNameFirestore(runData.player2Name);
         if (player2) {
           await recalculatePlayerPointsFirestore(player2.uid);
         }
@@ -483,7 +483,7 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
           await updatePlayerPointsFirestore(runData.playerId, pointsPerPlayer);
           
           // Update player 2's total points (if they have an account)
-          const player2 = await getPlayerByUsernameFirestore(runData.player2Name);
+          const player2 = await getPlayerByDisplayNameFirestore(runData.player2Name);
           if (player2) {
             await updatePlayerPointsFirestore(player2.uid, pointsPerPlayer);
           }
@@ -497,7 +497,7 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
       // This will subtract the points since the run is no longer verified
       await recalculatePlayerPointsFirestore(runData.playerId);
       if (runData.runType === 'co-op' && runData.player2Name) {
-        const player2 = await getPlayerByUsernameFirestore(runData.player2Name);
+        const player2 = await getPlayerByDisplayNameFirestore(runData.player2Name);
         if (player2) {
           await recalculatePlayerPointsFirestore(player2.uid);
         }
@@ -540,13 +540,29 @@ export const updatePlayerPointsFirestore = async (playerId: string, pointsToAdd:
 export const recalculatePlayerPointsFirestore = async (playerId: string): Promise<boolean> => {
   if (!db) return false;
   try {
-    // Get all verified runs for this player
+    // Get player's displayName to check for co-op runs where they are player2
+    const playerDocRef = doc(db, "players", playerId);
+    const playerDocSnap = await getDoc(playerDocRef);
+    const playerDisplayName = playerDocSnap.exists() 
+      ? (playerDocSnap.data() as Player).displayName 
+      : null;
+    
+    // Get all verified runs where this player is player1
     const q = query(
       collection(db, "leaderboardEntries"),
       where("playerId", "==", playerId),
       where("verified", "==", true)
     );
     const querySnapshot = await getDocs(q);
+    
+    // Get all verified co-op runs to check if player is player2
+    // We need to filter these since we can't query by player2Name directly
+    const coOpRunsQuery = query(
+      collection(db, "leaderboardEntries"),
+      where("verified", "==", true),
+      where("runType", "==", "co-op")
+    );
+    const coOpRunsSnapshot = await getDocs(coOpRunsQuery);
     
     // Get all categories and platforms for lookup
     const categories = await getCategoriesFirestore();
@@ -556,8 +572,9 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
     
     let totalPoints = 0;
     const runsToUpdate: { id: string; points: number }[] = [];
+    const processedRunIds = new Set<string>();
     
-    // Calculate points for each run
+    // Calculate points for runs where player is player1
     for (const runDoc of querySnapshot.docs) {
       const runData = runDoc.data() as LeaderboardEntry;
       
@@ -572,12 +589,44 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
       // Recalculate points for all runs with the new formula
       const points = calculatePoints(runData.time, categoryName, platformName);
       runsToUpdate.push({ id: runDoc.id, points });
+      processedRunIds.add(runDoc.id);
       
       // For co-op runs, only count half points for this player (the other half goes to player2)
       if (runData.runType === 'co-op' && runData.player2Name) {
         totalPoints += Math.round(points / 2);
       } else {
         totalPoints += points;
+      }
+    }
+    
+    // Calculate points for co-op runs where player is player2
+    if (playerDisplayName) {
+      for (const runDoc of coOpRunsSnapshot.docs) {
+        // Skip if we already processed this run (player is player1)
+        if (processedRunIds.has(runDoc.id)) {
+          continue;
+        }
+        
+        const runData = runDoc.data() as LeaderboardEntry;
+        
+        // Skip obsolete runs - they don't count for points
+        if (runData.isObsolete) {
+          continue;
+        }
+        
+        // Check if this player is player2 in this co-op run
+        // Compare player2Name with player's displayName (case-insensitive)
+        if (runData.player2Name && runData.player2Name.trim().toLowerCase() === playerDisplayName.trim().toLowerCase()) {
+          const categoryName = categoryMap.get(runData.category) || "Unknown";
+          const platformName = platformMap.get(runData.platform) || "Unknown";
+          
+          // Recalculate points for the run
+          const points = calculatePoints(runData.time, categoryName, platformName);
+          runsToUpdate.push({ id: runDoc.id, points });
+          
+          // Player2 gets half points
+          totalPoints += Math.round(points / 2);
+        }
       }
     }
     
@@ -593,9 +642,6 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
     }
     
     // Update or create player's total points
-    const playerDocRef = doc(db, "players", playerId);
-    const playerDocSnap = await getDoc(playerDocRef);
-    
     if (playerDocSnap.exists()) {
       await updateDoc(playerDocRef, { totalPoints });
     } else {
@@ -1315,8 +1361,8 @@ export const getPlayersByPointsFirestore = async (limit: number = 100): Promise<
       
       // For co-op runs, also add points to player2
       if (runData.runType === 'co-op' && runData.player2Name) {
-        // Look up player2 by name
-        const player2 = await getPlayerByUsernameFirestore(runData.player2Name);
+        // Look up player2 by display name
+        const player2 = await getPlayerByDisplayNameFirestore(runData.player2Name);
         const player2Id = player2?.uid || `unlinked_${runData.player2Name.trim().toLowerCase()}`;
         const isPlayer2Unlinked = !player2 || player2Id.startsWith("unlinked_");
         const player2AggregationKey = isPlayer2Unlinked 

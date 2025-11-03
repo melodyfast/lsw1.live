@@ -98,8 +98,8 @@ const UserSettings = () => {
     // Validate displayName
     if (!displayName || !displayName.trim()) {
       toast({
-        title: "Invalid Username",
-        description: "Please enter a username.",
+        title: "Invalid Display Name",
+        description: "Please enter a display name.",
         variant: "destructive",
       });
       return;
@@ -299,18 +299,18 @@ const UserSettings = () => {
           <CardContent>
             <form onSubmit={handleUpdateProfile} className="space-y-4">
               <div>
-                <Label htmlFor="displayName">Username</Label>
+                <Label htmlFor="displayName">Display Name</Label>
                 <Input
                   id="displayName"
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Enter your username"
+                  placeholder="Enter your display name"
                   className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                   required
                 />
                 <p className="text-sm text-[hsl(222,15%,60%)] mt-1">
-                  Choose a username that will be displayed on leaderboards and your profile.
+                  Choose a display name that will be displayed on leaderboards and your profile.
                 </p>
               </div>
               <div>
