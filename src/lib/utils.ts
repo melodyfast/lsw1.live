@@ -71,9 +71,17 @@ export function formatTime(timeString: string): string {
       const seconds = (parts[2] || '00').trim();
       return `${minutes}:${seconds}`;
     }
+    
+    // If hours is 1-9, remove leading zero and return H:MM:SS
+    // If hours is 10+, keep as is (though this won't happen in practice)
+    if (hours >= 1 && hours < 10) {
+      const minutes = (parts[1] || '00').trim();
+      const seconds = (parts[2] || '00').trim();
+      return `${hours}:${minutes}:${seconds}`;
+    }
   }
   
-  // Otherwise return as-is
+  // Otherwise return as-is (for 10+ hours, though this won't happen)
   return trimmed;
 }
 
