@@ -45,8 +45,8 @@ const Live = () => {
         {/* Stream and Chat Container */}
         <div className={`grid grid-cols-1 lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_450px] gap-6 transition-all duration-1000 delay-500 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           {/* Stream Player */}
-          <div className="w-full h-[600px] lg:h-[calc(100vh-200px)] min-h-[400px]">
-            <div className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] rounded-lg overflow-hidden shadow-2xl relative h-full">
+          <div className="w-full">
+            <div className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] rounded-lg overflow-hidden shadow-2xl relative" style={{ paddingBottom: '56.25%' /* 16:9 Aspect Ratio */ }}>
               {/* Streaming indicator */}
               <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-black/70 backdrop-blur-sm rounded-full px-3 py-1.5 border border-[#89b4fa]/30 pointer-events-none">
                 <div className="relative">
@@ -59,12 +59,10 @@ const Live = () => {
               {parentDomain && (
                 <iframe
                   src={`https://player.twitch.tv/?channel=${channel}&parent=${parentDomain}&autoplay=false&muted=false`}
-                  height="100%"
-                  width="100%"
-                  allowFullScreen
-                  className="w-full h-full"
+                  className="absolute top-0 left-0 w-full h-full"
                   title={`${channel} Twitch Stream`}
-                  style={{ border: 'none', display: 'block' }}
+                  style={{ border: 'none' }}
+                  allowFullScreen
                   allow="autoplay; fullscreen"
                 />
               )}
