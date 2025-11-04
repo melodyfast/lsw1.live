@@ -6,13 +6,15 @@ import { Card, CardContent } from '@/components/ui/card';
 
 const Live = () => {
   const [isLoaded, setIsLoaded] = useState(false);
-  // Get the current hostname for the 'parent' parameter required by Twitch embeds
-  // Twitch requires the parent parameter to match the domain where the embed is hosted
-  const parentDomain = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+  const [parentDomain, setParentDomain] = useState<string>('localhost');
   const channel = 'lsw1live';
 
   useEffect(() => {
-    // Trigger animations after component mounts
+    // Get the current hostname for the 'parent' parameter required by Twitch embeds
+    // Twitch requires the parent parameter to match the domain where the embed is hosted
+    if (typeof window !== 'undefined') {
+      setParentDomain(window.location.hostname);
+    }
     setIsLoaded(true);
   }, []);
 
@@ -25,7 +27,7 @@ const Live = () => {
             <div className={`p-2 rounded-xl bg-gradient-to-br from-[#89b4fa] to-[#74c7ec] shadow-lg transition-all duration-1000 ${isLoaded ? 'rotate-0 scale-100' : 'rotate-180 scale-0'}`}>
               <Radio className="h-6 w-6 text-[hsl(240,21%,15%)]" />
             </div>
-            <h1 className={`text-3xl md:text-4xl font-bold bg-gradient-to-r from-[#89b4fa] via-[#74c7ec] to-[#89dceb] bg-clip-text text-transparent animate-gradient bg-[length:200%_auto] transition-all duration-1000 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
+            <h1 className={`text-2xl md:text-3xl font-bold bg-gradient-to-r from-[#89b4fa] via-[#74c7ec] to-[#89dceb] bg-clip-text text-transparent transition-all duration-1000 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}>
               Live Stream
             </h1>
           </div>
@@ -43,8 +45,8 @@ const Live = () => {
         {/* Stream and Chat Container */}
         <div className={`grid grid-cols-1 lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_450px] gap-6 transition-all duration-1000 delay-500 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           {/* Stream Player */}
-          <div className="w-full h-[600px] lg:h-[calc(100vh-200px)] min-h-[400px] animate-fade-in-up">
-            <div className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] rounded-lg overflow-hidden shadow-2xl group hover:shadow-[#89b4fa]/20 transition-all duration-500 hover:scale-[1.01] relative h-full">
+          <div className="w-full h-[600px] lg:h-[calc(100vh-200px)] min-h-[400px]">
+            <div className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] rounded-lg overflow-hidden shadow-2xl relative h-full">
               {/* Streaming indicator */}
               <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-black/70 backdrop-blur-sm rounded-full px-3 py-1.5 border border-[#89b4fa]/30 pointer-events-none">
                 <div className="relative">
@@ -54,47 +56,49 @@ const Live = () => {
                 <span className="text-xs font-semibold text-white">LIVE</span>
               </div>
 
-              <iframe
-                src={`https://player.twitch.tv/?channel=${channel}&parent=${parentDomain}&autoplay=false&muted=false`}
-                height="100%"
-                width="100%"
-                allowFullScreen
-                className="w-full h-full block"
-                title={`${channel} Twitch Stream`}
-                style={{ border: 'none' }}
-                frameBorder="0"
-                scrolling="no"
-              ></iframe>
+              {parentDomain && (
+                <iframe
+                  src={`https://player.twitch.tv/?channel=${channel}&parent=${parentDomain}&autoplay=false&muted=false`}
+                  height="100%"
+                  width="100%"
+                  allowFullScreen
+                  className="w-full h-full"
+                  title={`${channel} Twitch Stream`}
+                  style={{ border: 'none', display: 'block' }}
+                  allow="autoplay; fullscreen"
+                />
+              )}
             </div>
           </div>
 
           {/* Chat */}
-          <div className="w-full h-[400px] lg:h-[calc(100vh-200px)] min-h-[400px] hidden lg:block animate-fade-in-up delay-300">
-            <div className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] rounded-lg overflow-hidden shadow-2xl group hover:shadow-[#89b4fa]/20 transition-all duration-500 hover:scale-[1.01] relative h-full">
+          <div className="w-full h-[400px] lg:h-[calc(100vh-200px)] min-h-[400px] hidden lg:block">
+            <div className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] rounded-lg overflow-hidden shadow-2xl relative h-full">
               {/* Chat header indicator */}
               <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-black/70 backdrop-blur-sm rounded-full px-3 py-1.5 border border-[#74c7ec]/30 pointer-events-none">
                 <Users className="h-4 w-4 text-[#74c7ec]" />
                 <span className="text-xs font-semibold text-white">Chat</span>
               </div>
 
-              <iframe
-                src={`https://www.twitch.tv/embed/${channel}/chat?parent=${parentDomain}&darkpopout`}
-                height="100%"
-                width="100%"
-                className="w-full h-full block"
-                title={`${channel} Twitch Chat`}
-                style={{ border: 'none' }}
-                frameBorder="0"
-                scrolling="no"
-              ></iframe>
+              {parentDomain && (
+                <iframe
+                  src={`https://www.twitch.tv/embed/${channel}/chat?parent=${parentDomain}&darkpopout`}
+                  height="100%"
+                  width="100%"
+                  className="w-full h-full"
+                  title={`${channel} Twitch Chat`}
+                  style={{ border: 'none', display: 'block' }}
+                  allow="autoplay; fullscreen"
+                />
+              )}
             </div>
           </div>
 
           {/* Mobile Chat Indicator */}
-          <div className="lg:hidden w-full animate-fade-in delay-500">
+          <div className="lg:hidden w-full">
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardContent className="p-6 text-center">
-                <Users className="h-12 w-12 mx-auto mb-4 text-[#74c7ec] animate-bounce-slow" />
+                <Users className="h-12 w-12 mx-auto mb-4 text-[#74c7ec]" />
                 <p className="text-[hsl(222,15%,70%)]">
                   Chat is available on larger screens. View the stream on desktop to see the chat!
                 </p>
@@ -103,63 +107,6 @@ const Live = () => {
           </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes fade-in-up {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fade-in-up {
-          animation: fade-in-up 0.8s ease-out forwards;
-        }
-        .delay-300 {
-          animation-delay: 0.3s;
-          opacity: 0;
-        }
-        .delay-500 {
-          animation-delay: 0.5s;
-          opacity: 0;
-        }
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.8s ease-out forwards;
-        }
-        @keyframes gradient {
-          0%, 100% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-        }
-        .animate-gradient {
-          animation: gradient 3s ease infinite;
-        }
-        @keyframes bounce-slow {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-10px);
-          }
-        }
-        .animate-bounce-slow {
-          animation: bounce-slow 2s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 };
