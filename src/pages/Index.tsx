@@ -93,7 +93,7 @@ const Index = () => {
                 <Button size="lg" className="bg-gradient-to-r from-[#cba6f7] via-[#f5c2e7] to-[#cba6f7] hover:from-[#f5c2e7] hover:via-[#cba6f7] hover:to-[#f5c2e7] text-[hsl(240,21%,15%)] font-bold transition-all duration-300 hover:scale-110 hover:shadow-xl hover:shadow-[#cba6f7]/50 animate-gradient bg-[length:200%_auto]" asChild>
                   <Link to="/submit">Submit Run</Link>
                 </Button>
-                <Button size="lg" variant="outline" className="text-[hsl(220,17%,92%)] border-[hsl(235,13%,30%)] bg-transparent hover:bg-[#89b4fa]/10 hover:border-[#89b4fa] transition-all duration-300 hover:scale-110 hover:shadow-xl" asChild>
+                <Button size="lg" variant="outline" className="text-[hsl(220,17%,92%)] hover:text-[hsl(220,17%,92%)] border-[hsl(235,13%,30%)] bg-transparent hover:bg-[#89b4fa]/10 hover:border-[#89b4fa] transition-all duration-300 hover:scale-110 hover:shadow-xl" asChild>
                   <Link to="/leaderboards">View All Leaderboards</Link>
                 </Button>
               </div>

@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, Gamepad2, Timer, User, Users, FileText, Sparkles, CheckCircle, Calendar } from "lucide-react";
+import { Upload, Gamepad2, Timer, User, Users, FileText, Sparkles, CheckCircle, Calendar, ChevronDown, ChevronUp } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
 import { addLeaderboardEntry, getCategories, getPlatforms, runTypes, getPlayerByDisplayName } from "@/lib/db";
@@ -32,6 +33,7 @@ const SubmitRun = () => {
   });
   
   const [loading, setLoading] = useState(false);
+  const [guidelinesOpen, setGuidelinesOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -202,18 +204,18 @@ const SubmitRun = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[hsl(240,21%,15%)] to-[hsl(235,19%,13%)] text-[hsl(220,17%,92%)] py-10">
+    <div className="min-h-screen bg-gradient-to-b from-[hsl(240,21%,15%)] to-[hsl(235,19%,13%)] text-[hsl(220,17%,92%)] py-6">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="text-center mb-12 animate-fade-in">
-          <div className="flex items-center justify-center gap-4 mb-6">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2] shadow-lg">
-              <Upload className="h-10 w-10 text-[hsl(240,21%,15%)]" />
+        <div className="text-center mb-6 animate-fade-in">
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2] shadow-lg">
+              <Upload className="h-8 w-8 text-[hsl(240,21%,15%)]" />
             </div>
-            <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-[#cba6f7] via-[#f5c2e7] to-[#cba6f7] bg-clip-text text-transparent">
+            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#cba6f7] via-[#f5c2e7] to-[#cba6f7] bg-clip-text text-transparent">
               Submit Your Run
             </h1>
           </div>
-          <p className="text-xl text-[hsl(222,15%,70%)] max-w-3xl mx-auto">
+          <p className="text-lg text-[hsl(222,15%,70%)] max-w-3xl mx-auto">
             Share your PB with the community. Make sure to follow our submission guidelines!
           </p>
         </div>
@@ -234,23 +236,25 @@ const SubmitRun = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-8 max-w-4xl mx-auto">
-            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
-              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)] py-5">
-                <CardTitle className="flex items-center gap-3 text-2xl">
-                  <div className="p-2 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                    <Timer className="h-6 w-6 text-[hsl(240,21%,15%)]" />
-                  </div>
-                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f5c2e7] bg-clip-text text-transparent">
-                    Run Details
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-8">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
+            {/* Main Form */}
+            <div className="lg:col-span-2">
+              <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
+                <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)] py-4">
+                  <CardTitle className="flex items-center gap-2 text-xl">
+                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+                      <Timer className="h-5 w-5 text-[hsl(240,21%,15%)]" />
+                    </div>
+                    <span className="bg-gradient-to-r from-[#cba6f7] to-[#f5c2e7] bg-clip-text text-transparent">
+                      Run Details
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="playerName" className="text-base font-semibold mb-2">Player 1 Name *</Label>
+                    <Label htmlFor="playerName" className="text-sm font-semibold mb-1.5">Player 1 Name *</Label>
                     <Input
                       id="playerName"
                       name="playerName"
@@ -258,13 +262,13 @@ const SubmitRun = () => {
                       onChange={handleChange}
                       placeholder="Enter your username"
                       required
-                      className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-12 text-base hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300"
+                      className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-10 text-sm hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="time" className="text-base font-semibold mb-2">Completion Time *</Label>
+                    <Label htmlFor="time" className="text-sm font-semibold mb-1.5">Completion Time *</Label>
                     <div className="relative">
-                      <Timer className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-[hsl(222,15%,60%)]" />
+                      <Timer className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[hsl(222,15%,60%)]" />
                       <Input
                         id="time"
                         name="time"
@@ -272,70 +276,40 @@ const SubmitRun = () => {
                         onChange={handleChange}
                         placeholder="HH:MM:SS"
                         required
-                        className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-12 text-base pl-11 hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300"
+                        className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-10 text-sm pl-10 hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300"
                       />
                     </div>
                   </div>
                 </div>
-                <div>
-                  <Label htmlFor="date" className="text-base font-semibold mb-2">Run Date *</Label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-[hsl(222,15%,60%)]" />
-                    <Input
-                      id="date"
-                      name="date"
-                      type="date"
-                      value={formData.date}
-                      onChange={handleChange}
-                      required
-                      max={new Date().toISOString().split('T')[0]}
-                      className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-12 text-base pl-11 hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300"
-                    />
-                  </div>
-                </div>
-                {formData.runType === 'co-op' && (
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="player2Name" className="text-base font-semibold mb-2">Player 2 Name *</Label>
-                    <Input
-                      id="player2Name"
-                      name="player2Name"
-                      value={formData.player2Name}
-                      onChange={handleChange}
-                      placeholder="Enter second player's username"
-                      required
-                      className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-12 text-base hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300"
-                    />
+                    <Label htmlFor="date" className="text-sm font-semibold mb-1.5">Run Date *</Label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[hsl(222,15%,60%)]" />
+                      <Input
+                        id="date"
+                        name="date"
+                        type="date"
+                        value={formData.date}
+                        onChange={handleChange}
+                        required
+                        max={new Date().toISOString().split('T')[0]}
+                        className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-10 text-sm pl-10 hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300"
+                      />
+                    </div>
                   </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <Label htmlFor="category" className="text-base font-semibold mb-2">Category *</Label>
-                    <Select value={formData.category} onValueChange={(value) => handleSelectChange("category", value)}>
-                      <SelectTrigger className="bg-[hsl(240,21%,18%)] border-[hsl(235,13%,30%)] h-12 text-base hover:border-[hsl(var(--mocha-mauve))] transition-colors">
-                        <SelectValue placeholder="Select category" />
+                    <Label htmlFor="runType" className="text-sm font-semibold mb-1.5">Run Type *</Label>
+                    <Select value={formData.runType} onValueChange={(value) => handleSelectChange("runType", value)}>
+                      <SelectTrigger className="bg-[hsl(240,21%,18%)] border-[hsl(235,13%,30%)] h-10 text-sm hover:border-[hsl(var(--mocha-mauve))] transition-colors">
+                        <SelectValue placeholder="Select run type" />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableCategories.map((category) => (
-                          <SelectItem key={category.id} value={category.id} className="text-base">
-                            {category.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="platform" className="text-base font-semibold mb-2">Platform *</Label>
-                    <Select value={formData.platform} onValueChange={(value) => handleSelectChange("platform", value)}>
-                      <SelectTrigger className="bg-[hsl(240,21%,18%)] border-[hsl(235,13%,30%)] h-12 text-base hover:border-[hsl(var(--mocha-mauve))] transition-colors">
-                        <SelectValue placeholder="Select platform" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availablePlatforms.map((platform) => (
-                          <SelectItem key={platform.id} value={platform.id} className="text-base">
+                        {runTypes.map((type) => (
+                          <SelectItem key={type.id} value={type.id} className="text-sm">
                             <div className="flex items-center gap-2">
-                              <Gamepad2 className="h-5 w-5" />
-                              {platform.name}
+                              {type.id === 'solo' ? <User className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+                              {type.name}
                             </div>
                           </SelectItem>
                         ))}
@@ -343,24 +317,55 @@ const SubmitRun = () => {
                     </Select>
                   </div>
                 </div>
+                {formData.runType === 'co-op' && (
+                  <div>
+                    <Label htmlFor="player2Name" className="text-sm font-semibold mb-1.5">Player 2 Name *</Label>
+                    <Input
+                      id="player2Name"
+                      name="player2Name"
+                      value={formData.player2Name}
+                      onChange={handleChange}
+                      placeholder="Enter second player's username"
+                      required
+                      className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-10 text-sm hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300"
+                    />
+                  </div>
+                )}
 
-                <div>
-                  <Label htmlFor="runType" className="text-base font-semibold mb-2">Run Type *</Label>
-                  <Select value={formData.runType} onValueChange={(value) => handleSelectChange("runType", value)}>
-                    <SelectTrigger className="bg-[hsl(240,21%,18%)] border-[hsl(235,13%,30%)] h-12 text-base hover:border-[hsl(var(--mocha-mauve))] transition-colors">
-                      <SelectValue placeholder="Select run type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {runTypes.map((type) => (
-                        <SelectItem key={type.id} value={type.id} className="text-base">
-                          <div className="flex items-center gap-2">
-                            {type.id === 'solo' ? <User className="h-5 w-5" /> : <Users className="h-5 w-5" />}
-                            {type.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="category" className="text-sm font-semibold mb-1.5">Category *</Label>
+                    <Select value={formData.category} onValueChange={(value) => handleSelectChange("category", value)}>
+                      <SelectTrigger className="bg-[hsl(240,21%,18%)] border-[hsl(235,13%,30%)] h-10 text-sm hover:border-[hsl(var(--mocha-mauve))] transition-colors">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCategories.map((category) => (
+                          <SelectItem key={category.id} value={category.id} className="text-sm">
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="platform" className="text-sm font-semibold mb-1.5">Platform *</Label>
+                    <Select value={formData.platform} onValueChange={(value) => handleSelectChange("platform", value)}>
+                      <SelectTrigger className="bg-[hsl(240,21%,18%)] border-[hsl(235,13%,30%)] h-10 text-sm hover:border-[hsl(var(--mocha-mauve))] transition-colors">
+                        <SelectValue placeholder="Select platform" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availablePlatforms.map((platform) => (
+                          <SelectItem key={platform.id} value={platform.id} className="text-sm">
+                            <div className="flex items-center gap-2">
+                              <Gamepad2 className="h-4 w-4" />
+                              {platform.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div>
@@ -373,7 +378,7 @@ const SubmitRun = () => {
                     
                     return (
                       <>
-                        <Label htmlFor="videoUrl" className="text-base font-semibold mb-2">Video Proof {isVideoRequired ? "*" : ""}</Label>
+                        <Label htmlFor="videoUrl" className="text-sm font-semibold mb-1.5">Video Proof {isVideoRequired ? "*" : ""}</Label>
                         <Input
                           id="videoUrl"
                           name="videoUrl"
@@ -381,12 +386,12 @@ const SubmitRun = () => {
                           onChange={handleChange}
                           placeholder="https://youtube.com/watch?v=..."
                           required={isVideoRequired}
-                          className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-12 text-base hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300"
+                          className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-10 text-sm hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300"
                         />
-                        <p className="text-sm text-[hsl(222,15%,70%)] mt-2 flex items-center gap-1">
+                        <p className="text-xs text-[hsl(222,15%,70%)] mt-1 flex items-center gap-1">
                           {isNocutsNoships ? (
                             <>
-                              <CheckCircle className="h-4 w-4 text-[hsl(var(--mocha-green))]" />
+                              <CheckCircle className="h-3 w-3 text-[hsl(var(--mocha-green))]" />
                               Video proof is optional for Nocuts Noships runs, but recommended.
                             </>
                           ) : (
@@ -399,26 +404,26 @@ const SubmitRun = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="comment" className="text-base font-semibold mb-2">Run Comment</Label>
+                  <Label htmlFor="comment" className="text-sm font-semibold mb-1.5">Run Comment</Label>
                   <Textarea
                     id="comment"
                     name="comment"
                     value={formData.comment}
                     onChange={handleChange}
                     placeholder="Add a comment about your run (optional)..."
-                    className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300 min-h-[120px] resize-none text-base"
-                    rows={4}
+                    className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300 min-h-[80px] resize-none text-sm"
+                    rows={3}
                   />
-                  <p className="text-sm text-[hsl(222,15%,70%)] mt-2">
+                  <p className="text-xs text-[hsl(222,15%,70%)] mt-1">
                     Share any details about your run, strategies, or highlights
                   </p>
                 </div>
 
-                <div className="pt-4">
+                <div className="pt-2">
                   <Button 
                     type="submit" 
                     disabled={loading}
-                    className="w-full bg-gradient-to-r from-[#cba6f7] via-[#f5c2e7] to-[#cba6f7] hover:from-[#f5c2e7] hover:via-[#cba6f7] hover:to-[#f5c2e7] text-[hsl(240,21%,15%)] font-bold py-6 text-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-[#cba6f7]/50 disabled:opacity-50 disabled:cursor-not-allowed animate-gradient bg-[length:200%_auto]"
+                    className="w-full bg-gradient-to-r from-[#cba6f7] via-[#f5c2e7] to-[#cba6f7] hover:from-[#f5c2e7] hover:via-[#cba6f7] hover:to-[#f5c2e7] text-[hsl(240,21%,15%)] font-bold py-3 text-base transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-[#cba6f7]/50 disabled:opacity-50 disabled:cursor-not-allowed animate-gradient bg-[length:200%_auto]"
                   >
                     {loading ? "Submitting..." : "Submit Run for Review"}
                   </Button>
@@ -427,82 +432,98 @@ const SubmitRun = () => {
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
-            <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)] py-5">
-              <CardTitle className="flex items-center gap-3 text-2xl">
-                <div className="p-2 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                  <FileText className="h-6 w-6 text-[hsl(240,21%,15%)]" />
-                </div>
-                <span className="bg-gradient-to-r from-[#cba6f7] to-[#f5c2e7] bg-clip-text text-transparent">
-                  Submission Guidelines
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="space-y-5 text-base text-[hsl(222,15%,70%)]">
-                <div>
-                  <h3 className="text-lg font-semibold text-[hsl(220,17%,92%)] mb-3 flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-sm font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">1</span>
-                    Game Rules
-                  </h3>
-                  <ul className="list-disc pl-6 space-y-2">
-                    <li>Time starts when you select "New Game".</li>
-                    <li>Time ends when you lose control of your character in the last completed episode.</li>
-                    <li>Using codes in the diner is not allowed.</li>
-                    <li>Runs must be single segment.</li>
-                    <li>Runs done with a USB loader are prohibited.</li>
-                    <li>Runs using Swiss to launch the game are allowed.</li>
-                    <li>Runs using the debug menu to manipulate gameplay are prohibited.</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold text-[hsl(220,17%,92%)] mb-3 flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-sm font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">2</span>
-                    Video Rules
-                  </h3>
-                  <ul className="list-disc pl-6 space-y-2">
-                    <li>Runs must have video proof with game audio.</li>
-                    <li><strong className="text-[hsl(220,17%,92%)]">Nocuts Noships</strong> runs do not require video proof (video is optional but recommended).</li>
-                    <li>Twitch VODs or highlights will not be accepted as video proof.</li>
-                    <li>All runs must be done RTA; the timer may not be paused during the run.</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold text-[hsl(220,17%,92%)] mb-3 flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-sm font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">3</span>
-                    Emulator Rules
-                  </h3>
-                  <ul className="list-disc pl-6 space-y-2">
-                    <li>Runs on Dolphin emulator must use version 5.0 or later.</li>
-                    <li>"Speed Up Disc Transfer Rate" must be turned off.</li>
-                    <li>"CPU Clock Override" must be set to 100%.</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold text-[hsl(220,17%,92%)] mb-3 flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-sm font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">4</span>
-                    PC Rules
-                  </h3>
-                  <ul className="list-disc pl-6 space-y-2">
-                    <li>FPS must be capped at 60.</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold text-[hsl(220,17%,92%)] mb-3 flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-sm font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">5</span>
-                    Solo Rules
-                  </h3>
-                  <ul className="list-disc pl-6 space-y-2">
-                    <li>One player, the number of controllers used does not matter.</li>
-                  </ul>
-                </div>
-              </div>
             </CardContent>
           </Card>
+            </div>
+            
+            {/* Guidelines Sidebar */}
+            <div className="lg:col-span-1">
+              <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl sticky top-6">
+                <Collapsible open={guidelinesOpen} onOpenChange={setGuidelinesOpen}>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)] py-4 cursor-pointer hover:bg-[hsl(240,21%,20%)] transition-colors">
+                      <CardTitle className="flex items-center justify-between text-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+                            <FileText className="h-4 w-4 text-[hsl(240,21%,15%)]" />
+                          </div>
+                          <span className="bg-gradient-to-r from-[#cba6f7] to-[#f5c2e7] bg-clip-text text-transparent">
+                            Guidelines
+                          </span>
+                        </div>
+                        {guidelinesOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </CardTitle>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent className="p-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+                      <div className="space-y-4 text-sm text-[hsl(222,15%,70%)]">
+                        <div>
+                          <h3 className="text-sm font-semibold text-[hsl(220,17%,92%)] mb-2 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-xs font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">1</span>
+                            Game Rules
+                          </h3>
+                          <ul className="list-disc pl-5 space-y-1 text-xs">
+                            <li>Time starts when you select "New Game".</li>
+                            <li>Time ends when you lose control of your character.</li>
+                            <li>Using codes in the diner is not allowed.</li>
+                            <li>Runs must be single segment.</li>
+                            <li>Runs done with a USB loader are prohibited.</li>
+                            <li>Runs using Swiss to launch the game are allowed.</li>
+                            <li>Runs using the debug menu are prohibited.</li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <h3 className="text-sm font-semibold text-[hsl(220,17%,92%)] mb-2 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-xs font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">2</span>
+                            Video Rules
+                          </h3>
+                          <ul className="list-disc pl-5 space-y-1 text-xs">
+                            <li>Runs must have video proof with game audio.</li>
+                            <li><strong className="text-[hsl(220,17%,92%)]">Nocuts Noships</strong> runs do not require video proof.</li>
+                            <li>Twitch VODs will not be accepted as video proof.</li>
+                            <li>All runs must be done RTA; timer may not be paused.</li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <h3 className="text-sm font-semibold text-[hsl(220,17%,92%)] mb-2 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-xs font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">3</span>
+                            Emulator Rules
+                          </h3>
+                          <ul className="list-disc pl-5 space-y-1 text-xs">
+                            <li>Dolphin emulator must use version 5.0 or later.</li>
+                            <li>"Speed Up Disc Transfer Rate" must be turned off.</li>
+                            <li>"CPU Clock Override" must be set to 100%.</li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <h3 className="text-sm font-semibold text-[hsl(220,17%,92%)] mb-2 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-xs font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">4</span>
+                            PC Rules
+                          </h3>
+                          <ul className="list-disc pl-5 space-y-1 text-xs">
+                            <li>FPS must be capped at 60.</li>
+                          </ul>
+                        </div>
+
+                        <div>
+                          <h3 className="text-sm font-semibold text-[hsl(220,17%,92%)] mb-2 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-xs font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">5</span>
+                            Solo Rules
+                          </h3>
+                          <ul className="list-disc pl-5 space-y-1 text-xs">
+                            <li>One player, the number of controllers used does not matter.</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+            </div>
           </div>
         )}
       </div>

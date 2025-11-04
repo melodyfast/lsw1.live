@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, XCircle, ShieldAlert, ExternalLink, Download, PlusCircle, Trash2, Wrench, Edit2, FolderTree, Play, ArrowUp, ArrowDown, Gamepad2, UserPlus, UserMinus, Trophy, Upload } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -112,6 +113,7 @@ const Admin = () => {
   const [foundPlayer, setFoundPlayer] = useState<{ uid: string; displayName: string; email: string; isAdmin: boolean } | null>(null);
   const [searchingPlayer, setSearchingPlayer] = useState(false);
   const [backfillingPoints, setBackfillingPoints] = useState(false);
+  const [activeTab, setActiveTab] = useState("runs");
 
   useEffect(() => {
     fetchPlatforms();
@@ -940,20 +942,40 @@ const Admin = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[hsl(240,21%,15%)] to-[hsl(235,19%,13%)] text-[hsl(220,17%,92%)] py-8">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold mb-4 flex items-center justify-center gap-2">
-            <ShieldAlert className="h-8 w-8 text-[#cba6f7]" />
+    <div className="min-h-screen bg-gradient-to-b from-[hsl(240,21%,15%)] to-[hsl(235,19%,13%)] text-[hsl(220,17%,92%)] py-6">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="text-center mb-6">
+          <h1 className="text-3xl font-bold mb-2 flex items-center justify-center gap-2">
+            <ShieldAlert className="h-7 w-7 text-[#cba6f7]" />
             Admin Panel
           </h1>
-          <p className="text-[hsl(222,15%,60%)] max-w-2xl mx-auto">
+          <p className="text-[hsl(222,15%,60%)] max-w-2xl mx-auto text-sm">
             Review and manage submitted speedruns and site resources.
           </p>
         </div>
 
-        {/* System Tools Section */}
-        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-5 mb-6 bg-[hsl(240,21%,18%)] border border-[hsl(235,13%,30%)]">
+            <TabsTrigger value="runs" className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[hsl(240,21%,15%)]">
+              Unverified Runs
+            </TabsTrigger>
+            <TabsTrigger value="categories" className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[hsl(240,21%,15%)]">
+              Categories
+            </TabsTrigger>
+            <TabsTrigger value="platforms" className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[hsl(240,21%,15%)]">
+              Platforms
+            </TabsTrigger>
+            <TabsTrigger value="downloads" className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[hsl(240,21%,15%)]">
+              Downloads
+            </TabsTrigger>
+            <TabsTrigger value="tools" className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[hsl(240,21%,15%)]">
+              Tools
+            </TabsTrigger>
+          </TabsList>
+
+          {/* System Tools Section */}
+          <TabsContent value="tools" className="space-y-4">
+            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Wrench className="h-5 w-5" />
@@ -1036,8 +1058,11 @@ const Admin = () => {
           </CardContent>
         </Card>
 
-        {/* Unverified Runs Section */}
-        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-8">
+          </TabsContent>
+
+          {/* Unverified Runs Section */}
+          <TabsContent value="runs" className="space-y-4">
+            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
           <CardHeader>
             <CardTitle>Unverified Runs</CardTitle>
           </CardHeader>
@@ -1108,67 +1133,74 @@ const Admin = () => {
           </CardContent>
         </Card>
 
-        {/* Category Management Section */}
-        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-8">
+          </TabsContent>
+
+          {/* Category Management Section */}
+          <TabsContent value="categories" className="space-y-4">
+            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FolderTree className="h-5 w-5" />
               Manage Categories
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <h3 className="text-xl font-semibold mb-4">Add New Category</h3>
-            <form onSubmit={handleAddCategory} className="space-y-4 mb-8">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="categoryName">Category Name</Label>
-                <Input
-                  id="categoryName"
-                  type="text"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder="e.g., 100% Glitchless"
-                  required
-                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                />
+                <h3 className="text-base font-semibold mb-3">Add New Category</h3>
+                <form onSubmit={handleAddCategory} className="space-y-3">
+                  <div>
+                    <Label htmlFor="categoryName" className="text-sm">Category Name</Label>
+                    <Input
+                      id="categoryName"
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="e.g., 100% Glitchless"
+                      required
+                      className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-9 text-sm"
+                    />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={addingCategory}
+                    size="sm"
+                    className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2"
+                  >
+                    <PlusCircle className="h-3 w-3" />
+                    {addingCategory ? "Adding..." : "Add Category"}
+                  </Button>
+                </form>
               </div>
-              <Button 
-                type="submit" 
-                disabled={addingCategory}
-                className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2"
-              >
-                <PlusCircle className="h-4 w-4" />
-                {addingCategory ? "Adding..." : "Add Category"}
-              </Button>
-            </form>
-
-            <h3 className="text-xl font-semibold mb-4">Existing Categories</h3>
-            {firestoreCategories.length === 0 ? (
-              <p className="text-[hsl(222,15%,60%)] text-center py-4">No categories found. Using default categories.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
-                      <TableHead className="py-3 px-4 text-left">Name</TableHead>
-                      <TableHead className="py-3 px-4 text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {firestoreCategories.map((category, index) => (
-                      <TableRow key={category.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)]">
-                        <TableCell className="py-3 px-4 font-medium">
-                          {editingCategory?.id === category.id ? (
-                            <Input
-                              value={editingCategoryName}
-                              onChange={(e) => setEditingCategoryName(e.target.value)}
-                              className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                              autoFocus
-                            />
-                          ) : (
-                            category.name
-                          )}
-                        </TableCell>
-                        <TableCell className="py-3 px-4 text-center space-x-2">
+              <div>
+                <h3 className="text-base font-semibold mb-3">Existing Categories</h3>
+                {firestoreCategories.length === 0 ? (
+                  <p className="text-[hsl(222,15%,60%)] text-center py-4 text-sm">No categories found. Using default categories.</p>
+                ) : (
+                  <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
+                          <TableHead className="py-2 px-3 text-left text-xs">Name</TableHead>
+                          <TableHead className="py-2 px-3 text-center text-xs">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {firestoreCategories.map((category, index) => (
+                          <TableRow key={category.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)]">
+                            <TableCell className="py-2 px-3 font-medium text-sm">
+                              {editingCategory?.id === category.id ? (
+                                <Input
+                                  value={editingCategoryName}
+                                  onChange={(e) => setEditingCategoryName(e.target.value)}
+                                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-8 text-sm"
+                                  autoFocus
+                                />
+                              ) : (
+                                category.name
+                              )}
+                            </TableCell>
+                            <TableCell className="py-2 px-3 text-center space-x-1">
                           {editingCategory?.id === category.id ? (
                             <>
                               <Button
@@ -1197,36 +1229,36 @@ const Admin = () => {
                                 size="sm"
                                 onClick={() => handleMoveCategoryUp(category.id)}
                                 disabled={reorderingCategory === category.id || index === 0}
-                                className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50"
+                                className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0"
                                 title="Move up"
                               >
-                                <ArrowUp className="h-4 w-4" />
+                                <ArrowUp className="h-3 w-3" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleMoveCategoryDown(category.id)}
                                 disabled={reorderingCategory === category.id || index === firestoreCategories.length - 1}
-                                className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50"
+                                className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0"
                                 title="Move down"
                               >
-                                <ArrowDown className="h-4 w-4" />
+                                <ArrowDown className="h-3 w-3" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleStartEditCategory(category)}
-                                className="text-blue-500 hover:bg-blue-900/20"
+                                className="text-blue-500 hover:bg-blue-900/20 h-7 w-7 p-0"
                               >
-                                <Edit2 className="h-4 w-4" />
+                                <Edit2 className="h-3 w-3" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleDeleteCategory(category.id)}
-                                className="text-red-500 hover:bg-red-900/20"
+                                className="text-red-500 hover:bg-red-900/20 h-7 w-7 p-0"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3 w-3" />
                               </Button>
                             </>
                           )}
@@ -1240,140 +1272,152 @@ const Admin = () => {
           </CardContent>
         </Card>
 
-        {/* Platform Management Section */}
-        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-8">
+          </TabsContent>
+
+          {/* Platform Management Section */}
+          <TabsContent value="platforms" className="space-y-4">
+            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Gamepad2 className="h-5 w-5" />
               Manage Platforms
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <h3 className="text-xl font-semibold mb-4">Add New Platform</h3>
-            <form onSubmit={(e) => { e.preventDefault(); handleAddPlatform(); }} className="space-y-4 mb-8">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="platformName">Platform Name</Label>
-                <Input
-                  id="platformName"
-                  type="text"
-                  value={newPlatformName}
-                  onChange={(e) => setNewPlatformName(e.target.value)}
-                  placeholder="e.g., Nintendo Switch"
-                  required
-                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                />
+                <h3 className="text-base font-semibold mb-3">Add New Platform</h3>
+                <form onSubmit={(e) => { e.preventDefault(); handleAddPlatform(); }} className="space-y-3">
+                  <div>
+                    <Label htmlFor="platformName" className="text-sm">Platform Name</Label>
+                    <Input
+                      id="platformName"
+                      type="text"
+                      value={newPlatformName}
+                      onChange={(e) => setNewPlatformName(e.target.value)}
+                      placeholder="e.g., Nintendo Switch"
+                      required
+                      className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-9 text-sm"
+                    />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={addingPlatform}
+                    size="sm"
+                    className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2"
+                  >
+                    <PlusCircle className="h-3 w-3" />
+                    {addingPlatform ? "Adding..." : "Add Platform"}
+                  </Button>
+                </form>
               </div>
-              <Button 
-                type="submit" 
-                disabled={addingPlatform}
-                className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2"
-              >
-                <PlusCircle className="h-4 w-4" />
-                {addingPlatform ? "Adding..." : "Add Platform"}
-              </Button>
-            </form>
-
-            <h3 className="text-xl font-semibold mb-4">Existing Platforms</h3>
-            {firestorePlatforms.length === 0 ? (
-              <p className="text-[hsl(222,15%,60%)] text-center py-4">No platforms found.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
-                      <TableHead className="py-3 px-4 text-left">Name</TableHead>
-                      <TableHead className="py-3 px-4 text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {firestorePlatforms.map((platform, index) => (
-                      <TableRow key={platform.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)]">
-                        <TableCell className="py-3 px-4 font-medium">
-                          {editingPlatform?.id === platform.id ? (
-                            <Input
-                              value={editingPlatformName}
-                              onChange={(e) => setEditingPlatformName(e.target.value)}
-                              className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                              autoFocus
-                            />
-                          ) : (
-                            platform.name
-                          )}
-                        </TableCell>
-                        <TableCell className="py-3 px-4 text-center space-x-2">
-                          {editingPlatform?.id === platform.id ? (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleSaveEditPlatform}
-                                disabled={updatingPlatform}
-                                className="text-green-500 hover:bg-green-900/20"
-                              >
-                                Save
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleCancelEditPlatform}
-                                disabled={updatingPlatform}
-                                className="text-gray-500 hover:bg-gray-900/20"
-                              >
-                                Cancel
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleMovePlatformUp(platform.id)}
-                                disabled={reorderingPlatform === platform.id || index === 0}
-                                className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50"
-                                title="Move up"
-                              >
-                                <ArrowUp className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleMovePlatformDown(platform.id)}
-                                disabled={reorderingPlatform === platform.id || index === firestorePlatforms.length - 1}
-                                className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50"
-                                title="Move down"
-                              >
-                                <ArrowDown className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleStartEditPlatform(platform)}
-                                className="text-blue-500 hover:bg-blue-900/20"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeletePlatform(platform.id)}
-                                className="text-red-500 hover:bg-red-900/20"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <div>
+                <h3 className="text-base font-semibold mb-3">Existing Platforms</h3>
+                {firestorePlatforms.length === 0 ? (
+                  <p className="text-[hsl(222,15%,60%)] text-center py-4 text-sm">No platforms found.</p>
+                ) : (
+                  <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
+                          <TableHead className="py-2 px-3 text-left text-xs">Name</TableHead>
+                          <TableHead className="py-2 px-3 text-center text-xs">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {firestorePlatforms.map((platform, index) => (
+                          <TableRow key={platform.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)]">
+                            <TableCell className="py-2 px-3 font-medium text-sm">
+                              {editingPlatform?.id === platform.id ? (
+                                <Input
+                                  value={editingPlatformName}
+                                  onChange={(e) => setEditingPlatformName(e.target.value)}
+                                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-8 text-sm"
+                                  autoFocus
+                                />
+                              ) : (
+                                platform.name
+                              )}
+                            </TableCell>
+                            <TableCell className="py-2 px-3 text-center space-x-1">
+                              {editingPlatform?.id === platform.id ? (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleSaveEditPlatform}
+                                    disabled={updatingPlatform}
+                                    className="text-green-500 hover:bg-green-900/20 h-7"
+                                  >
+                                    Save
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleCancelEditPlatform}
+                                    disabled={updatingPlatform}
+                                    className="text-gray-500 hover:bg-gray-900/20 h-7"
+                                  >
+                                    Cancel
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleMovePlatformUp(platform.id)}
+                                    disabled={reorderingPlatform === platform.id || index === 0}
+                                    className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0"
+                                    title="Move up"
+                                  >
+                                    <ArrowUp className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleMovePlatformDown(platform.id)}
+                                    disabled={reorderingPlatform === platform.id || index === firestorePlatforms.length - 1}
+                                    className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0"
+                                    title="Move down"
+                                  >
+                                    <ArrowDown className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleStartEditPlatform(platform)}
+                                    className="text-blue-500 hover:bg-blue-900/20 h-7 w-7 p-0"
+                                  >
+                                    <Edit2 className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeletePlatform(platform.id)}
+                                    className="text-red-500 hover:bg-red-900/20 h-7 w-7 p-0"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
 
-        {/* Manage Downloads Section */}
-        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-8">
+          </TabsContent>
+
+          {/* Manage Downloads Section */}
+          <TabsContent value="downloads" className="space-y-4">
+            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Wrench className="h-5 w-5" />
@@ -1653,17 +1697,17 @@ const Admin = () => {
           </CardContent>
         </Card>
 
-        {/* Manual Run Input Section */}
-        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Play className="h-5 w-5" />
-              Manually Add Run
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleAddManualRun} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Manual Run Input Section */}
+            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mt-4">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Play className="h-4 w-4" />
+                  Manually Add Run
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleAddManualRun} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="manualPlayerName">Player 1 Name *</Label>
                   <Input
@@ -1729,59 +1773,59 @@ const Admin = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="manualCategory">Category *</Label>
-                  <Select
-                    value={manualRun.category}
-                    onValueChange={(value) => setManualRun({ ...manualRun, category: value })}
-                  >
-                    <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {firestoreCategories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="manualPlatform">Platform *</Label>
-                  <Select
-                    value={manualRun.platform}
-                    onValueChange={(value) => setManualRun({ ...manualRun, platform: value })}
-                  >
-                    <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                      <SelectValue placeholder="Select platform" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {firestorePlatforms.map((platform) => (
-                        <SelectItem key={platform.id} value={platform.id}>
-                          {platform.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="manualRunType">Run Type *</Label>
-                  <Select
-                    value={manualRun.runType}
-                    onValueChange={(value) => setManualRun({ ...manualRun, runType: value as 'solo' | 'co-op' })}
-                  >
-                    <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                      <SelectValue placeholder="Select run type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="solo">Solo</SelectItem>
-                      <SelectItem value="co-op">Co-op</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label htmlFor="manualCategory" className="text-xs">Category *</Label>
+                      <Select
+                        value={manualRun.category}
+                        onValueChange={(value) => setManualRun({ ...manualRun, category: value })}
+                      >
+                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-9 text-sm">
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {firestoreCategories.map((category) => (
+                            <SelectItem key={category.id} value={category.id} className="text-sm">
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="manualPlatform" className="text-xs">Platform *</Label>
+                      <Select
+                        value={manualRun.platform}
+                        onValueChange={(value) => setManualRun({ ...manualRun, platform: value })}
+                      >
+                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-9 text-sm">
+                          <SelectValue placeholder="Select platform" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {firestorePlatforms.map((platform) => (
+                            <SelectItem key={platform.id} value={platform.id} className="text-sm">
+                              {platform.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="manualRunType" className="text-xs">Run Type *</Label>
+                      <Select
+                        value={manualRun.runType}
+                        onValueChange={(value) => setManualRun({ ...manualRun, runType: value as 'solo' | 'co-op' })}
+                      >
+                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-9 text-sm">
+                          <SelectValue placeholder="Select run type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="solo" className="text-sm">Solo</SelectItem>
+                          <SelectItem value="co-op" className="text-sm">Co-op</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
 
               <div>
                 <Label htmlFor="manualVideoUrl">Video URL (Optional)</Label>
@@ -1849,8 +1893,8 @@ const Admin = () => {
           </CardContent>
         </Card>
 
-        {/* Admin Management Section */}
-        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-8">
+            {/* Admin Management Section */}
+            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mt-4">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ShieldAlert className="h-5 w-5" />
@@ -1941,6 +1985,8 @@ const Admin = () => {
             </div>
           </CardContent>
         </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
