@@ -997,95 +997,80 @@ const Admin = () => {
 
           {/* Tools Section */}
           <TabsContent value="tools" className="space-y-4 animate-fade-in">
-            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-[#cba6f7]/20 hover:border-[#cba6f7]/50">
+            {/* Backfill Points Card */}
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-[#FFD700]/20 hover:border-[#FFD700]/50">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
                 <CardTitle className="flex items-center gap-2 text-xl">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                    <Wrench className="h-5 w-5 text-[hsl(240,21%,15%)]" />
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#FFD700] to-[#FFA500]">
+                    <Trophy className="h-5 w-5 text-black" />
                   </div>
-                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
-                    System Tools
+                  <span className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] bg-clip-text text-transparent">
+                    Backfill Points for All Runs
                   </span>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="p-5 bg-gradient-to-br from-[hsl(235,19%,18%)] to-[hsl(235,19%,16%)] rounded-lg border border-[hsl(235,13%,30%)] transition-all duration-300 hover:border-[#FFD700]/50 hover:shadow-lg hover:shadow-[#FFD700]/10">
-                    <div className="flex flex-col gap-4">
-                      <div>
-                        <h3 className="font-semibold flex items-center gap-2 mb-2 text-lg">
-                          <div className="p-1 rounded bg-gradient-to-br from-[#FFD700] to-[#FFA500]">
-                            <Trophy className="h-4 w-4 text-black" />
-                          </div>
-                          <span className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] bg-clip-text text-transparent">
-                            Backfill Points for All Runs
-                          </span>
-                        </h3>
-                        <p className="text-sm text-[hsl(222,15%,70%)] leading-relaxed">
-                          Recalculate and update points for all verified runs using the current points formula. This will also recalculate all players' total points based on their verified runs. Obsolete runs will be excluded.
-                        </p>
-                        {backfillingPoints && (
-                          <p className="text-xs text-[hsl(222,15%,60%)] mt-2 italic flex items-center gap-2">
-                            <span className="animate-pulse">●</span>
-                            This may take a while depending on the number of runs...
-                          </p>
-                        )}
-                      </div>
-                      <Button
-                        onClick={async () => {
-                          if (!currentUser) return;
-                          
-                          // Confirmation dialog
-                          if (!window.confirm(
-                            "This will recalculate points for ALL verified runs and update all player totals. " +
-                            "This operation cannot be undone and may take several minutes. Continue?"
-                          )) {
-                            return;
-                          }
-                          
-                          setBackfillingPoints(true);
-                          try {
-                            const result = await backfillPointsForAllRuns();
-                            if (result.errors.length > 0) {
-                              toast({
-                                title: "Backfill Complete with Errors",
-                                description: `Updated ${result.runsUpdated} runs and ${result.playersUpdated} players. ${result.errors.length} error(s) occurred.`,
-                                variant: "destructive",
-                              });
-                            } else {
-                              toast({
-                                title: "Backfill Complete",
-                                description: `Successfully recalculated points for ${result.runsUpdated} runs and updated ${result.playersUpdated} players.`,
-                              });
-                            }
-                          } catch (error: any) {
-                            toast({
-                              title: "Error",
-                              description: error.message || "Failed to backfill points.",
-                              variant: "destructive",
-                            });
-                          } finally {
-                            setBackfillingPoints(false);
-                          }
-                        }}
-                        disabled={backfillingPoints}
-                        className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-black font-semibold w-full sm:w-auto transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#FFD700]/50"
-                      >
-                        {backfillingPoints ? (
-                          <>
-                            <LoadingSpinner size="sm" className="mr-2" />
-                            Processing Points...
-                          </>
-                        ) : (
-                          <>
-                            <Trophy className="h-4 w-4 mr-2" />
-                            Recalculate All Points
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+              <CardContent className="pt-6">
+                <p className="text-sm text-[hsl(222,15%,70%)] leading-relaxed mb-4">
+                  Recalculate and update points for all verified runs using the current points formula. This will also recalculate all players' total points based on their verified runs. Obsolete runs will be excluded.
+                </p>
+                {backfillingPoints && (
+                  <p className="text-xs text-[hsl(222,15%,60%)] mb-4 italic flex items-center gap-2">
+                    <span className="animate-pulse">●</span>
+                    This may take a while depending on the number of runs...
+                  </p>
+                )}
+                <Button
+                  onClick={async () => {
+                    if (!currentUser) return;
+                    
+                    // Confirmation dialog
+                    if (!window.confirm(
+                      "This will recalculate points for ALL verified runs and update all player totals. " +
+                      "This operation cannot be undone and may take several minutes. Continue?"
+                    )) {
+                      return;
+                    }
+                    
+                    setBackfillingPoints(true);
+                    try {
+                      const result = await backfillPointsForAllRuns();
+                      if (result.errors.length > 0) {
+                        toast({
+                          title: "Backfill Complete with Errors",
+                          description: `Updated ${result.runsUpdated} runs and ${result.playersUpdated} players. ${result.errors.length} error(s) occurred.`,
+                          variant: "destructive",
+                        });
+                      } else {
+                        toast({
+                          title: "Backfill Complete",
+                          description: `Successfully recalculated points for ${result.runsUpdated} runs and updated ${result.playersUpdated} players.`,
+                        });
+                      }
+                    } catch (error: any) {
+                      toast({
+                        title: "Error",
+                        description: error.message || "Failed to backfill points.",
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setBackfillingPoints(false);
+                    }
+                  }}
+                  disabled={backfillingPoints}
+                  className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-black font-semibold w-full sm:w-auto transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#FFD700]/50"
+                >
+                  {backfillingPoints ? (
+                    <>
+                      <LoadingSpinner size="sm" className="mr-2" />
+                      Processing Points...
+                    </>
+                  ) : (
+                    <>
+                      <Trophy className="h-4 w-4 mr-2" />
+                      Recalculate All Points
+                    </>
+                  )}
+                </Button>
               </CardContent>
             </Card>
 
