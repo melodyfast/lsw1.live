@@ -64,6 +64,7 @@ const Admin = () => {
     description: "",
     url: "",
     fileUrl: "",
+    fileName: "", // Store the selected file name
     category: downloadCategories[0].id,
     useFileUpload: false, // Toggle between URL and file upload
   });
@@ -311,15 +312,22 @@ const Admin = () => {
 
     setAddingDownload(true);
     try {
+      // Log current state for debugging
+      console.log("Current newDownload state:", newDownload);
+      
       const downloadEntry: Omit<DownloadEntry, 'id' | 'dateAdded' | 'order'> = {
         name: newDownload.name,
         description: newDownload.description,
         category: newDownload.category,
-        ...(newDownload.useFileUpload 
+        ...(newDownload.useFileUpload && newDownload.fileUrl
           ? { fileUrl: newDownload.fileUrl } 
-          : { url: newDownload.url }
+          : newDownload.url
+          ? { url: newDownload.url }
+          : {}
         ),
       };
+      
+      console.log("Download entry being saved:", downloadEntry);
       
       const success = await addDownloadEntry(downloadEntry, currentUser.uid);
       if (success) {
@@ -332,6 +340,7 @@ const Admin = () => {
           description: "", 
           url: "", 
           fileUrl: "",
+          fileName: "",
           category: downloadCategories[0].id,
           useFileUpload: false,
         });
@@ -1402,7 +1411,7 @@ const Admin = () => {
                     <input
                       type="radio"
                       checked={!newDownload.useFileUpload}
-                      onChange={() => setNewDownload({ ...newDownload, useFileUpload: false, fileUrl: "" })}
+                      onChange={() => setNewDownload((prev) => ({ ...prev, useFileUpload: false, fileUrl: "", fileName: "" }))}
                       className="w-4 h-4"
                     />
                     <span>External URL</span>
@@ -1411,7 +1420,7 @@ const Admin = () => {
                     <input
                       type="radio"
                       checked={newDownload.useFileUpload}
-                      onChange={() => setNewDownload({ ...newDownload, useFileUpload: true, url: "" })}
+                      onChange={() => setNewDownload((prev) => ({ ...prev, useFileUpload: true, url: "" }))}
                       className="w-4 h-4"
                     />
                     <span>Upload File</span>
@@ -1421,30 +1430,50 @@ const Admin = () => {
                   <div className="space-y-2">
                     <Label htmlFor="fileUpload">File</Label>
                     <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        onClick={async () => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.onchange = async (e) => {
+                      <div className="flex items-center gap-3">
+                        <Button
+                          type="button"
+                          onClick={async () => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.onchange = async (e) => {
                             const file = (e.target as HTMLInputElement).files?.[0];
                             if (!file) return;
                             
+                            // Store file name immediately when selected
+                            setNewDownload((prev) => ({
+                              ...prev,
+                              fileName: file.name,
+                              useFileUpload: true,
+                            }));
+                            
                             try {
+                              console.log("Starting upload for:", file.name, "Size:", file.size);
                               const uploadedFiles = await startUpload([file]);
+                              console.log("Upload result:", uploadedFiles);
                               if (uploadedFiles && uploadedFiles[0]) {
+                                const fileUrl = uploadedFiles[0].url;
+                                console.log("Got fileUrl:", fileUrl);
                                 // Use functional update to ensure we have the latest state
-                                setNewDownload((prev) => ({ 
-                                  ...prev, 
-                                  fileUrl: uploadedFiles[0].url,
-                                  useFileUpload: true // Ensure this is set to true
-                                }));
+                                setNewDownload((prev) => {
+                                  const updated = { 
+                                    ...prev, 
+                                    fileUrl: fileUrl,
+                                    fileName: file.name, // Keep file name
+                                    useFileUpload: true // Ensure this is set to true
+                                  };
+                                  console.log("Updated state:", updated);
+                                  return updated;
+                                });
                                 toast({
                                   title: "File Uploaded",
                                   description: "File uploaded successfully. You can now click 'Add Download' to save it.",
                                 });
+                              } else {
+                                throw new Error("Upload completed but no file URL returned");
                               }
                             } catch (error: any) {
+                              console.error("Upload error:", error);
                               toast({
                                 title: "Upload Failed",
                                 description: error.message || "Failed to upload file.",
@@ -1454,19 +1483,35 @@ const Admin = () => {
                           };
                           input.click();
                         }}
-                        disabled={isUploading}
-                        className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2"
-                      >
-                        <Upload className="h-4 w-4" />
-                        {isUploading ? "Uploading..." : "Choose File"}
-                      </Button>
-                      {newDownload.fileUrl && (
-                        <span className="text-sm text-[hsl(222,15%,70%)] flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          File uploaded: {newDownload.fileUrl.substring(0, 50)}...
-                        </span>
-                      )}
+                          disabled={isUploading}
+                          className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2"
+                        >
+                          <Upload className="h-4 w-4" />
+                          {isUploading ? "Uploading..." : "Choose File"}
+                        </Button>
+                        {newDownload.fileName && (
+                          <span className="text-sm text-[hsl(222,15%,70%)] flex items-center gap-2">
+                            {newDownload.fileUrl ? (
+                              <>
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                                <span className="font-medium">{newDownload.fileName}</span>
+                                <span className="text-xs text-[hsl(222,15%,60%)]">(uploaded)</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="font-medium">{newDownload.fileName}</span>
+                                <span className="text-xs text-[hsl(222,15%,60%)]">(selected)</span>
+                              </>
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    {newDownload.fileUrl && (
+                      <p className="text-xs text-[hsl(222,15%,60%)] mt-2 break-all">
+                        File URL: {newDownload.fileUrl}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div>
