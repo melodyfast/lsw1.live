@@ -23,13 +23,30 @@ const Live = () => {
     // Check if stream is live
     const checkStreamStatus = async () => {
       try {
-        // Use a public API to check stream status (no auth required)
-        const response = await fetch(`https://decapi.me/twitch/uptime/${channel}`);
+        // Use decapi.me status endpoint which returns "live" or "offline"
+        const response = await fetch(`https://decapi.me/twitch/status/${channel}`);
+        
+        if (!response.ok) {
+          setIsLive(false);
+          return;
+        }
+        
         const data = await response.text();
-        // If the response is "offline" or empty, stream is offline
-        setIsLive(data && data.trim() !== 'offline' && data.trim() !== '');
+        const trimmedData = data.trim().toLowerCase();
+        
+        // The status endpoint should return "live" or "offline"
+        if (trimmedData === 'live') {
+          setIsLive(true);
+        } else if (trimmedData === 'offline') {
+          setIsLive(false);
+        } else {
+          // If response is unexpected, default to offline for safety
+          console.warn('Unexpected stream status response:', trimmedData);
+          setIsLive(false);
+        }
       } catch (error) {
         console.error('Error checking stream status:', error);
+        // Default to offline on error
         setIsLive(false);
       }
     };
