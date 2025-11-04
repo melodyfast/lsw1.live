@@ -15,13 +15,36 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-  throw new Error("Missing required Firebase configuration. Please check your .env file.");
+// Log configuration status (only in development or if there's an error)
+if (import.meta.env.DEV || !firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  console.log("Firebase Config:", {
+    hasApiKey: !!firebaseConfig.apiKey,
+    hasProjectId: !!firebaseConfig.projectId,
+    authDomain: firebaseConfig.authDomain,
+    currentDomain: window.location.hostname,
+  });
 }
 
-const app = initializeApp(firebaseConfig);
-const auth: Auth = getAuth(app);
-const db = getFirestore(app);
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  const errorMsg = "Missing required Firebase configuration. Please check your environment variables.";
+  console.error(errorMsg, firebaseConfig);
+  throw new Error(errorMsg);
+}
+
+let app;
+let auth: Auth;
+let db;
+
+try {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+} catch (error) {
+  console.error("Firebase initialization error:", error);
+  console.error("Current domain:", window.location.hostname);
+  console.error("Expected authDomain:", firebaseConfig.authDomain);
+  throw error;
+}
 
 export { auth, db };
 export default app;
