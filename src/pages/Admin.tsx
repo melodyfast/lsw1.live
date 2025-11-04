@@ -1267,11 +1267,12 @@ const Admin = () => {
                     ))}
                   </TableBody>
                 </Table>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
-
           </TabsContent>
 
           {/* Platform Management Section */}
