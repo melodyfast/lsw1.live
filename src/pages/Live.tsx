@@ -43,7 +43,7 @@ const Live = () => {
         </div>
 
         {/* Stream and Chat Container */}
-        <div className={`grid grid-cols-1 lg:grid-cols-[1fr_280px] xl:grid-cols-[1fr_320px] gap-6 transition-all duration-1000 delay-500 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        <div className={`grid grid-cols-1 lg:grid-cols-[1fr_280px] xl:grid-cols-[1fr_320px] gap-6 items-stretch transition-all duration-1000 delay-500 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           {/* Stream Player */}
           <div className="w-full">
             <div className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] rounded-lg overflow-hidden shadow-2xl relative" style={{ paddingBottom: '56.25%' /* 16:9 Aspect Ratio */ }}>
@@ -70,8 +70,8 @@ const Live = () => {
           </div>
 
           {/* Chat */}
-          <div className="w-full hidden lg:block">
-            <div className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] rounded-lg overflow-hidden shadow-2xl relative" style={{ paddingBottom: '56.25%' /* Match player height using same aspect ratio */ }}>
+          <div className="w-full hidden lg:block" style={{ height: '100%' }}>
+            <div className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] rounded-lg overflow-hidden shadow-2xl relative h-full">
               {/* Chat header indicator */}
               <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-black/70 backdrop-blur-sm rounded-full px-3 py-1.5 border border-[#74c7ec]/30 pointer-events-none">
                 <Users className="h-4 w-4 text-[#74c7ec]" />
