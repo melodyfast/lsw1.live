@@ -144,15 +144,19 @@ export function RecentRuns({ runs, loading, showRankBadge = true }: RecentRunsPr
                     </div>
                   </div>
                   <div className="flex items-center gap-6 flex-shrink-0 ml-4">
-                    <div className="text-right">
+                    <div className="text-right min-w-[120px]">
                       <div className="flex items-center gap-2 justify-end mb-1">
-                        <Timer className="h-5 w-5 text-[hsl(var(--mocha-mauve))] group-hover:scale-110 transition-transform" />
-                        <p className="font-mono text-2xl font-bold bg-gradient-to-r from-[#cdd6f4] to-[#cba6f7] bg-clip-text text-transparent group-hover:scale-105 transition-transform">
+                        <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+                          <Timer className="h-5 w-5 text-[hsl(var(--mocha-mauve))] group-hover:scale-110 transition-transform" />
+                        </div>
+                        <p className="font-mono text-2xl font-bold bg-gradient-to-r from-[#cdd6f4] to-[#cba6f7] bg-clip-text text-transparent group-hover:scale-105 transition-transform tabular-nums">
                           {formatTime(run.time)}
                         </p>
                       </div>
                       <p className="text-xs text-[hsl(222,15%,60%)] mt-1.5 flex items-center justify-end gap-1">
-                        <Clock className="h-3 w-3" />
+                        <div className="w-3 h-3 flex items-center justify-center flex-shrink-0">
+                          <Clock className="h-3 w-3" />
+                        </div>
                         {formatDate(run.date)}
                       </p>
                     </div>
