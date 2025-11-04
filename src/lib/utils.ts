@@ -48,16 +48,33 @@ export function formatSecondsToTime(totalSeconds: number): string {
 export function formatTime(timeString: string): string {
   if (!timeString) return timeString;
   
-  const parts = timeString.split(':');
+  // Trim whitespace
+  const trimmed = timeString.trim();
+  
+  // Handle different time formats
+  const parts = trimmed.split(':');
+  
+  // If it's already in MM:SS format (2 parts), return as-is
+  if (parts.length === 2) {
+    return trimmed;
+  }
+  
+  // If it's in HH:MM:SS format (3 parts)
   if (parts.length === 3) {
-    const hours = parseInt(parts[0], 10);
-    // If hours is 0, return MM:SS format
-    if (hours === 0) {
-      return `${parts[1]}:${parts[2]}`;
+    const hoursStr = parts[0].trim();
+    const hours = parseInt(hoursStr, 10);
+    
+    // If hours is 0, "00", or NaN, return MM:SS format
+    if (isNaN(hours) || hours === 0 || hoursStr === '00' || hoursStr === '0') {
+      // Ensure minutes and seconds are properly formatted
+      const minutes = (parts[1] || '00').trim();
+      const seconds = (parts[2] || '00').trim();
+      return `${minutes}:${seconds}`;
     }
   }
+  
   // Otherwise return as-is
-  return timeString;
+  return trimmed;
 }
 
 /**
