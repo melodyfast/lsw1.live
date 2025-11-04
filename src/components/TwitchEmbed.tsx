@@ -1,6 +1,9 @@
 "use client";
 
 import React from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { ExternalLink } from 'lucide-react';
 
 interface TwitchEmbedProps {
   channel: string;
@@ -11,7 +14,7 @@ const TwitchEmbed: React.FC<TwitchEmbedProps> = ({ channel }) => {
   const parentDomain = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 
   return (
-    <div className="w-full max-w-4xl mx-auto bg-[hsl(240,21%,15%)] rounded-lg overflow-hidden shadow-lg border border-[hsl(235,13%,30%)]">
+    <Card className="w-full max-w-4xl mx-auto bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl overflow-hidden">
       <div className="relative" style={{ paddingBottom: '56.25%' /* 16:9 Aspect Ratio */ }}>
         <iframe
           src={`https://player.twitch.tv/?channel=${channel}&parent=${parentDomain}&autoplay=false&muted=true`}
@@ -22,15 +25,23 @@ const TwitchEmbed: React.FC<TwitchEmbedProps> = ({ channel }) => {
           title={`${channel} Twitch Stream`}
         ></iframe>
       </div>
-      <div className="p-4 text-center">
-        <p className="text-lg font-semibold text-[hsl(220,17%,92%)]">
-          Watch <a href={`https://twitch.tv/${channel}`} target="_blank" rel="noopener noreferrer" className="text-[#cba6f7] hover:underline">{channel}</a> live on Twitch!
-        </p>
-        <p className="text-sm text-[hsl(222,15%,60%)] mt-1">
+      <CardContent className="p-6 text-center space-y-3">
+        <div className="flex items-center justify-center gap-2 flex-wrap">
+          <p className="text-lg font-semibold text-[hsl(220,17%,92%)]">
+            Watch <span className="text-[#cba6f7]">{channel}</span> live on Twitch!
+          </p>
+          <Badge variant="outline" className="border-[#9147ff] bg-[#9147ff]/10 text-[#9147ff]">
+            <ExternalLink className="h-3 w-3 mr-1" />
+            <a href={`https://twitch.tv/${channel}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+              View on Twitch
+            </a>
+          </Badge>
+        </div>
+        <p className="text-sm text-[hsl(222,15%,60%)]">
           (Stream is muted by default. Click the player to unmute.)
         </p>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 

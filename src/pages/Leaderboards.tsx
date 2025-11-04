@@ -7,6 +7,7 @@ import { LeaderboardTable } from "@/components/LeaderboardTable";
 import { getLeaderboardEntries, getCategories, getPlatforms, runTypes } from "@/lib/db";
 import { LeaderboardEntry } from "@/types/database";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import LegoGoldBrickIcon from "@/components/icons/LegoGoldBrickIcon";
 
 const Leaderboards = () => {
@@ -177,8 +178,13 @@ const Leaderboards = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-8">
-            {loading ? (
-              <LoadingSpinner size="sm" className="py-12" />
+            {loading || categoriesLoading ? (
+              <div className="space-y-4 py-8">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-[90%]" />
+              </div>
             ) : (
               <LeaderboardTable data={leaderboardData} platforms={availablePlatforms} categories={availableCategories} />
             )}

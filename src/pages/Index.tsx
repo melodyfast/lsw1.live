@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Trophy, CheckCircle, Clock } from "lucide-react";
 import { getRecentRuns, getAllVerifiedRuns } from "@/lib/db";
 import { LeaderboardEntry } from "@/types/database";
@@ -68,7 +69,7 @@ const Index = () => {
               </CardHeader>
               <CardContent>
                 {statsLoading ? (
-                  <div className="text-3xl font-bold text-card-foreground animate-pulse">...</div>
+                  <Skeleton className="h-10 w-24 mb-2" />
                 ) : (
                   <div className="text-3xl font-bold text-[hsl(var(--mocha-green))] transition-all duration-300">
                     {totalVerifiedRuns.toLocaleString()}
@@ -108,7 +109,7 @@ const Index = () => {
               </CardHeader>
               <CardContent>
                 {statsLoading ? (
-                  <div className="text-3xl font-bold text-card-foreground animate-pulse">...</div>
+                  <Skeleton className="h-10 w-32 mb-2" />
                 ) : (
                   <div className="text-3xl font-bold text-[#cdd6f4] font-mono transition-all duration-300">
                     {totalTime}

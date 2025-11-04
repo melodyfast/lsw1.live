@@ -1,4 +1,7 @@
 import React from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ExternalLink } from "lucide-react";
 
 interface VideoEmbedProps {
   url: string;
@@ -52,29 +55,26 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({ url, title }) => {
   if (!embedUrl) {
     // If we can't convert to embed, show as a link
     return (
-      <div className="w-full bg-[hsl(240,21%,15%)] rounded-lg overflow-hidden shadow-lg border border-[hsl(235,13%,30%)] p-4">
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[#cba6f7] hover:underline flex items-center gap-2"
-        >
-          <span>View video on original site</span>
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+      <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
+        <CardContent className="p-6 text-center">
+          <p className="text-[hsl(222,15%,70%)] mb-4">Unable to embed this video URL</p>
+          <Button 
+            asChild
+            variant="outline"
+            className="border-[hsl(235,13%,30%)] hover:bg-[#cba6f7]/10 hover:border-[#cba6f7] transition-all duration-300"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-            />
-          </svg>
-        </a>
-      </div>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2"
+            >
+              <span>View video on original site</span>
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 

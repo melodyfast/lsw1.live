@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Radio } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 const Live = () => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -82,18 +83,19 @@ const Live = () => {
             
             {/* Title below player */}
             <div className={`text-center mt-4 transition-all duration-1000 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
-              <div className="flex items-center justify-center gap-2">
-                <Radio className="h-4 w-4 text-[#89b4fa]" />
-                <span className={`text-base font-medium transition-colors duration-300 ${
+              <Badge 
+                variant={isLive ? "default" : "secondary"}
+                className={`text-base font-medium px-4 py-2 transition-all duration-300 ${
                   isLive === null 
-                    ? 'text-[hsl(222,15%,70%)]' 
+                    ? 'bg-[hsl(235,13%,25%)] text-[hsl(222,15%,70%)] border-[hsl(235,13%,30%)]' 
                     : isLive 
-                    ? 'text-[#89b4fa]' 
-                    : 'text-[hsl(222,15%,60%)]'
-                }`}>
-                  {isLive === null ? 'Checking...' : isLive ? 'Live' : 'Offline'}
-                </span>
-              </div>
+                    ? 'bg-gradient-to-r from-[#89b4fa] to-[#74c7ec] text-white border-0 hover:from-[#74c7ec] hover:to-[#89b4fa] shadow-lg shadow-[#89b4fa]/30 animate-pulse' 
+                    : 'bg-[hsl(235,13%,25%)] text-[hsl(222,15%,60%)] border-[hsl(235,13%,30%)]'
+                }`}
+              >
+                <Radio className={`h-4 w-4 mr-2 ${isLive ? 'animate-pulse' : ''}`} />
+                {isLive === null ? 'Checking...' : isLive ? 'Live' : 'Offline'}
+              </Badge>
             </div>
           </div>
 
