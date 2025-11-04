@@ -92,7 +92,7 @@ const Index = () => {
                 <Button size="lg" className="bg-gradient-to-r from-[#cba6f7] via-[#f5c2e7] to-[#cba6f7] hover:from-[#f5c2e7] hover:via-[#cba6f7] hover:to-[#f5c2e7] text-[hsl(240,21%,15%)] font-bold transition-all duration-300 hover:scale-110 hover:shadow-xl hover:shadow-[#cba6f7]/50 animate-gradient bg-[length:200%_auto]" asChild>
                   <Link to="/submit">Submit Run</Link>
                 </Button>
-                <Button size="lg" variant="outline" className="text-[hsl(220,17%,92%)] border-[hsl(235,13%,30%)] bg-gradient-to-r from-transparent via-[hsl(237,16%,24%)]/50 to-transparent hover:from-[hsl(237,16%,24%)] hover:via-[hsl(237,16%,28%)] hover:to-[hsl(237,16%,24%)] transition-all duration-300 hover:scale-110 hover:shadow-xl hover:border-[#cba6f7]/50" asChild>
+                <Button size="lg" variant="outline" className="text-[hsl(220,17%,92%)] border-[hsl(235,13%,30%)] bg-transparent hover:bg-[#89b4fa]/10 hover:border-[#89b4fa] transition-all duration-300 hover:scale-110 hover:shadow-xl" asChild>
                   <Link to="/leaderboards">View All Leaderboards</Link>
                 </Button>
               </div>
@@ -145,7 +145,7 @@ const Index = () => {
               <RecentRuns runs={recentRunsData} loading={loading} showRankBadge={false} />
 
               <div className="mt-8 text-center">
-                <Button variant="outline" className="text-[hsl(220,17%,92%)] border-[hsl(235,13%,30%)] bg-gradient-to-r from-transparent via-[hsl(237,16%,24%)]/50 to-transparent hover:from-[hsl(237,16%,24%)] hover:via-[hsl(237,16%,28%)] hover:to-[hsl(237,16%,24%)] transition-all duration-300 hover:scale-110 hover:shadow-lg hover:border-[#cba6f7]/50" asChild>
+                <Button variant="outline" className="text-[hsl(220,17%,92%)] border-[hsl(235,13%,30%)] bg-transparent hover:bg-[#89b4fa]/10 hover:border-[#89b4fa] transition-all duration-300 hover:scale-110 hover:shadow-lg" asChild>
                   <Link to="/leaderboards">View Full Leaderboards</Link>
                 </Button>
               </div>

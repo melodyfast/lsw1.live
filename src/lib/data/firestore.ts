@@ -1617,6 +1617,22 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
 
         // Track player IDs for later recalculation
         playerIdsSet.add(runData.playerId);
+        
+        // For co-op runs, also track player2's ID
+        if (runData.runType === 'co-op' && runData.player2Name) {
+          try {
+            const player2NameTrimmed = runData.player2Name.trim();
+            const player2 = await getPlayerByDisplayNameFirestore(player2NameTrimmed);
+            if (player2) {
+              playerIdsSet.add(player2.uid);
+              console.log(`Tracked player2 "${player2.displayName}" (UID: ${player2.uid}) for co-op run ${runData.id}`);
+            } else {
+              result.errors.push(`Player2 "${player2NameTrimmed}" not found for co-op run ${runData.id}. Points will only be awarded to player1.`);
+            }
+          } catch (error) {
+            result.errors.push(`Error looking up player2 for co-op run ${runData.id}: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
       } catch (error) {
         result.errors.push(`Error processing run ${runData.id}: ${error instanceof Error ? error.message : String(error)}`);
       }
