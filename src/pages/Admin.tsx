@@ -1433,10 +1433,15 @@ const Admin = () => {
                             try {
                               const uploadedFiles = await startUpload([file]);
                               if (uploadedFiles && uploadedFiles[0]) {
-                                setNewDownload({ ...newDownload, fileUrl: uploadedFiles[0].url });
+                                // Use functional update to ensure we have the latest state
+                                setNewDownload((prev) => ({ 
+                                  ...prev, 
+                                  fileUrl: uploadedFiles[0].url,
+                                  useFileUpload: true // Ensure this is set to true
+                                }));
                                 toast({
                                   title: "File Uploaded",
-                                  description: "File uploaded successfully.",
+                                  description: "File uploaded successfully. You can now click 'Add Download' to save it.",
                                 });
                               }
                             } catch (error: any) {
@@ -1458,7 +1463,7 @@ const Admin = () => {
                       {newDownload.fileUrl && (
                         <span className="text-sm text-[hsl(222,15%,70%)] flex items-center gap-2">
                           <CheckCircle className="h-4 w-4 text-green-500" />
-                          File uploaded
+                          File uploaded: {newDownload.fileUrl.substring(0, 50)}...
                         </span>
                       )}
                     </div>
