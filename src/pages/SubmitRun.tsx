@@ -236,10 +236,9 @@ const SubmitRun = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
+          <div className="space-y-6 max-w-4xl mx-auto">
             {/* Main Form */}
-            <div className="lg:col-span-2">
-              <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
                 <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)] py-4">
                   <CardTitle className="flex items-center gap-2 text-xl">
                     <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
@@ -431,96 +430,93 @@ const SubmitRun = () => {
               </form>
             </CardContent>
           </Card>
-            </div>
             
-            {/* Guidelines Sidebar */}
-            <div className="lg:col-span-1">
-              <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl sticky top-6">
-                <Collapsible open={guidelinesOpen} onOpenChange={setGuidelinesOpen}>
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)] py-4 cursor-pointer hover:bg-[hsl(240,21%,20%)] transition-colors">
-                      <CardTitle className="flex items-center justify-between text-lg">
-                        <div className="flex items-center gap-2">
-                          <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                            <FileText className="h-4 w-4 text-[hsl(240,21%,15%)]" />
-                          </div>
-                          <span className="bg-gradient-to-r from-[#cba6f7] to-[#f5c2e7] bg-clip-text text-transparent">
-                            Guidelines
-                          </span>
+            {/* Guidelines Section */}
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
+              <Collapsible open={guidelinesOpen} onOpenChange={setGuidelinesOpen}>
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)] py-4 cursor-pointer hover:bg-[hsl(240,21%,20%)] transition-colors">
+                    <CardTitle className="flex items-center justify-between text-xl">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+                          <FileText className="h-5 w-5 text-[hsl(240,21%,15%)]" />
                         </div>
-                        {guidelinesOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </CardTitle>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent className="p-4 max-h-[calc(100vh-200px)] overflow-y-auto">
-                      <div className="space-y-4 text-sm text-[hsl(222,15%,70%)]">
-                        <div>
-                          <h3 className="text-sm font-semibold text-[hsl(220,17%,92%)] mb-2 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-xs font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">1</span>
-                            Game Rules
-                          </h3>
-                          <ul className="list-disc pl-5 space-y-1 text-xs">
-                            <li>Time starts when you select "New Game".</li>
-                            <li>Time ends when you lose control of your character.</li>
-                            <li>Using codes in the diner is not allowed.</li>
-                            <li>Runs must be single segment.</li>
-                            <li>Runs done with a USB loader are prohibited.</li>
-                            <li>Runs using Swiss to launch the game are allowed.</li>
-                            <li>Runs using the debug menu are prohibited.</li>
-                          </ul>
-                        </div>
-
-                        <div>
-                          <h3 className="text-sm font-semibold text-[hsl(220,17%,92%)] mb-2 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-xs font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">2</span>
-                            Video Rules
-                          </h3>
-                          <ul className="list-disc pl-5 space-y-1 text-xs">
-                            <li>Runs must have video proof with game audio.</li>
-                            <li><strong className="text-[hsl(220,17%,92%)]">Nocuts Noships</strong> runs do not require video proof.</li>
-                            <li>Twitch VODs will not be accepted as video proof.</li>
-                            <li>All runs must be done RTA; timer may not be paused.</li>
-                          </ul>
-                        </div>
-
-                        <div>
-                          <h3 className="text-sm font-semibold text-[hsl(220,17%,92%)] mb-2 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-xs font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">3</span>
-                            Emulator Rules
-                          </h3>
-                          <ul className="list-disc pl-5 space-y-1 text-xs">
-                            <li>Dolphin emulator must use version 5.0 or later.</li>
-                            <li>"Speed Up Disc Transfer Rate" must be turned off.</li>
-                            <li>"CPU Clock Override" must be set to 100%.</li>
-                          </ul>
-                        </div>
-
-                        <div>
-                          <h3 className="text-sm font-semibold text-[hsl(220,17%,92%)] mb-2 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-xs font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">4</span>
-                            PC Rules
-                          </h3>
-                          <ul className="list-disc pl-5 space-y-1 text-xs">
-                            <li>FPS must be capped at 60.</li>
-                          </ul>
-                        </div>
-
-                        <div>
-                          <h3 className="text-sm font-semibold text-[hsl(220,17%,92%)] mb-2 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-xs font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">5</span>
-                            Solo Rules
-                          </h3>
-                          <ul className="list-disc pl-5 space-y-1 text-xs">
-                            <li>One player, the number of controllers used does not matter.</li>
-                          </ul>
-                        </div>
+                        <span className="bg-gradient-to-r from-[#cba6f7] to-[#f5c2e7] bg-clip-text text-transparent">
+                          Submission Guidelines
+                        </span>
                       </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Collapsible>
-              </Card>
-            </div>
+                      {guidelinesOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                    </CardTitle>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="p-6">
+                    <div className="space-y-6 text-base text-[hsl(222,15%,70%)]">
+                      <div>
+                        <h3 className="text-lg font-semibold text-[hsl(220,17%,92%)] mb-3 flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-sm font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">1</span>
+                          Game Rules
+                        </h3>
+                        <ul className="list-disc pl-6 space-y-2 text-sm">
+                          <li>Time starts when you select "New Game".</li>
+                          <li>Time ends when you lose control of your character.</li>
+                          <li>Using codes in the diner is not allowed.</li>
+                          <li>Runs must be single segment.</li>
+                          <li>Runs done with a USB loader are prohibited.</li>
+                          <li>Runs using Swiss to launch the game are allowed.</li>
+                          <li>Runs using the debug menu are prohibited.</li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-semibold text-[hsl(220,17%,92%)] mb-3 flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-sm font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">2</span>
+                          Video Rules
+                        </h3>
+                        <ul className="list-disc pl-6 space-y-2 text-sm">
+                          <li>Runs must have video proof with game audio.</li>
+                          <li><strong className="text-[hsl(220,17%,92%)]">Nocuts Noships</strong> runs do not require video proof.</li>
+                          <li>Twitch VODs will not be accepted as video proof.</li>
+                          <li>All runs must be done RTA; timer may not be paused.</li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-semibold text-[hsl(220,17%,92%)] mb-3 flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-sm font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">3</span>
+                          Emulator Rules
+                        </h3>
+                        <ul className="list-disc pl-6 space-y-2 text-sm">
+                          <li>Dolphin emulator must use version 5.0 or later.</li>
+                          <li>"Speed Up Disc Transfer Rate" must be turned off.</li>
+                          <li>"CPU Clock Override" must be set to 100%.</li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-semibold text-[hsl(220,17%,92%)] mb-3 flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-sm font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">4</span>
+                          PC Rules
+                        </h3>
+                        <ul className="list-disc pl-6 space-y-2 text-sm">
+                          <li>FPS must be capped at 60.</li>
+                        </ul>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-semibold text-[hsl(220,17%,92%)] mb-3 flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-full bg-[hsl(240,21%,18%)] flex items-center justify-center text-sm font-bold border border-[hsl(235,13%,30%)] flex-shrink-0">5</span>
+                          Solo Rules
+                        </h3>
+                        <ul className="list-disc pl-6 space-y-2 text-sm">
+                          <li>One player, the number of controllers used does not matter.</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </CardContent>
+                </CollapsibleContent>
+              </Collapsible>
+            </Card>
           </div>
         )}
       </div>

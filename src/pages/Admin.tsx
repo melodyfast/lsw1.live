@@ -944,128 +944,466 @@ const Admin = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[hsl(240,21%,15%)] to-[hsl(235,19%,13%)] text-[hsl(220,17%,92%)] py-6">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold mb-2 flex items-center justify-center gap-2">
-            <ShieldAlert className="h-7 w-7 text-[#cba6f7]" />
-            Admin Panel
-          </h1>
-          <p className="text-[hsl(222,15%,60%)] max-w-2xl mx-auto text-sm">
+        <div className="text-center mb-8 animate-fade-in">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="relative">
+              <div className="absolute inset-0 bg-[#cba6f7]/20 blur-3xl rounded-full animate-pulse"></div>
+              <div className="p-3 rounded-xl bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2] shadow-lg relative z-10">
+                <ShieldAlert className="h-8 w-8 text-[hsl(240,21%,15%)]" />
+              </div>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#cba6f7] via-[#f38ba8] to-[#cba6f7] bg-clip-text text-transparent animate-gradient bg-[length:200%_auto]">
+              Admin Panel
+            </h1>
+          </div>
+          <p className="text-[hsl(222,15%,70%)] max-w-2xl mx-auto text-base animate-fade-in-delay">
             Review and manage submitted speedruns and site resources.
           </p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-6 bg-[hsl(240,21%,18%)] border border-[hsl(235,13%,30%)]">
-            <TabsTrigger value="runs" className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[hsl(240,21%,15%)]">
+          <TabsList className="grid w-full grid-cols-5 mb-6 bg-[hsl(240,21%,18%)] border border-[hsl(235,13%,30%)] rounded-lg p-1 shadow-lg">
+            <TabsTrigger 
+              value="runs" 
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#cba6f7] data-[state=active]:to-[#b4a0e2] data-[state=active]:text-[hsl(240,21%,15%)] data-[state=active]:shadow-lg transition-all duration-300 rounded-md font-medium hover:bg-[hsl(240,21%,20%)]"
+            >
               Unverified Runs
             </TabsTrigger>
-            <TabsTrigger value="categories" className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[hsl(240,21%,15%)]">
+            <TabsTrigger 
+              value="categories" 
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#cba6f7] data-[state=active]:to-[#b4a0e2] data-[state=active]:text-[hsl(240,21%,15%)] data-[state=active]:shadow-lg transition-all duration-300 rounded-md font-medium hover:bg-[hsl(240,21%,20%)]"
+            >
               Categories
             </TabsTrigger>
-            <TabsTrigger value="platforms" className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[hsl(240,21%,15%)]">
+            <TabsTrigger 
+              value="platforms" 
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#cba6f7] data-[state=active]:to-[#b4a0e2] data-[state=active]:text-[hsl(240,21%,15%)] data-[state=active]:shadow-lg transition-all duration-300 rounded-md font-medium hover:bg-[hsl(240,21%,20%)]"
+            >
               Platforms
             </TabsTrigger>
-            <TabsTrigger value="downloads" className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[hsl(240,21%,15%)]">
+            <TabsTrigger 
+              value="downloads" 
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#cba6f7] data-[state=active]:to-[#b4a0e2] data-[state=active]:text-[hsl(240,21%,15%)] data-[state=active]:shadow-lg transition-all duration-300 rounded-md font-medium hover:bg-[hsl(240,21%,20%)]"
+            >
               Downloads
             </TabsTrigger>
-            <TabsTrigger value="tools" className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[hsl(240,21%,15%)]">
+            <TabsTrigger 
+              value="tools" 
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#cba6f7] data-[state=active]:to-[#b4a0e2] data-[state=active]:text-[hsl(240,21%,15%)] data-[state=active]:shadow-lg transition-all duration-300 rounded-md font-medium hover:bg-[hsl(240,21%,20%)]"
+            >
               Tools
             </TabsTrigger>
           </TabsList>
 
-          {/* System Tools Section */}
-          <TabsContent value="tools" className="space-y-4">
-            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wrench className="h-5 w-5" />
-              System Tools
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="p-4 bg-[hsl(235,19%,18%)] rounded-lg border border-[hsl(235,13%,30%)]">
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <h3 className="font-semibold flex items-center gap-2 mb-2">
-                      <Trophy className="h-4 w-4 text-yellow-500" />
-                      Backfill Points for All Runs
-                    </h3>
-                    <p className="text-sm text-[hsl(222,15%,60%)]">
-                      Recalculate and update points for all verified runs using the current points formula. This will also recalculate all players' total points based on their verified runs. Obsolete runs will be excluded.
-                    </p>
-                    {backfillingPoints && (
-                      <p className="text-xs text-[hsl(222,15%,60%)] mt-2 italic">
-                        This may take a while depending on the number of runs...
-                      </p>
-                    )}
+          {/* Tools Section */}
+          <TabsContent value="tools" className="space-y-4 animate-fade-in">
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-[#cba6f7]/20 hover:border-[#cba6f7]/50">
+              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+                    <Wrench className="h-5 w-5 text-[hsl(240,21%,15%)]" />
                   </div>
-                  <Button
-                    onClick={async () => {
-                      if (!currentUser) return;
-                      
-                      // Confirmation dialog
-                      if (!window.confirm(
-                        "This will recalculate points for ALL verified runs and update all player totals. " +
-                        "This operation cannot be undone and may take several minutes. Continue?"
-                      )) {
-                        return;
-                      }
-                      
-                      setBackfillingPoints(true);
-                      try {
-                        const result = await backfillPointsForAllRuns();
-                        if (result.errors.length > 0) {
-                          toast({
-                            title: "Backfill Complete with Errors",
-                            description: `Updated ${result.runsUpdated} runs and ${result.playersUpdated} players. ${result.errors.length} error(s) occurred.`,
-                            variant: "destructive",
-                          });
-                        } else {
-                          toast({
-                            title: "Backfill Complete",
-                            description: `Successfully recalculated points for ${result.runsUpdated} runs and updated ${result.playersUpdated} players.`,
-                          });
-                        }
-                      } catch (error: any) {
-                        toast({
-                          title: "Error",
-                          description: error.message || "Failed to backfill points.",
-                          variant: "destructive",
-                        });
-                      } finally {
-                        setBackfillingPoints(false);
-                      }
-                    }}
-                    disabled={backfillingPoints}
-                    className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-black font-semibold w-full sm:w-auto"
-                  >
-                    {backfillingPoints ? (
-                      <>
-                        <LoadingSpinner size="sm" className="mr-2" />
-                        Processing Points...
-                      </>
-                    ) : (
-                      <>
-                        <Trophy className="h-4 w-4 mr-2" />
-                        Recalculate All Points
-                      </>
-                    )}
-                  </Button>
+                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                    System Tools
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="p-5 bg-gradient-to-br from-[hsl(235,19%,18%)] to-[hsl(235,19%,16%)] rounded-lg border border-[hsl(235,13%,30%)] transition-all duration-300 hover:border-[#FFD700]/50 hover:shadow-lg hover:shadow-[#FFD700]/10">
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <h3 className="font-semibold flex items-center gap-2 mb-2 text-lg">
+                          <div className="p-1 rounded bg-gradient-to-br from-[#FFD700] to-[#FFA500]">
+                            <Trophy className="h-4 w-4 text-black" />
+                          </div>
+                          <span className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] bg-clip-text text-transparent">
+                            Backfill Points for All Runs
+                          </span>
+                        </h3>
+                        <p className="text-sm text-[hsl(222,15%,70%)] leading-relaxed">
+                          Recalculate and update points for all verified runs using the current points formula. This will also recalculate all players' total points based on their verified runs. Obsolete runs will be excluded.
+                        </p>
+                        {backfillingPoints && (
+                          <p className="text-xs text-[hsl(222,15%,60%)] mt-2 italic flex items-center gap-2">
+                            <span className="animate-pulse">●</span>
+                            This may take a while depending on the number of runs...
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        onClick={async () => {
+                          if (!currentUser) return;
+                          
+                          // Confirmation dialog
+                          if (!window.confirm(
+                            "This will recalculate points for ALL verified runs and update all player totals. " +
+                            "This operation cannot be undone and may take several minutes. Continue?"
+                          )) {
+                            return;
+                          }
+                          
+                          setBackfillingPoints(true);
+                          try {
+                            const result = await backfillPointsForAllRuns();
+                            if (result.errors.length > 0) {
+                              toast({
+                                title: "Backfill Complete with Errors",
+                                description: `Updated ${result.runsUpdated} runs and ${result.playersUpdated} players. ${result.errors.length} error(s) occurred.`,
+                                variant: "destructive",
+                              });
+                            } else {
+                              toast({
+                                title: "Backfill Complete",
+                                description: `Successfully recalculated points for ${result.runsUpdated} runs and updated ${result.playersUpdated} players.`,
+                              });
+                            }
+                          } catch (error: any) {
+                            toast({
+                              title: "Error",
+                              description: error.message || "Failed to backfill points.",
+                              variant: "destructive",
+                            });
+                          } finally {
+                            setBackfillingPoints(false);
+                          }
+                        }}
+                        disabled={backfillingPoints}
+                        className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-black font-semibold w-full sm:w-auto transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#FFD700]/50"
+                      >
+                        {backfillingPoints ? (
+                          <>
+                            <LoadingSpinner size="sm" className="mr-2" />
+                            Processing Points...
+                          </>
+                        ) : (
+                          <>
+                            <Trophy className="h-4 w-4 mr-2" />
+                            Recalculate All Points
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
+            {/* Manual Run Input Section */}
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-[#cba6f7]/20 hover:border-[#cba6f7]/50">
+              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+                    <Play className="h-5 w-5 text-[hsl(240,21%,15%)]" />
+                  </div>
+                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                    Manually Add Run
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleAddManualRun} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="manualPlayerName">Player 1 Name *</Label>
+                      <Input
+                        id="manualPlayerName"
+                        type="text"
+                        value={manualRun.playerName}
+                        onChange={(e) => setManualRun({ ...manualRun, playerName: e.target.value })}
+                        placeholder="Player name"
+                        required
+                        className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="manualPlayerUsername">Player Username (Optional)</Label>
+                      <Input
+                        id="manualPlayerUsername"
+                        type="text"
+                        value={manualRun.playerUsername}
+                        onChange={(e) => setManualRun({ ...manualRun, playerUsername: e.target.value })}
+                        placeholder="Enter username to link run to account"
+                        className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                      />
+                      <p className="text-sm text-[hsl(222,15%,60%)] mt-1">
+                        If provided, the run will be linked to this player's account. If not found, the run will still be added with the provided player name.
+                      </p>
+                    </div>
+                  </div>
+                  {manualRun.runType === 'co-op' && (
+                    <div>
+                      <Label htmlFor="manualPlayer2Name">Player 2 Name *</Label>
+                      <Input
+                        id="manualPlayer2Name"
+                        type="text"
+                        value={manualRun.player2Name}
+                        onChange={(e) => setManualRun({ ...manualRun, player2Name: e.target.value })}
+                        placeholder="Second player name"
+                        required={manualRun.runType === 'co-op'}
+                        className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                      />
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="manualTime">Completion Time *</Label>
+                      <Input
+                        id="manualTime"
+                        type="text"
+                        value={manualRun.time}
+                        onChange={(e) => setManualRun({ ...manualRun, time: e.target.value })}
+                        placeholder="HH:MM:SS"
+                        required
+                        className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="manualDate">Date *</Label>
+                      <Input
+                        id="manualDate"
+                        type="date"
+                        value={manualRun.date}
+                        onChange={(e) => setManualRun({ ...manualRun, date: e.target.value })}
+                        required
+                        className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="manualCategory">Category *</Label>
+                      <Select
+                        value={manualRun.category}
+                        onValueChange={(value) => setManualRun({ ...manualRun, category: value })}
+                      >
+                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {firestoreCategories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="manualPlatform">Platform *</Label>
+                      <Select
+                        value={manualRun.platform}
+                        onValueChange={(value) => setManualRun({ ...manualRun, platform: value })}
+                      >
+                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                          <SelectValue placeholder="Select platform" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {firestorePlatforms.map((platform) => (
+                            <SelectItem key={platform.id} value={platform.id}>
+                              {platform.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="manualRunType">Run Type *</Label>
+                      <Select
+                        value={manualRun.runType}
+                        onValueChange={(value) => setManualRun({ ...manualRun, runType: value as 'solo' | 'co-op' })}
+                      >
+                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                          <SelectValue placeholder="Select run type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="solo">Solo</SelectItem>
+                          <SelectItem value="co-op">Co-op</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="manualVideoUrl">Video URL (Optional)</Label>
+                    <Input
+                      id="manualVideoUrl"
+                      type="url"
+                      value={manualRun.videoUrl}
+                      onChange={(e) => setManualRun({ ...manualRun, videoUrl: e.target.value })}
+                      placeholder="https://youtube.com/watch?v=..."
+                      className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="manualComment">Comment (Optional)</Label>
+                    <Textarea
+                      id="manualComment"
+                      value={manualRun.comment}
+                      onChange={(e) => setManualRun({ ...manualRun, comment: e.target.value })}
+                      placeholder="Add a comment about the run..."
+                      className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="manualVerified"
+                      checked={manualRun.verified}
+                      onChange={(e) => setManualRun({ ...manualRun, verified: e.target.checked })}
+                      className="w-4 h-4 rounded border-[hsl(235,13%,30%)] bg-[hsl(240,21%,15%)]"
+                    />
+                    <Label htmlFor="manualVerified" className="cursor-pointer">
+                      Mark as verified
+                    </Label>
+                  </div>
+
+                  {manualRun.verified && (
+                    <div>
+                      <Label htmlFor="manualVerifiedBy">Verifier (Optional)</Label>
+                      <Input
+                        id="manualVerifiedBy"
+                        type="text"
+                        value={manualRun.verifiedBy}
+                        onChange={(e) => setManualRun({ ...manualRun, verifiedBy: e.target.value })}
+                        placeholder="Enter verifier name or UID (defaults to current admin if empty)"
+                        className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                      />
+                      <p className="text-sm text-[hsl(222,15%,60%)] mt-1">
+                        Leave empty to use your admin account as the verifier. Enter a name or UID to specify a different verifier.
+                      </p>
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={addingManualRun}
+                    className="w-full bg-gradient-to-r from-[#cba6f7] via-[#f5c2e7] to-[#cba6f7] hover:from-[#f5c2e7] hover:via-[#cba6f7] hover:to-[#f5c2e7] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-[#cba6f7]/50 animate-gradient bg-[length:200%_auto]"
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                    {addingManualRun ? "Adding..." : "Add Run"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* Admin Management Section */}
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-[#cba6f7]/20 hover:border-[#cba6f7]/50">
+              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+                    <ShieldAlert className="h-5 w-5 text-[hsl(240,21%,15%)]" />
+                  </div>
+                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                    Manage Admin Status
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex gap-4 items-end">
+                    <div className="flex-1">
+                      <Label htmlFor="adminSearchType">Search By</Label>
+                      <Select value={adminSearchType} onValueChange={(value: "displayName" | "uid") => {
+                        setAdminSearchType(value);
+                        setFoundPlayer(null);
+                        setAdminUserInput("");
+                      }}>
+                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="displayName">Display Name</SelectItem>
+                          <SelectItem value="uid">UID</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex-1">
+                      <Label htmlFor="adminUserInput">{adminSearchType === "displayName" ? "Display Name" : "UID"}</Label>
+                      <Input
+                        id="adminUserInput"
+                        value={adminUserInput}
+                        onChange={(e) => setAdminUserInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleSearchPlayer();
+                          }
+                        }}
+                        placeholder={adminSearchType === "displayName" ? "Enter display name" : "Enter UID"}
+                        className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleSearchPlayer}
+                      disabled={searchingPlayer || !adminUserInput.trim()}
+                      className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                    >
+                      {searchingPlayer ? "Searching..." : "Search"}
+                    </Button>
+                  </div>
+
+                  {foundPlayer && (
+                    <div className="bg-gradient-to-br from-[hsl(235,19%,13%)] to-[hsl(235,19%,11%)] border border-[hsl(235,13%,30%)] rounded-lg p-5 space-y-4 shadow-lg transition-all duration-300 animate-fade-in hover:border-[#cba6f7]/50 hover:shadow-xl hover:shadow-[#cba6f7]/10">
+                      <div>
+                        <h4 className="font-semibold mb-3 text-lg flex items-center gap-2">
+                          <div className="p-1 rounded bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+                            <CheckCircle className="h-4 w-4 text-[hsl(240,21%,15%)]" />
+                          </div>
+                          <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                            Player Found
+                          </span>
+                        </h4>
+                        <div className="space-y-1 text-sm">
+                          <p><span className="text-[hsl(222,15%,60%)]">UID:</span> <code className="text-[#cba6f7]">{foundPlayer.uid}</code></p>
+                          <p><span className="text-[hsl(222,15%,60%)]">Display Name:</span> {foundPlayer.displayName || "Not set"}</p>
+                          <p><span className="text-[hsl(222,15%,60%)]">Email:</span> {foundPlayer.email || "Not set"}</p>
+                          <p>
+                            <span className="text-[hsl(222,15%,60%)]">Admin Status:</span>{" "}
+                            <Badge variant={foundPlayer.isAdmin ? "default" : "secondary"}>
+                              {foundPlayer.isAdmin ? "Admin" : "Not Admin"}
+                            </Badge>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleSetAdminStatus(foundPlayer.uid, true)}
+                          disabled={settingAdmin || foundPlayer.isAdmin}
+                          className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-600 text-white flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                        >
+                          <UserPlus className="h-4 w-4" />
+                          Grant Admin
+                        </Button>
+                        <Button
+                          onClick={() => handleSetAdminStatus(foundPlayer.uid, false)}
+                          disabled={settingAdmin || !foundPlayer.isAdmin}
+                          variant="destructive"
+                          className="flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                        >
+                          <UserMinus className="h-4 w-4" />
+                          Revoke Admin
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Unverified Runs Section */}
-          <TabsContent value="runs" className="space-y-4">
-            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-          <CardHeader>
-            <CardTitle>Unverified Runs</CardTitle>
-          </CardHeader>
+          <TabsContent value="runs" className="space-y-4 animate-fade-in">
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-[#cba6f7]/20 hover:border-[#cba6f7]/50">
+              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
+                <CardTitle className="text-xl bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                  Unverified Runs
+                </CardTitle>
+              </CardHeader>
           <CardContent>
             {unverifiedRuns.length === 0 ? (
               <p className="text-[hsl(222,15%,60%)] text-center py-8">No runs awaiting verification.</p>
@@ -1085,7 +1423,7 @@ const Admin = () => {
                   </TableHeader>
                   <TableBody>
                     {unverifiedRuns.map((run) => (
-                      <TableRow key={run.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)]">
+                      <TableRow key={run.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-md">
                         <TableCell className="py-3 px-4 font-medium">
                           <span style={{ color: run.nameColor || 'inherit' }}>{run.playerName}</span>
                           {run.player2Name && (
@@ -1111,7 +1449,7 @@ const Admin = () => {
                             variant="ghost" 
                             size="sm" 
                             onClick={() => handleVerify(run.id)}
-                            className="text-green-500 hover:bg-green-900/20"
+                            className="text-green-500 hover:bg-green-900/20 transition-all duration-300 hover:scale-110 hover:shadow-md"
                           >
                             <CheckCircle className="h-4 w-4" />
                           </Button>
@@ -1119,7 +1457,7 @@ const Admin = () => {
                             variant="ghost" 
                             size="sm" 
                             onClick={() => handleReject(run.id)}
-                            className="text-red-500 hover:bg-red-900/20"
+                            className="text-red-500 hover:bg-red-900/20 transition-all duration-300 hover:scale-110 hover:shadow-md"
                           >
                             <XCircle className="h-4 w-4" />
                           </Button>
@@ -1136,14 +1474,18 @@ const Admin = () => {
           </TabsContent>
 
           {/* Category Management Section */}
-          <TabsContent value="categories" className="space-y-4">
-            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FolderTree className="h-5 w-5" />
-              Manage Categories
-            </CardTitle>
-          </CardHeader>
+          <TabsContent value="categories" className="space-y-4 animate-fade-in">
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-[#cba6f7]/20 hover:border-[#cba6f7]/50">
+              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+                    <FolderTree className="h-5 w-5 text-[hsl(240,21%,15%)]" />
+                  </div>
+                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                    Manage Categories
+                  </span>
+                </CardTitle>
+              </CardHeader>
           <CardContent className="p-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
@@ -1165,7 +1507,7 @@ const Admin = () => {
                     type="submit" 
                     disabled={addingCategory}
                     size="sm"
-                    className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2"
+                    className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
                   >
                     <PlusCircle className="h-3 w-3" />
                     {addingCategory ? "Adding..." : "Add Category"}
@@ -1187,7 +1529,7 @@ const Admin = () => {
                       </TableHeader>
                       <TableBody>
                         {firestoreCategories.map((category, index) => (
-                          <TableRow key={category.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)]">
+                          <TableRow key={category.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-sm">
                             <TableCell className="py-2 px-3 font-medium text-sm">
                               {editingCategory?.id === category.id ? (
                                 <Input
@@ -1224,42 +1566,42 @@ const Admin = () => {
                             </>
                           ) : (
                             <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleMoveCategoryUp(category.id)}
-                                disabled={reorderingCategory === category.id || index === 0}
-                                className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0"
-                                title="Move up"
-                              >
-                                <ArrowUp className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleMoveCategoryDown(category.id)}
-                                disabled={reorderingCategory === category.id || index === firestoreCategories.length - 1}
-                                className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0"
-                                title="Move down"
-                              >
-                                <ArrowDown className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleStartEditCategory(category)}
-                                className="text-blue-500 hover:bg-blue-900/20 h-7 w-7 p-0"
-                              >
-                                <Edit2 className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteCategory(category.id)}
-                                className="text-red-500 hover:bg-red-900/20 h-7 w-7 p-0"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleMoveCategoryUp(category.id)}
+                              disabled={reorderingCategory === category.id || index === 0}
+                              className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                              title="Move up"
+                            >
+                              <ArrowUp className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleMoveCategoryDown(category.id)}
+                              disabled={reorderingCategory === category.id || index === firestoreCategories.length - 1}
+                              className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                              title="Move down"
+                            >
+                              <ArrowDown className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleStartEditCategory(category)}
+                              className="text-blue-500 hover:bg-blue-900/20 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteCategory(category.id)}
+                              className="text-red-500 hover:bg-red-900/20 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                             </>
                           )}
                         </TableCell>
@@ -1276,14 +1618,18 @@ const Admin = () => {
           </TabsContent>
 
           {/* Platform Management Section */}
-          <TabsContent value="platforms" className="space-y-4">
-            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Gamepad2 className="h-5 w-5" />
-              Manage Platforms
-            </CardTitle>
-          </CardHeader>
+          <TabsContent value="platforms" className="space-y-4 animate-fade-in">
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-[#cba6f7]/20 hover:border-[#cba6f7]/50">
+              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+                    <Gamepad2 className="h-5 w-5 text-[hsl(240,21%,15%)]" />
+                  </div>
+                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                    Manage Platforms
+                  </span>
+                </CardTitle>
+              </CardHeader>
           <CardContent className="p-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
@@ -1305,7 +1651,7 @@ const Admin = () => {
                     type="submit" 
                     disabled={addingPlatform}
                     size="sm"
-                    className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2"
+                    className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
                   >
                     <PlusCircle className="h-3 w-3" />
                     {addingPlatform ? "Adding..." : "Add Platform"}
@@ -1327,7 +1673,7 @@ const Admin = () => {
                       </TableHeader>
                       <TableBody>
                         {firestorePlatforms.map((platform, index) => (
-                          <TableRow key={platform.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)]">
+                          <TableRow key={platform.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-sm">
                             <TableCell className="py-2 px-3 font-medium text-sm">
                               {editingPlatform?.id === platform.id ? (
                                 <Input
@@ -1369,7 +1715,7 @@ const Admin = () => {
                                     size="sm"
                                     onClick={() => handleMovePlatformUp(platform.id)}
                                     disabled={reorderingPlatform === platform.id || index === 0}
-                                    className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0"
+                                    className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
                                     title="Move up"
                                   >
                                     <ArrowUp className="h-3 w-3" />
@@ -1379,7 +1725,7 @@ const Admin = () => {
                                     size="sm"
                                     onClick={() => handleMovePlatformDown(platform.id)}
                                     disabled={reorderingPlatform === platform.id || index === firestorePlatforms.length - 1}
-                                    className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0"
+                                    className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
                                     title="Move down"
                                   >
                                     <ArrowDown className="h-3 w-3" />
@@ -1388,7 +1734,7 @@ const Admin = () => {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleStartEditPlatform(platform)}
-                                    className="text-blue-500 hover:bg-blue-900/20 h-7 w-7 p-0"
+                                    className="text-blue-500 hover:bg-blue-900/20 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
                                   >
                                     <Edit2 className="h-3 w-3" />
                                   </Button>
@@ -1396,7 +1742,7 @@ const Admin = () => {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleDeletePlatform(platform.id)}
-                                    className="text-red-500 hover:bg-red-900/20 h-7 w-7 p-0"
+                                    className="text-red-500 hover:bg-red-900/20 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
                                   >
                                     <Trash2 className="h-3 w-3" />
                                   </Button>
@@ -1417,14 +1763,18 @@ const Admin = () => {
           </TabsContent>
 
           {/* Manage Downloads Section */}
-          <TabsContent value="downloads" className="space-y-4">
-            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wrench className="h-5 w-5" />
-              Manage Downloads
-            </CardTitle>
-          </CardHeader>
+          <TabsContent value="downloads" className="space-y-4 animate-fade-in">
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-[#cba6f7]/20 hover:border-[#cba6f7]/50">
+              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+                    <Wrench className="h-5 w-5 text-[hsl(240,21%,15%)]" />
+                  </div>
+                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                    Manage Downloads
+                  </span>
+                </CardTitle>
+              </CardHeader>
           <CardContent>
             <h3 className="text-xl font-semibold mb-4">Add New Download</h3>
             <form onSubmit={handleAddDownload} className="space-y-4 mb-8">
@@ -1615,7 +1965,7 @@ const Admin = () => {
               <Button 
                 type="submit" 
                 disabled={addingDownload}
-                className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2"
+                className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
               >
                 <PlusCircle className="h-4 w-4" />
                 {addingDownload ? "Adding..." : "Add Download"}
@@ -1640,7 +1990,7 @@ const Admin = () => {
                   </TableHeader>
                   <TableBody>
                     {downloadEntries.map((entry, index) => (
-                      <TableRow key={entry.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)]">
+                      <TableRow key={entry.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-sm">
                         <TableCell className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -1648,7 +1998,7 @@ const Admin = () => {
                               size="sm"
                               onClick={() => handleMoveDownloadUp(entry.id)}
                               disabled={reorderingDownload !== null || index === 0}
-                              className="h-8 w-8 p-0"
+                              className="h-8 w-8 p-0 transition-all duration-200 hover:scale-110 hover:bg-purple-900/20 text-purple-500"
                             >
                               <ArrowUp className="h-4 w-4" />
                             </Button>
@@ -1657,7 +2007,7 @@ const Admin = () => {
                               size="sm"
                               onClick={() => handleMoveDownloadDown(entry.id)}
                               disabled={reorderingDownload !== null || index === downloadEntries.length - 1}
-                              className="h-8 w-8 p-0"
+                              className="h-8 w-8 p-0 transition-all duration-200 hover:scale-110 hover:bg-purple-900/20 text-purple-500"
                             >
                               <ArrowDown className="h-4 w-4" />
                             </Button>
@@ -1684,7 +2034,7 @@ const Admin = () => {
                             variant="ghost" 
                             size="sm" 
                             onClick={() => handleDeleteDownload(entry.id)}
-                            className="text-red-500 hover:bg-red-900/20"
+                            className="text-red-500 hover:bg-red-900/20 transition-all duration-200 hover:scale-110"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -1695,300 +2045,50 @@ const Admin = () => {
                 </Table>
               </div>
             )}
-          </CardContent>
-        </Card>
-
-            {/* Manual Run Input Section */}
-            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mt-4">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Play className="h-4 w-4" />
-                  Manually Add Run
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleAddManualRun} className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="manualPlayerName">Player 1 Name *</Label>
-                  <Input
-                    id="manualPlayerName"
-                    type="text"
-                    value={manualRun.playerName}
-                    onChange={(e) => setManualRun({ ...manualRun, playerName: e.target.value })}
-                    placeholder="Player name"
-                    required
-                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="manualPlayerUsername">Player Username (Optional)</Label>
-                  <Input
-                    id="manualPlayerUsername"
-                    type="text"
-                    value={manualRun.playerUsername}
-                    onChange={(e) => setManualRun({ ...manualRun, playerUsername: e.target.value })}
-                    placeholder="Enter username to link run to account"
-                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                  />
-                  <p className="text-sm text-[hsl(222,15%,60%)] mt-1">
-                    If provided, the run will be linked to this player's account. If not found, the run will still be added with the provided player name.
-                  </p>
-                </div>
-                {manualRun.runType === 'co-op' && (
-                  <div>
-                    <Label htmlFor="manualPlayer2Name">Player 2 Name *</Label>
-                    <Input
-                      id="manualPlayer2Name"
-                      type="text"
-                      value={manualRun.player2Name}
-                      onChange={(e) => setManualRun({ ...manualRun, player2Name: e.target.value })}
-                      placeholder="Second player name"
-                      required={manualRun.runType === 'co-op'}
-                      className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                    />
-                  </div>
-                )}
-                <div>
-                  <Label htmlFor="manualTime">Completion Time *</Label>
-                  <Input
-                    id="manualTime"
-                    type="text"
-                    value={manualRun.time}
-                    onChange={(e) => setManualRun({ ...manualRun, time: e.target.value })}
-                    placeholder="HH:MM:SS"
-                    required
-                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="manualDate">Date *</Label>
-                  <Input
-                    id="manualDate"
-                    type="date"
-                    value={manualRun.date}
-                    onChange={(e) => setManualRun({ ...manualRun, date: e.target.value })}
-                    required
-                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                  />
-                </div>
-              </div>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <Label htmlFor="manualCategory" className="text-xs">Category *</Label>
-                      <Select
-                        value={manualRun.category}
-                        onValueChange={(value) => setManualRun({ ...manualRun, category: value })}
-                      >
-                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-9 text-sm">
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {firestoreCategories.map((category) => (
-                            <SelectItem key={category.id} value={category.id} className="text-sm">
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="manualPlatform" className="text-xs">Platform *</Label>
-                      <Select
-                        value={manualRun.platform}
-                        onValueChange={(value) => setManualRun({ ...manualRun, platform: value })}
-                      >
-                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-9 text-sm">
-                          <SelectValue placeholder="Select platform" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {firestorePlatforms.map((platform) => (
-                            <SelectItem key={platform.id} value={platform.id} className="text-sm">
-                              {platform.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="manualRunType" className="text-xs">Run Type *</Label>
-                      <Select
-                        value={manualRun.runType}
-                        onValueChange={(value) => setManualRun({ ...manualRun, runType: value as 'solo' | 'co-op' })}
-                      >
-                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-9 text-sm">
-                          <SelectValue placeholder="Select run type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="solo" className="text-sm">Solo</SelectItem>
-                          <SelectItem value="co-op" className="text-sm">Co-op</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-              <div>
-                <Label htmlFor="manualVideoUrl">Video URL (Optional)</Label>
-                <Input
-                  id="manualVideoUrl"
-                  type="url"
-                  value={manualRun.videoUrl}
-                  onChange={(e) => setManualRun({ ...manualRun, videoUrl: e.target.value })}
-                  placeholder="https://youtube.com/watch?v=..."
-                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="manualComment">Comment (Optional)</Label>
-                <Textarea
-                  id="manualComment"
-                  value={manualRun.comment}
-                  onChange={(e) => setManualRun({ ...manualRun, comment: e.target.value })}
-                  placeholder="Add a comment about the run..."
-                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="manualVerified"
-                  checked={manualRun.verified}
-                  onChange={(e) => setManualRun({ ...manualRun, verified: e.target.checked })}
-                  className="w-4 h-4 rounded border-[hsl(235,13%,30%)] bg-[hsl(240,21%,15%)]"
-                />
-                <Label htmlFor="manualVerified" className="cursor-pointer">
-                  Mark as verified
-                </Label>
-              </div>
-
-              {manualRun.verified && (
-                <div>
-                  <Label htmlFor="manualVerifiedBy">Verifier (Optional)</Label>
-                  <Input
-                    id="manualVerifiedBy"
-                    type="text"
-                    value={manualRun.verifiedBy}
-                    onChange={(e) => setManualRun({ ...manualRun, verifiedBy: e.target.value })}
-                    placeholder="Enter verifier name or UID (defaults to current admin if empty)"
-                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                  />
-                  <p className="text-sm text-[hsl(222,15%,60%)] mt-1">
-                    Leave empty to use your admin account as the verifier. Enter a name or UID to specify a different verifier.
-                  </p>
-                </div>
-              )}
-
-              <Button
-                type="submit"
-                disabled={addingManualRun}
-                className="w-full bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2"
-              >
-                <PlusCircle className="h-4 w-4" />
-                {addingManualRun ? "Adding..." : "Add Run"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-            {/* Admin Management Section */}
-            <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mt-4">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShieldAlert className="h-5 w-5" />
-              Manage Admin Status
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <div className="flex gap-4 items-end">
-                <div className="flex-1">
-                  <Label htmlFor="adminSearchType">Search By</Label>
-                  <Select value={adminSearchType} onValueChange={(value: "displayName" | "uid") => {
-                    setAdminSearchType(value);
-                    setFoundPlayer(null);
-                    setAdminUserInput("");
-                  }}>
-                    <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="displayName">Display Name</SelectItem>
-                      <SelectItem value="uid">UID</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1">
-                  <Label htmlFor="adminUserInput">{adminSearchType === "displayName" ? "Display Name" : "UID"}</Label>
-                  <Input
-                    id="adminUserInput"
-                    value={adminUserInput}
-                    onChange={(e) => setAdminUserInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleSearchPlayer();
-                      }
-                    }}
-                    placeholder={adminSearchType === "displayName" ? "Enter display name" : "Enter UID"}
-                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                  />
-                </div>
-                <Button
-                  onClick={handleSearchPlayer}
-                  disabled={searchingPlayer || !adminUserInput.trim()}
-                  className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold"
-                >
-                  {searchingPlayer ? "Searching..." : "Search"}
-                </Button>
-              </div>
-
-              {foundPlayer && (
-                <div className="bg-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] rounded-lg p-4 space-y-4">
-                  <div>
-                    <h4 className="font-semibold mb-2">Player Found</h4>
-                    <div className="space-y-1 text-sm">
-                      <p><span className="text-[hsl(222,15%,60%)]">UID:</span> <code className="text-[#cba6f7]">{foundPlayer.uid}</code></p>
-                      <p><span className="text-[hsl(222,15%,60%)]">Display Name:</span> {foundPlayer.displayName || "Not set"}</p>
-                      <p><span className="text-[hsl(222,15%,60%)]">Email:</span> {foundPlayer.email || "Not set"}</p>
-                      <p>
-                        <span className="text-[hsl(222,15%,60%)]">Admin Status:</span>{" "}
-                        <Badge variant={foundPlayer.isAdmin ? "default" : "secondary"}>
-                          {foundPlayer.isAdmin ? "Admin" : "Not Admin"}
-                        </Badge>
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => handleSetAdminStatus(foundPlayer.uid, true)}
-                      disabled={settingAdmin || foundPlayer.isAdmin}
-                      className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
-                    >
-                      <UserPlus className="h-4 w-4" />
-                      Grant Admin
-                    </Button>
-                    <Button
-                      onClick={() => handleSetAdminStatus(foundPlayer.uid, false)}
-                      disabled={settingAdmin || !foundPlayer.isAdmin}
-                      variant="destructive"
-                      className="flex items-center gap-2"
-                    >
-                      <UserMinus className="h-4 w-4" />
-                      Revoke Admin
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
+      
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes gradient {
+          0% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+          100% {
+            background-position: 0% 50%;
+          }
+        }
+        
+        .animate-fade-in {
+          animation: fadeIn 0.6s ease-out forwards;
+        }
+        
+        .animate-fade-in-delay {
+          animation: fadeIn 0.8s ease-out 0.2s forwards;
+          opacity: 0;
+        }
+        
+        .animate-gradient {
+          background-size: 200% auto;
+          animation: gradient 3s linear infinite;
+        }
+      `}</style>
     </div>
   );
 };
