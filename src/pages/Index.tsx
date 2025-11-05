@@ -87,7 +87,7 @@ const Index = () => {
                 lsw1.dev
               </h1>
               <p className="text-xl md:text-2xl mb-10 text-ctp-subtext1 max-w-2xl mx-auto animate-fade-in-delay">
-                Compete for the fastest times in the galaxy. Track your progress and climb the ranks!
+                The official site for the LEGO Star Wars: The Video Game speedrunning community. Track your progress and try to earn a stud on the leaderboards!
               </p>
               <div className="flex flex-col sm:flex-row justify-center gap-4 animate-fade-in-delay-2">
                 <Button size="lg" className="bg-gradient-to-r from-ctp-mauve via-ctp-pink to-ctp-mauve hover:from-ctp-pink hover:via-ctp-mauve hover:to-ctp-pink text-ctp-crust font-bold transition-all duration-300 hover:scale-110 hover:shadow-xl hover:shadow-ctp-mauve/50 animate-gradient bg-[length:200%_auto]" asChild>

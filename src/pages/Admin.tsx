@@ -1272,11 +1272,8 @@ const Admin = () => {
             {/* Manual Run Input Section */}
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                    <Play className="h-5 w-5 text-[hsl(240,21%,15%)]" />
-                  </div>
-                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
+                  <span>
                     Manually Add Run
                   </span>
                 </CardTitle>
@@ -1533,11 +1530,8 @@ const Admin = () => {
             {/* Admin Management Section */}
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                    <ShieldAlert className="h-5 w-5 text-[hsl(240,21%,15%)]" />
-                  </div>
-                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
+                  <span>
                     Manage Admin Status
                   </span>
                 </CardTitle>
@@ -1716,11 +1710,8 @@ const Admin = () => {
           <TabsContent value="categories" className="space-y-4 animate-fade-in">
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                    <FolderTree className="h-5 w-5 text-[hsl(240,21%,15%)]" />
-                  </div>
-                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
+                  <span>
                     Manage Categories
                   </span>
                 </CardTitle>
@@ -1882,11 +1873,8 @@ const Admin = () => {
           <TabsContent value="levels" className="space-y-4 animate-fade-in">
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                    <Star className="h-5 w-5 text-[hsl(240,21%,15%)]" />
-                  </div>
-                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
+                  <span>
                     Manage Levels
                   </span>
                 </CardTitle>
@@ -2026,11 +2014,8 @@ const Admin = () => {
           <TabsContent value="platforms" className="space-y-4 animate-fade-in">
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                    <Gamepad2 className="h-5 w-5 text-[hsl(240,21%,15%)]" />
-                  </div>
-                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
+                  <span>
                     Manage Platforms
                   </span>
                 </CardTitle>
@@ -2171,11 +2156,8 @@ const Admin = () => {
           <TabsContent value="downloads" className="space-y-4 animate-fade-in">
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                    <Wrench className="h-5 w-5 text-[hsl(240,21%,15%)]" />
-                  </div>
-                  <span className="bg-gradient-to-r from-[#cba6f7] to-[#f38ba8] bg-clip-text text-transparent">
+                <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
+                  <span>
                     Manage Downloads
                   </span>
                 </CardTitle>

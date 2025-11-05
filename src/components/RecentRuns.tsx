@@ -69,7 +69,7 @@ export function RecentRuns({ runs, loading, showRankBadge = true }: RecentRunsPr
               <Link
                 key={run.id}
                 to={`/run/${run.id}`}
-                className="group relative block overflow-hidden rounded-xl bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] hover:border-[hsl(var(--mocha-mauve))] transition-all duration-300 hover:shadow-lg hover:shadow-[hsl(var(--mocha-mauve))]/20 hover:-translate-y-1"
+                className="group relative block overflow-hidden bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border border-[hsl(235,13%,30%)] hover:border-[hsl(var(--mocha-mauve))] transition-all duration-300 hover:shadow-lg hover:shadow-[hsl(var(--mocha-mauve))]/20 hover:-translate-y-1"
               >
                 {/* Animated background gradient on hover */}
                 <div className="absolute inset-0 bg-gradient-to-r from-[hsl(var(--mocha-mauve))]/0 via-[hsl(var(--mocha-mauve))]/5 to-[hsl(var(--mocha-mauve))]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
