@@ -32,6 +32,7 @@ export interface Player {
   nameColor?: string; // New field for player's name color
   isAdmin?: boolean; // New field to identify admin users
   totalPoints?: number; // Total points accumulated from all verified runs
+  profilePicture?: string; // URL to the player's profile picture
 }
 
 export interface Category {

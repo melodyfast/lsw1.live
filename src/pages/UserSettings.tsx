@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, User, Mail, Lock, Palette, Trophy, CheckCircle } from "lucide-react";
+import { Settings, User, Mail, Lock, Palette, Trophy, CheckCircle, Upload, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
 import { updatePlayerProfile, getPlayerByUid, getUnclaimedRunsByUsername, claimRun } from "@/lib/db";
@@ -16,6 +16,8 @@ import { Player, LeaderboardEntry } from "@/types/database";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, formatTime } from "@/lib/utils";
 import { categories, platforms } from "@/lib/db";
+import { useUploadThing } from "@/lib/uploadthing";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const UserSettings = () => {
   const { currentUser, loading: authLoading } = useAuth();
@@ -27,9 +29,11 @@ const UserSettings = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [nameColor, setNameColor] = useState("#cba6f7"); // Default color
+  const [profilePicture, setProfilePicture] = useState<string>("");
   const [pageLoading, setPageLoading] = useState(true);
   const [unclaimedRuns, setUnclaimedRuns] = useState<LeaderboardEntry[]>([]);
   const [loadingUnclaimed, setLoadingUnclaimed] = useState(false);
+  const { startUpload, isUploading } = useUploadThing("profilePicture");
 
   useEffect(() => {
     if (!authLoading) {
@@ -51,6 +55,7 @@ const UserSettings = () => {
             setDisplayName(player.displayName || currentUser.displayName || "");
             setEmail(player.email || currentUser.email || "");
             setNameColor(player.nameColor || "#cba6f7");
+            setProfilePicture(player.profilePicture || "");
             // Check for unclaimed runs after loading player data
             if (player.displayName) {
               fetchUnclaimedRuns(player.displayName);
@@ -59,6 +64,7 @@ const UserSettings = () => {
             // If player doesn't exist in DB, use Firebase auth data
             setDisplayName(currentUser.displayName || "");
             setEmail(currentUser.email || "");
+            setProfilePicture("");
             // Still check for unclaimed runs using displayName
             if (currentUser.displayName) {
               fetchUnclaimedRuns(currentUser.displayName);
@@ -127,7 +133,8 @@ const UserSettings = () => {
       const success = await updatePlayerProfile(currentUser.uid, { 
         displayName: newDisplayName, 
         nameColor,
-        email: currentUser.email || email || ""
+        email: currentUser.email || email || "",
+        profilePicture: profilePicture || undefined
       });
 
       if (!success) {
@@ -141,6 +148,7 @@ const UserSettings = () => {
         // Update local state with the saved data
         setDisplayName(player.displayName || newDisplayName);
         setNameColor(player.nameColor || nameColor);
+        setProfilePicture(player.profilePicture || "");
       } else {
         // Fallback to the new display name if player fetch fails
         setDisplayName(newDisplayName);
@@ -335,6 +343,97 @@ const UserSettings = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleUpdateProfile} className="space-y-4">
+              <div>
+                <Label>Profile Picture</Label>
+                <div className="flex items-center gap-4 mb-2">
+                  <Avatar className="h-20 w-20">
+                    <AvatarImage src={profilePicture || `https://api.dicebear.com/7.x/lorelei-neutral/svg?seed=${displayName}`} />
+                    <AvatarFallback>{displayName.charAt(0).toUpperCase() || "U"}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={async () => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = async (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0];
+                          if (!file) return;
+                          
+                          // Validate file size (4MB max)
+                          if (file.size > 4 * 1024 * 1024) {
+                            toast({
+                              title: "File Too Large",
+                              description: "Profile picture must be less than 4MB.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          
+                          // Validate file type
+                          if (!file.type.startsWith('image/')) {
+                            toast({
+                              title: "Invalid File Type",
+                              description: "Please upload an image file.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          
+                          try {
+                            const uploadedFiles = await startUpload([file]);
+                            if (uploadedFiles && uploadedFiles.length > 0) {
+                              const fileUrl = uploadedFiles[0]?.url;
+                              if (fileUrl) {
+                                setProfilePicture(fileUrl);
+                                toast({
+                                  title: "Profile Picture Uploaded",
+                                  description: "Click 'Save Profile' to save your changes.",
+                                });
+                              }
+                            }
+                          } catch (error) {
+                            toast({
+                              title: "Upload Failed",
+                              description: "Failed to upload profile picture. Please try again.",
+                              variant: "destructive",
+                            });
+                          }
+                        };
+                        input.click();
+                      }}
+                      disabled={isUploading}
+                      className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] hover:bg-[hsl(234,14%,29%)]"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      {isUploading ? "Uploading..." : "Upload Picture"}
+                    </Button>
+                    {profilePicture && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setProfilePicture("");
+                          toast({
+                            title: "Profile Picture Removed",
+                            description: "Click 'Save Profile' to save your changes.",
+                          });
+                        }}
+                        className="ml-2 text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-sm text-[hsl(222,15%,60%)] mt-1">
+                  Upload a profile picture (max 4MB). Click "Save Profile" to apply changes.
+                </p>
+              </div>
               <div>
                 <Label htmlFor="displayName">Display Name</Label>
                 <Input

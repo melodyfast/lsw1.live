@@ -12,6 +12,15 @@ type OurFileRouter = {
       type: string;
     };
   };
+  profilePicture: {
+    input: Record<string, never>;
+    output: {
+      url: string;
+      name: string;
+      size: number;
+      type: string;
+    };
+  };
 };
 
 export const { useUploadThing, uploadFiles } = generateReactHelpers<OurFileRouter>({

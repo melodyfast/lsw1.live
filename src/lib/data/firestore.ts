@@ -291,6 +291,7 @@ export const getRecentRunsFirestore = async (limitCount: number = 10): Promise<L
 export const getPlayerRunsFirestore = async (playerId: string): Promise<LeaderboardEntry[]> => {
   if (!db) return [];
   try {
+    // Fetch player's runs
     const q = query(
       collection(db, "leaderboardEntries"),
       where("playerId", "==", playerId),
@@ -304,7 +305,70 @@ export const getPlayerRunsFirestore = async (playerId: string): Promise<Leaderbo
       .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
       .filter(entry => !entry.isObsolete);
 
-    // Enrich with player display name and color
+    if (entries.length === 0) {
+      return [];
+    }
+
+    // Get unique category/platform/runType combinations from player's runs
+    const combinations = new Set<string>();
+    entries.forEach(entry => {
+      const key = `${entry.category}_${entry.platform}_${entry.runType || 'solo'}`;
+      combinations.add(key);
+    });
+
+    // Fetch all verified entries once (with higher limit to ensure we get all relevant entries)
+    const allEntriesQuery = query(
+      collection(db, "leaderboardEntries"),
+      where("verified", "==", true),
+      firestoreLimit(500)
+    );
+    
+    const allEntriesSnapshot = await getDocs(allEntriesQuery);
+    const allEntries = allEntriesSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
+      .filter(entry => !entry.isObsolete);
+
+    // Create a map to store ranks for each combination
+    const rankMap = new Map<string, Map<string, number>>(); // combination -> runId -> rank
+
+    // Calculate ranks for each unique combination
+    for (const comboKey of combinations) {
+      const [category, platform, runType] = comboKey.split('_');
+      
+      // Filter entries for this combination
+      const comboEntries = allEntries.filter(entry => 
+        entry.category === category &&
+        entry.platform === platform &&
+        (entry.runType || 'solo') === runType
+      );
+
+      // Parse and sort by time
+      const entriesWithTime = comboEntries.map(entry => {
+        const parts = entry.time.split(':').map(Number);
+        let totalSeconds = 0;
+        if (parts.length === 3) {
+          totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+        } else if (parts.length === 2) {
+          totalSeconds = parts[0] * 60 + parts[1];
+        } else {
+          totalSeconds = Infinity;
+        }
+        return { entry, totalSeconds };
+      });
+
+      // Sort by time (fastest first)
+      entriesWithTime.sort((a, b) => a.totalSeconds - b.totalSeconds);
+
+      // Assign ranks
+      const comboRankMap = new Map<string, number>();
+      entriesWithTime.forEach((item, index) => {
+        comboRankMap.set(item.entry.id, index + 1);
+      });
+      
+      rankMap.set(comboKey, comboRankMap);
+    }
+
+    // Enrich with player display name and color, and assign ranks
     const player = await getPlayerByUidFirestore(playerId);
     return entries.map(entry => {
       if (player) {
@@ -316,6 +380,14 @@ export const getPlayerRunsFirestore = async (playerId: string): Promise<Leaderbo
           entry.nameColor = player.nameColor;
         }
       }
+      
+      // Assign rank based on the combination
+      const comboKey = `${entry.category}_${entry.platform}_${entry.runType || 'solo'}`;
+      const comboRankMap = rankMap.get(comboKey);
+      if (comboRankMap) {
+        entry.rank = comboRankMap.get(entry.id);
+      }
+      
       return entry;
     });
   } catch (error) {

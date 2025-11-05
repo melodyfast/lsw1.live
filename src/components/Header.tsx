@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Upload, Home, User, Settings, ShieldAlert, Download, Radio, Trophy, Github, MessageCircle, Menu } from "lucide-react";
+import { Upload, User, Settings, ShieldAlert, Download, Radio, Trophy, Github, MessageCircle, Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 import LegoStudIcon from "@/components/icons/LegoStudIcon";
 import { useAuth } from "@/components/AuthProvider";
@@ -34,15 +34,6 @@ export function Header() {
 
   const NavLinks = () => (
     <>
-      <Link 
-        to="/" 
-        className="text-[#cba6f7] hover:text-[#cba6f7] flex items-center gap-2 transition-all duration-300 relative group"
-        onClick={() => setIsMobileMenuOpen(false)}
-      >
-        <Home className="h-4 w-4 transition-transform duration-300 group-hover:scale-110" />
-        <span>Home</span>
-        <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-[#cba6f7] via-[#f5c2e7] to-[#cba6f7] transition-all duration-300 group-hover:w-full"></span>
-      </Link>
       <Link 
         to="/leaderboards" 
         className="text-[#cdd6f4] hover:text-[#cdd6f4] transition-all duration-300 relative group"

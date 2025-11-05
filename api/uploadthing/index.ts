@@ -20,6 +20,16 @@ const ourFileRouter = {
       console.log("File upload complete:", file.url);
       return {};
     }),
+  profilePicture: f({ 
+    image: { 
+      maxFileSize: "4MB", 
+      maxFileCount: 1 
+    } 
+  })
+    .onUploadComplete(async ({ file }) => {
+      console.log("Profile picture upload complete:", file.url);
+      return {};
+    }),
 } satisfies FileRouter;
 
 // Create the route handler - this returns an object with GET and POST handlers

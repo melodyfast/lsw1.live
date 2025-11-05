@@ -15,15 +15,16 @@ interface PlayerProfileProps {
   joinDate: string;
   stats: PlayerStats;
   nameColor?: string; // Added nameColor prop
+  profilePicture?: string; // URL to the player's profile picture
 }
 
-export function PlayerProfile({ playerName, joinDate, stats, nameColor }: PlayerProfileProps) {
+export function PlayerProfile({ playerName, joinDate, stats, nameColor, profilePicture }: PlayerProfileProps) {
   return (
     <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
       <CardHeader>
         <CardTitle className="flex items-center gap-3">
           <Avatar className="h-12 w-12">
-            <AvatarImage src={`https://api.dicebear.com/7.x/lorelei-neutral/svg?seed=${playerName}`} />
+            <AvatarImage src={profilePicture || `https://api.dicebear.com/7.x/lorelei-neutral/svg?seed=${playerName}`} />
             <AvatarFallback>{playerName.charAt(0)}</AvatarFallback>
           </Avatar>
           <div>
