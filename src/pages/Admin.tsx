@@ -369,9 +369,6 @@ const Admin = () => {
 
     setAddingDownload(true);
     try {
-      // Log current state for debugging
-      console.log("Current newDownload state:", newDownload);
-      
       const downloadEntry: Omit<DownloadEntry, 'id' | 'dateAdded' | 'order'> = {
         name: newDownload.name,
         description: newDownload.description,
@@ -383,8 +380,6 @@ const Admin = () => {
           : {}
         ),
       };
-      
-      console.log("Download entry being saved:", downloadEntry);
       
       const success = await addDownloadEntry(downloadEntry, currentUser.uid);
       if (success) {
@@ -2278,11 +2273,7 @@ const Admin = () => {
                             }));
                             
                             try {
-                              console.log("Starting upload for:", file.name, "Size:", file.size);
                               const uploadedFiles = await startUpload([file]);
-                              console.log("Upload result (full):", JSON.stringify(uploadedFiles, null, 2));
-                              console.log("Upload result type:", typeof uploadedFiles);
-                              console.log("Is array?", Array.isArray(uploadedFiles));
                               
                               // Handle different response structures
                               let fileUrl: string | null = null;
@@ -2290,18 +2281,15 @@ const Admin = () => {
                               if (Array.isArray(uploadedFiles) && uploadedFiles.length > 0) {
                                 // Standard array response
                                 fileUrl = uploadedFiles[0]?.url || uploadedFiles[0]?.serverData?.url || null;
-                                console.log("File URL from array:", fileUrl);
                               } else if (uploadedFiles && typeof uploadedFiles === 'object') {
                                 // Object response - try different possible properties
                                 fileUrl = (uploadedFiles as any).url || 
                                          (uploadedFiles as any).fileUrl || 
                                          (uploadedFiles as any)[0]?.url ||
                                          null;
-                                console.log("File URL from object:", fileUrl);
                               }
                               
                               if (fileUrl) {
-                                console.log("Got fileUrl:", fileUrl);
                                 // Use functional update to ensure we have the latest state
                                 setNewDownload((prev) => {
                                   const updated = { 

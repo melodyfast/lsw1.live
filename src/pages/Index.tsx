@@ -21,7 +21,7 @@ const Index = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const recentEntries = await getRecentRuns(5);
+        const recentEntries = await getRecentRuns(3);
         setRecentRunsData(recentEntries);
       } catch (error) {
         // Silent fail
@@ -130,7 +130,7 @@ const Index = () => {
 
       <div className="py-16 px-4 sm:px-6 overflow-x-hidden">
         <div className="max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Left Side - Twitch Embed */}
             <div className="lg:col-span-2 min-w-0">
               <div className="flex justify-center overflow-x-auto">
@@ -141,7 +141,7 @@ const Index = () => {
             </div>
 
             {/* Right Side - Recent Runs */}
-            <div className="lg:col-span-1 min-w-0">
+            <div className="lg:col-span-3 min-w-0">
               <div className="mb-3">
                 <h2 className="text-lg sm:text-xl font-bold mb-1.5 text-ctp-text">Recent Runs</h2>
                 <p className="text-xs text-ctp-subtext1">
@@ -150,7 +150,7 @@ const Index = () => {
               </div>
 
               <div className="overflow-x-auto">
-                <div className="[&>div]:scale-95 [&>div]:origin-top [&_header]:hidden [&_div[class*='CardContent']]:!p-4 [&_div[class*='space-y-5']]:!space-y-3 [&_.text-xl]:!text-base [&_.text-2xl]:!text-lg [&_.text-sm]:!text-xs">
+                <div className="[&_header]:hidden [&_div[class*='CardContent']]:!p-4 [&_div[class*='space-y-5']]:!space-y-3">
                   <RecentRuns runs={recentRunsData} loading={loading} showRankBadge={false} />
                 </div>
               </div>

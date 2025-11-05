@@ -2039,9 +2039,6 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
       result.errors.push("Warning: Hit Firestore query limit of 10,000 runs. Some runs may not have been processed. Consider implementing pagination for databases with more than 10,000 verified runs.");
     }
 
-    // Get points config once for all calculations
-    const pointsConfig = await getPointsConfigFirestore();
-
     // Track unique player IDs
     const playerIdsSet = new Set<string>();
 
@@ -2116,7 +2113,6 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
               platformName,
               runData.category,
               runData.platform,
-              pointsConfig,
               rank
             );
             
@@ -2186,7 +2182,6 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
     return result;
   } catch (error) {
     result.errors.push(`Fatal error: ${error instanceof Error ? error.message : String(error)}`);
-    console.error("Backfill fatal error:", error);
     return result;
   }
 };

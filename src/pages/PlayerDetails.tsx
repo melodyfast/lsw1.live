@@ -47,22 +47,17 @@ const PlayerDetails = () => {
         // Check both currentUser exists and uid matches playerId
         if (currentUser && currentUser.uid && currentUser.uid === playerId) {
           try {
-            console.log("Fetching pending runs for playerId:", playerId);
             const fetchedPending = await getPlayerPendingRuns(playerId);
-            console.log("Fetched pending runs:", fetchedPending);
             setPendingRuns(fetchedPending || []);
           } catch (error) {
-            console.error("Error fetching pending runs:", error);
             setPendingRuns([]);
           }
         } else {
           // Clear pending runs if not own profile
-          console.log("Not own profile or currentUser not loaded. Clearing pending runs.");
           setPendingRuns([]);
         }
       } catch (error) {
         // Error handling - player data fetch failed
-        console.error("Error fetching player data:", error);
         setPlayer(null);
         setPlayerRuns([]);
       } finally {

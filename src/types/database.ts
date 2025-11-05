@@ -81,16 +81,3 @@ import { User as FirebaseAuthUser } from "firebase/auth";
 export interface CustomUser extends FirebaseAuthUser {
   isAdmin?: boolean;
 }
-
-export interface PointsConfig {
-  id: string;
-  // Flat amount of points for all verified full game runs
-  basePointsPerRun: number;
-  // Bonus points for top 3 runs in any category
-  top3BonusPoints: {
-    rank1: number; // Bonus points for 1st place
-    rank2: number; // Bonus points for 2nd place
-    rank3: number; // Bonus points for 3rd place
-  };
-  enabled: boolean; // Master switch to enable/disable points
-}
