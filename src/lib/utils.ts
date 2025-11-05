@@ -123,13 +123,25 @@ export function calculatePoints(
   const basePoints = 10;
   
   // Ensure rank is a number for comparison
-  const numericRank = typeof rank === 'number' ? rank : (rank !== undefined ? Number(rank) : undefined);
+  // Handle null, undefined, and non-number values
+  let numericRank: number | undefined = undefined;
+  if (rank !== undefined && rank !== null) {
+    if (typeof rank === 'number' && !isNaN(rank)) {
+      numericRank = rank;
+    } else {
+      const parsed = Number(rank);
+      if (!isNaN(parsed) && parsed > 0) {
+        numericRank = parsed;
+      }
+    }
+  }
   
   // Start with base points
   let points = basePoints;
 
   // Add top 3 bonus if applicable
-  if (numericRank !== undefined && numericRank >= 1 && numericRank <= 3) {
+  // Only apply bonus if rank is exactly 1, 2, or 3
+  if (numericRank !== undefined && numericRank >= 1 && numericRank <= 3 && Number.isInteger(numericRank)) {
     if (numericRank === 1) {
       points += 50; // 1st place bonus
     } else if (numericRank === 2) {

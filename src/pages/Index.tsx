@@ -58,25 +58,26 @@ const Index = () => {
     <div className="min-h-screen bg-[#1e1e2e] text-ctp-text overflow-x-hidden">
       <div className="py-20 px-4 sm:px-6 lg:px-8 animate-fade-in">
         <div className="max-w-[1920px] mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 lg:gap-8">
+          {/* Top Row - Stats Cards and Title */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 lg:gap-8 mb-6 lg:mb-8">
             {/* Left Side - Verified Runs Card */}
             <div className="lg:col-span-3 lg:order-1 min-w-0">
-              <Card className="bg-gradient-to-br from-ctp-base via-ctp-mantle to-ctp-crust border-ctp-surface1 w-full h-full transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-ctp-green/30 hover:border-ctp-green/50 group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-card-foreground text-lg sm:text-xl lg:text-2xl whitespace-nowrap">
-                    <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7 text-ctp-green transition-transform duration-300 group-hover:scale-125 group-hover:rotate-12 flex-shrink-0" />
+              <Card className="bg-gradient-to-br from-ctp-base via-ctp-mantle to-ctp-crust border-ctp-surface1 w-full transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-ctp-green/30 hover:border-ctp-green/50 group">
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <CardTitle className="flex items-center gap-2 text-card-foreground text-base sm:text-lg lg:text-xl whitespace-nowrap">
+                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-ctp-green transition-transform duration-300 group-hover:scale-125 group-hover:rotate-12 flex-shrink-0" />
                     <span className="truncate">Verified Runs</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-4 pb-4 pt-2">
                   {statsLoading ? (
-                    <Skeleton className="h-12 w-32 mb-2" />
+                    <Skeleton className="h-10 w-28 mb-1" />
                   ) : (
-                    <div className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-ctp-green transition-all duration-300 truncate">
+                    <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-ctp-green transition-all duration-300 truncate">
                       {totalVerifiedRuns.toLocaleString()}
                     </div>
                   )}
-                  <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mt-3 whitespace-nowrap">
+                  <p className="text-xs sm:text-sm lg:text-base text-muted-foreground mt-1.5 whitespace-nowrap">
                     Total verified speedruns
                   </p>
                 </CardContent>
@@ -103,35 +104,32 @@ const Index = () => {
 
             {/* Right Side - Total Time Card */}
             <div className="lg:col-span-3 lg:order-3 min-w-0">
-              <Card className="bg-gradient-to-br from-ctp-base via-ctp-mantle to-ctp-crust border-ctp-surface1 w-full h-full transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-ctp-mauve/30 hover:border-ctp-mauve/50 group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-card-foreground text-lg sm:text-xl lg:text-2xl whitespace-nowrap">
-                    <Clock className="h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7 text-ctp-mauve transition-transform duration-300 group-hover:scale-125 group-hover:rotate-12 flex-shrink-0" />
+              <Card className="bg-gradient-to-br from-ctp-base via-ctp-mantle to-ctp-crust border-ctp-surface1 w-full transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-ctp-mauve/30 hover:border-ctp-mauve/50 group">
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <CardTitle className="flex items-center gap-2 text-card-foreground text-base sm:text-lg lg:text-xl whitespace-nowrap">
+                    <Clock className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-ctp-mauve transition-transform duration-300 group-hover:scale-125 group-hover:rotate-12 flex-shrink-0" />
                     <span className="truncate">Total Time</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-4 pb-4 pt-2">
                   {statsLoading ? (
-                    <Skeleton className="h-12 w-40 mb-2" />
+                    <Skeleton className="h-10 w-36 mb-1" />
                   ) : (
-                    <div className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-ctp-text transition-all duration-300 truncate">
+                    <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-ctp-text transition-all duration-300 truncate">
                       {totalTime}
                     </div>
                   )}
-                  <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mt-3 whitespace-nowrap">
+                  <p className="text-xs sm:text-sm lg:text-base text-muted-foreground mt-1.5 whitespace-nowrap">
                     Combined runtime
                   </p>
                 </CardContent>
               </Card>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="py-16 px-4 sm:px-6 lg:px-8 overflow-x-hidden">
-        <div className="max-w-[1920px] mx-auto w-full">
+          {/* Bottom Row - Twitch Embed and Recent Runs */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 lg:gap-8">
-            {/* Left Side - Twitch Embed */}
+            {/* Left Side - Twitch Embed (under Verified Runs) */}
             <div className="lg:col-span-8 min-w-0">
               <div className="flex justify-center overflow-x-auto h-full">
                 <div className="w-full max-w-full">

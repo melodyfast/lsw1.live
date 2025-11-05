@@ -901,6 +901,13 @@ export const updateLeaderboardEntryFirestore = async (runId: string, data: Parti
         rank = rankMap.get(runId);
       }
       
+      // Store rank in update data
+      if (rank !== undefined) {
+        updateData.rank = rank;
+      } else {
+        updateData.rank = deleteField(); // Remove rank if obsolete or not in top rankings
+      }
+      
       // Calculate points with rank
       const points = calculatePoints(
         newTime, 
@@ -997,8 +1004,16 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
         rank
       );
       
-      // Update the document with calculated points
-      await updateDoc(runDocRef, { points });
+      // Update the document with calculated points and rank
+      const updateFields: { points: number; rank?: number } = { points };
+      if (rank !== undefined) {
+        updateFields.rank = rank;
+      } else {
+        // Remove rank field if obsolete or not ranked
+        await updateDoc(runDocRef, { points, rank: deleteField() });
+        return true;
+      }
+      await updateDoc(runDocRef, updateFields);
       
       // Always recalculate player points to ensure accuracy (handles re-verification correctly)
       // Now that the run is verified, it will be included in the recalculation
@@ -1200,7 +1215,7 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
     }
     
     let totalPoints = 0;
-    const runsToUpdate: { id: string; points: number }[] = [];
+    const runsToUpdate: { id: string; points: number; rank?: number }[] = [];
     
     // Calculate points with ranks - always recalculate to ensure accuracy with current ranks
     for (const { run: runData, rank } of allRunsWithRanks) {
@@ -1217,20 +1232,26 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
         rank
       );
       
-      // Always update the run with recalculated points
-      runsToUpdate.push({ id: runData.id, points });
+      // Always update the run with recalculated points and rank
+      runsToUpdate.push({ id: runData.id, points, rank });
       
       totalPoints += points;
     }
     
-    // Batch update runs with points (Firestore batch limit is 500)
+    // Batch update runs with points and ranks (Firestore batch limit is 500)
     const MAX_BATCH_SIZE = 500;
     let batchCount = 0;
     let batch = writeBatch(db);
     
     for (const run of runsToUpdate) {
       const runDocRef = doc(db, "leaderboardEntries", run.id);
-      batch.update(runDocRef, { points: run.points });
+      const updateData: { points: number; rank?: number } = { points: run.points };
+      if (run.rank !== undefined) {
+        updateData.rank = run.rank;
+      } else {
+        updateData.rank = deleteField();
+      }
+      batch.update(runDocRef, updateData);
       batchCount++;
       
       // Commit batch if it reaches the limit
@@ -2060,7 +2081,7 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
     }
 
     // Calculate ranks for each group and assign points
-    const runsToUpdate: { id: string; points: number; playerId: string }[] = [];
+    const runsToUpdate: { id: string; points: number; rank?: number; playerId: string }[] = [];
 
     for (const [groupKey, runs] of runsByGroup.entries()) {
       try {
@@ -2111,6 +2132,7 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
             runsToUpdate.push({
               id: runData.id,
               points,
+              rank,
               playerId: runData.playerId,
             });
           } catch (error) {
@@ -2130,7 +2152,13 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
     for (const run of runsToUpdate) {
       try {
         const runDocRef = doc(db, "leaderboardEntries", run.id);
-        batch.update(runDocRef, { points: run.points });
+        const updateData: { points: number; rank?: number } = { points: run.points };
+        if (run.rank !== undefined) {
+          updateData.rank = run.rank;
+        } else {
+          updateData.rank = deleteField();
+        }
+        batch.update(runDocRef, updateData);
         batchCount++;
         
         // Commit batch if it reaches the limit
