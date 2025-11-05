@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,6 +25,8 @@ const Leaderboards = () => {
   const [loading, setLoading] = useState(true);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [levelsLoading, setLevelsLoading] = useState(true);
+  const requestCounterRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -73,6 +75,18 @@ const Leaderboards = () => {
   }, [leaderboardType]);
 
   useEffect(() => {
+    // Cancel previous request if it exists
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    // Increment request counter to track the latest request
+    const currentRequest = ++requestCounterRef.current;
+    
     const fetchLeaderboardData = async () => {
       setLoading(true);
       try {
@@ -84,11 +98,21 @@ const Leaderboards = () => {
           leaderboardType,
           (leaderboardType === 'individual-level' || leaderboardType === 'community-golds') ? selectedLevel : undefined
         );
-        setLeaderboardData(data);
+        
+        // Only update state if this is still the latest request
+        if (currentRequest === requestCounterRef.current && !abortController.signal.aborted) {
+          setLeaderboardData(data);
+        }
       } catch (error) {
-        // Silent fail
+        // Only handle error if this is still the latest request and not aborted
+        if (currentRequest === requestCounterRef.current && !abortController.signal.aborted) {
+          // Silent fail
+        }
       } finally {
-        setLoading(false);
+        // Only update loading state if this is still the latest request
+        if (currentRequest === requestCounterRef.current) {
+          setLoading(false);
+        }
       }
     };
 
@@ -97,7 +121,15 @@ const Leaderboards = () => {
     
     if (hasRequiredFilters && hasLevelFilter) {
       fetchLeaderboardData();
+    } else {
+      setLoading(false);
+      setLeaderboardData([]);
     }
+
+    // Cleanup: abort request on unmount or dependency change
+    return () => {
+      abortController.abort();
+    };
   }, [selectedCategory, selectedPlatform, selectedRunType, selectedLevel, showObsoleteRuns, leaderboardType]);
 
   return (
@@ -281,6 +313,9 @@ const Leaderboards = () => {
           <CardContent className="p-5">
             {loading || categoriesLoading ? (
               <div className="space-y-3 py-6 animate-fade-in">
+                <div className="flex items-center justify-center py-8">
+                  <LoadingSpinner size="lg" />
+                </div>
                 <Skeleton className="h-10 w-full animate-pulse" />
                 <Skeleton className="h-10 w-full animate-pulse" style={{ animationDelay: '100ms' }} />
                 <Skeleton className="h-10 w-full animate-pulse" style={{ animationDelay: '200ms' }} />

@@ -26,7 +26,7 @@ export function LoadingSpinner({ size = "md", className = "", variant = "spinner
 
   return (
     <div className={`flex items-center justify-center ${className}`}>
-      <Loader2 className={`animate-spin text-[#cba6f7] ${sizeClasses[size]}`} />
+      <Loader2 className={`animate-spin text-ctp-mauve ${sizeClasses[size]}`} />
     </div>
   );
 }
