@@ -93,10 +93,19 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
     
+    // Levels
+    match /levels/{levelId} {
+      // Anyone can read
+      allow read: if true;
+      // Only admins can create/update/delete
+      allow create, update, delete: if isAdmin();
+    }
+    
     // Points Configuration
     match /pointsConfig/{configId} {
       // Anyone can read (needed for points calculation)
-      allow read: if true;
+      // This allows reading even when document doesn't exist
+      allow get, list: if true;
       // Only admins can create/update
       allow create, update: if isAdmin();
       // No one can delete (points config should always exist)
