@@ -1269,7 +1269,7 @@ const Admin = () => {
                       setSavingPointsConfig(false);
                     }
                   }} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <div>
                         <Label htmlFor="pointsEnabled">Enable Points System</Label>
                         <Select
@@ -1318,6 +1318,27 @@ const Admin = () => {
                         />
                         <p className="text-sm text-ctp-overlay0 mt-1">
                           Minimum points awarded (floor value). Default: 10
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="minTimePointRatio">Points at Minimum Time (%)</Label>
+                        <Input
+                          id="minTimePointRatio"
+                          type="number"
+                          value={Math.round((pointsConfig.minTimePointRatio ?? 0.5) * 100)}
+                          onChange={(e) => {
+                            const percent = Number(e.target.value);
+                            const ratio = Math.max(0.01, Math.min(0.99, percent / 100));
+                            setPointsConfig({ ...pointsConfig, minTimePointRatio: ratio });
+                          }}
+                          min="1"
+                          max="99"
+                          step="1"
+                          className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                        />
+                        <p className="text-sm text-ctp-overlay0 mt-1">
+                          At each category's minimum time, award this percentage of base multiplier points. Default: 50%
                         </p>
                       </div>
                     </div>
@@ -1387,32 +1408,58 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <Label>Category Scale Factors</Label>
+                      <Label>Category Minimum Times</Label>
                       <p className="text-sm text-ctp-overlay0 mb-2">
-                        Configure the exponential scale factor for each category. Higher values = slower decay.
+                        Set the minimum time (in HH:MM:SS format) for each category. At this time, runs will receive {Math.round((pointsConfig.minTimePointRatio ?? 0.5) * 100)}% of the base multiplier points. Faster times get exponentially more points.
                       </p>
                       <div className="space-y-3 max-h-64 overflow-y-auto">
                         {pointsConfig.eligibleCategories.map((categoryId) => {
                           const category = firestoreCategories.find(c => c.id === categoryId || c.name === categoryId);
                           const categoryKey = categoryId;
-                          const currentValue = pointsConfig.categoryScaleFactors[categoryKey] || (categoryId.toLowerCase().includes("nocuts") ? 1400 : 2400);
+                          const currentSeconds = pointsConfig.categoryMinTimes?.[categoryKey] || (categoryId.toLowerCase().includes("nocuts") ? 1740 : 3300);
+                          
+                          // Convert seconds to HH:MM:SS
+                          const hours = Math.floor(currentSeconds / 3600);
+                          const minutes = Math.floor((currentSeconds % 3600) / 60);
+                          const seconds = currentSeconds % 60;
+                          const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                          
                           return (
                             <div key={categoryKey} className="flex items-center gap-4">
-                              <Label className="w-32 text-sm">{category?.name || categoryId}</Label>
+                              <Label className="w-40 text-sm">{category?.name || categoryId}</Label>
                               <Input
-                                type="number"
-                                value={currentValue}
+                                type="text"
+                                value={timeString}
                                 onChange={(e) => {
-                                  const newScaleFactors = {
-                                    ...pointsConfig.categoryScaleFactors,
-                                    [categoryKey]: Number(e.target.value)
-                                  };
-                                  setPointsConfig({ ...pointsConfig, categoryScaleFactors: newScaleFactors });
+                                  const timeStr = e.target.value.trim();
+                                  // Parse HH:MM:SS or MM:SS format
+                                  const parts = timeStr.split(':').map(Number);
+                                  let totalSeconds = 0;
+                                  if (parts.length === 3) {
+                                    // HH:MM:SS
+                                    totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                                  } else if (parts.length === 2) {
+                                    // MM:SS
+                                    totalSeconds = parts[0] * 60 + parts[1];
+                                  } else if (parts.length === 1 && !isNaN(parts[0])) {
+                                    // Just seconds
+                                    totalSeconds = parts[0];
+                                  }
+                                  
+                                  if (totalSeconds > 0) {
+                                    const newMinTimes = {
+                                      ...(pointsConfig.categoryMinTimes || {}),
+                                      [categoryKey]: totalSeconds
+                                    };
+                                    setPointsConfig({ ...pointsConfig, categoryMinTimes: newMinTimes });
+                                  }
                                 }}
-                                min="100"
-                                step="100"
-                                className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] flex-1"
+                                placeholder="HH:MM:SS or MM:SS"
+                                className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] flex-1 font-mono"
                               />
+                              <span className="text-xs text-ctp-overlay0 w-24">
+                                ({Math.floor(currentSeconds / 60)}m {currentSeconds % 60}s)
+                              </span>
                             </div>
                           );
                         })}
@@ -1420,51 +1467,71 @@ const Admin = () => {
                     </div>
 
                     <div>
-                      <Label>Category Milestones</Label>
+                      <Label>Category Milestones (Optional Bonuses)</Label>
                       <p className="text-sm text-ctp-overlay0 mb-2">
-                        Configure milestone bonuses for each category. Set threshold time (in seconds) and multiplier range.
+                        Configure optional milestone bonuses for exceptional times. Runs faster than the threshold time get bonus multipliers.
                       </p>
                       <div className="space-y-4 max-h-96 overflow-y-auto">
                         {pointsConfig.eligibleCategories.map((categoryId) => {
                           const category = firestoreCategories.find(c => c.id === categoryId || c.name === categoryId);
                           const categoryKey = categoryId;
-                          const milestone = pointsConfig.categoryMilestones[categoryKey] || {
+                          const milestone = pointsConfig.categoryMilestones?.[categoryKey] || {
                             thresholdSeconds: categoryId.toLowerCase().includes("nocuts") ? 1740 : 3300,
                             minMultiplier: categoryId.toLowerCase().includes("nocuts") ? 1.3 : 1.2,
                             maxMultiplier: categoryId.toLowerCase().includes("nocuts") ? 2.2 : 2.0,
                           };
+                          
+                          // Convert threshold seconds to HH:MM:SS
+                          const thresholdHours = Math.floor(milestone.thresholdSeconds / 3600);
+                          const thresholdMinutes = Math.floor((milestone.thresholdSeconds % 3600) / 60);
+                          const thresholdSecs = milestone.thresholdSeconds % 60;
+                          const thresholdTimeString = `${thresholdHours.toString().padStart(2, '0')}:${thresholdMinutes.toString().padStart(2, '0')}:${thresholdSecs.toString().padStart(2, '0')}`;
+                          
                           return (
                             <Card key={categoryKey} className="bg-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] p-4">
                               <h4 className="font-semibold mb-3">{category?.name || categoryId}</h4>
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                  <Label className="text-xs">Threshold (seconds)</Label>
+                                  <Label className="text-xs">Threshold Time</Label>
                                   <Input
-                                    type="number"
-                                    value={milestone.thresholdSeconds}
+                                    type="text"
+                                    value={thresholdTimeString}
                                     onChange={(e) => {
-                                      const newMilestones = {
-                                        ...pointsConfig.categoryMilestones,
-                                        [categoryKey]: {
-                                          ...milestone,
-                                          thresholdSeconds: Number(e.target.value)
-                                        }
-                                      };
-                                      setPointsConfig({ ...pointsConfig, categoryMilestones: newMilestones });
+                                      const timeStr = e.target.value.trim();
+                                      const parts = timeStr.split(':').map(Number);
+                                      let totalSeconds = milestone.thresholdSeconds;
+                                      if (parts.length === 3) {
+                                        totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                                      } else if (parts.length === 2) {
+                                        totalSeconds = parts[0] * 60 + parts[1];
+                                      } else if (parts.length === 1 && !isNaN(parts[0])) {
+                                        totalSeconds = parts[0];
+                                      }
+                                      
+                                      if (totalSeconds > 0) {
+                                        const newMilestones = {
+                                          ...(pointsConfig.categoryMilestones || {}),
+                                          [categoryKey]: {
+                                            ...milestone,
+                                            thresholdSeconds: totalSeconds
+                                          }
+                                        };
+                                        setPointsConfig({ ...pointsConfig, categoryMilestones: newMilestones });
+                                      }
                                     }}
-                                    min="1"
-                                    step="1"
-                                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                                    placeholder="HH:MM:SS"
+                                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] font-mono"
                                   />
+                                  <p className="text-xs text-ctp-overlay0 mt-1">Runs faster than this get bonus</p>
                                 </div>
                                 <div>
-                                  <Label className="text-xs">Min Multiplier</Label>
+                                  <Label className="text-xs">Min Bonus Multiplier</Label>
                                   <Input
                                     type="number"
                                     value={milestone.minMultiplier}
                                     onChange={(e) => {
                                       const newMilestones = {
-                                        ...pointsConfig.categoryMilestones,
+                                        ...(pointsConfig.categoryMilestones || {}),
                                         [categoryKey]: {
                                           ...milestone,
                                           minMultiplier: Number(e.target.value)
@@ -1476,15 +1543,16 @@ const Admin = () => {
                                     step="0.1"
                                     className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                                   />
+                                  <p className="text-xs text-ctp-overlay0 mt-1">At threshold time</p>
                                 </div>
                                 <div>
-                                  <Label className="text-xs">Max Multiplier</Label>
+                                  <Label className="text-xs">Max Bonus Multiplier</Label>
                                   <Input
                                     type="number"
                                     value={milestone.maxMultiplier}
                                     onChange={(e) => {
                                       const newMilestones = {
-                                        ...pointsConfig.categoryMilestones,
+                                        ...(pointsConfig.categoryMilestones || {}),
                                         [categoryKey]: {
                                           ...milestone,
                                           maxMultiplier: Number(e.target.value)
@@ -1496,6 +1564,7 @@ const Admin = () => {
                                     step="0.1"
                                     className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                                   />
+                                  <p className="text-xs text-ctp-overlay0 mt-1">At extremely fast times</p>
                                 </div>
                               </div>
                             </Card>

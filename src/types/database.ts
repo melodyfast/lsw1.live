@@ -88,11 +88,12 @@ export interface PointsConfig {
   minPoints: number;
   eligiblePlatforms: string[]; // Platform IDs or names
   eligibleCategories: string[]; // Category IDs or names
-  categoryScaleFactors: Record<string, number>; // Category ID -> scale factor
+  categoryMinTimes: Record<string, number>; // Category ID -> minimum time in seconds (at this time, points = baseMultiplier * minTimePointRatio)
+  minTimePointRatio: number; // Ratio of baseMultiplier to award at minimum time (0.0 to 1.0, default 0.5 = 50%)
   categoryMilestones: Record<string, {
     thresholdSeconds: number;
     minMultiplier: number;
     maxMultiplier: number;
-  }>; // Category ID -> milestone config
+  }>; // Category ID -> milestone config (optional bonuses)
   enabled: boolean; // Master switch to enable/disable points
 }

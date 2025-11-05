@@ -2242,8 +2242,9 @@ const DEFAULT_POINTS_CONFIG: Omit<PointsConfig, 'id'> = {
   minPoints: 10,
   eligiblePlatforms: [], // Will be populated with GameCube platform ID
   eligibleCategories: [], // Will be populated with Any% and Nocuts Noships category IDs
-  categoryScaleFactors: {}, // Will be populated
-  categoryMilestones: {}, // Will be populated
+  categoryMinTimes: {}, // Will be populated with category ID -> minimum time in seconds
+  minTimePointRatio: 0.5, // At minimum time, award 50% of baseMultiplier
+  categoryMilestones: {}, // Will be populated (optional bonuses)
   enabled: true,
 };
 
@@ -2259,13 +2260,31 @@ export const getPointsConfigFirestore = async (): Promise<PointsConfig> => {
     if (configDocSnap.exists()) {
       const data = configDocSnap.data();
       // Ensure all required fields are present
+      // Migrate old categoryScaleFactors to categoryMinTimes if needed
+      let categoryMinTimes = data.categoryMinTimes ?? DEFAULT_POINTS_CONFIG.categoryMinTimes;
+      if (data.categoryScaleFactors && (!categoryMinTimes || Object.keys(categoryMinTimes).length === 0)) {
+        // Migration: Convert old scale factors to min times (approximate)
+        // For a scale factor SF, we calculate what time would give 50% points
+        // baseMultiplier * 0.5 = baseMultiplier * e^(-time/SF)
+        // 0.5 = e^(-time/SF)
+        // ln(0.5) = -time/SF
+        // time = -SF * ln(0.5) ≈ SF * 0.693
+        categoryMinTimes = {};
+        if (data.categoryScaleFactors) {
+          Object.entries(data.categoryScaleFactors).forEach(([catId, scaleFactor]) => {
+            categoryMinTimes[catId] = Math.round(scaleFactor * 0.693);
+          });
+        }
+      }
+      
       return {
         id: configDocSnap.id,
         baseMultiplier: data.baseMultiplier ?? DEFAULT_POINTS_CONFIG.baseMultiplier,
         minPoints: data.minPoints ?? DEFAULT_POINTS_CONFIG.minPoints,
         eligiblePlatforms: data.eligiblePlatforms ?? DEFAULT_POINTS_CONFIG.eligiblePlatforms,
         eligibleCategories: data.eligibleCategories ?? DEFAULT_POINTS_CONFIG.eligibleCategories,
-        categoryScaleFactors: data.categoryScaleFactors ?? DEFAULT_POINTS_CONFIG.categoryScaleFactors,
+        categoryMinTimes: categoryMinTimes,
+        minTimePointRatio: data.minTimePointRatio ?? DEFAULT_POINTS_CONFIG.minTimePointRatio,
         categoryMilestones: data.categoryMilestones ?? DEFAULT_POINTS_CONFIG.categoryMilestones,
         enabled: data.enabled !== undefined ? data.enabled : DEFAULT_POINTS_CONFIG.enabled,
       } as PointsConfig;

@@ -112,7 +112,8 @@ export function calculatePoints(
     minPoints?: number;
     eligiblePlatforms?: string[];
     eligibleCategories?: string[];
-    categoryScaleFactors?: Record<string, number>;
+    categoryMinTimes?: Record<string, number>;
+    minTimePointRatio?: number;
     categoryMilestones?: Record<string, { thresholdSeconds: number; minMultiplier: number; maxMultiplier: number }>;
     enabled?: boolean;
   }
@@ -192,12 +193,27 @@ export function calculatePoints(
     return 0;
   }
 
-  // Get scale factor for this category
+  // Get scale factor for this category from minimum time
+  // If categoryMinTimes is set, calculate scale factor from it
+  // Formula: at minTimeSeconds, points should be baseMultiplier * minTimePointRatio
+  // baseMultiplier * minTimePointRatio = baseMultiplier * e^(-minTimeSeconds/scaleFactor)
+  // minTimePointRatio = e^(-minTimeSeconds/scaleFactor)
+  // ln(minTimePointRatio) = -minTimeSeconds/scaleFactor
+  // scaleFactor = -minTimeSeconds / ln(minTimePointRatio)
   let scaleFactor: number;
-  if (config.categoryScaleFactors && categoryKey && config.categoryScaleFactors[categoryKey]) {
-    scaleFactor = config.categoryScaleFactors[categoryKey];
+  const minTimePointRatio = config.minTimePointRatio ?? 0.5;
+  
+  if (config.categoryMinTimes && categoryKey && config.categoryMinTimes[categoryKey]) {
+    const minTimeSeconds = config.categoryMinTimes[categoryKey];
+    if (minTimePointRatio > 0 && minTimePointRatio < 1 && minTimeSeconds > 0) {
+      scaleFactor = -minTimeSeconds / Math.log(minTimePointRatio);
+    } else {
+      // Fallback if invalid ratio or time
+      const isNocutsNoships = normalizedCategory === "nocuts noships" || normalizedCategory === "nocutsnoships";
+      scaleFactor = isNocutsNoships ? 1400 : 2400;
+    }
   } else {
-    // Fallback to old defaults
+    // Fallback to old defaults (convert old scale factors if needed, or use defaults)
     const isNocutsNoships = normalizedCategory === "nocuts noships" || normalizedCategory === "nocutsnoships";
     scaleFactor = isNocutsNoships ? 1400 : 2400;
   }
