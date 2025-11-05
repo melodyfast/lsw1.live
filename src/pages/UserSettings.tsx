@@ -348,7 +348,12 @@ const UserSettings = () => {
         <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-ctp-text">
-              <User className="h-5 w-5" />
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#cba6f7] to-[#b4befe] opacity-30 blur-sm animate-pulse"></div>
+                <div className="relative p-1.5 bg-gradient-to-br from-[#cba6f7] to-[#b4befe] transition-transform duration-300 hover:scale-110">
+                  <User className="h-5 w-5 text-ctp-crust" />
+                </div>
+              </div>
               Profile Information
             </CardTitle>
           </CardHeader>
@@ -523,7 +528,12 @@ const UserSettings = () => {
         <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-ctp-text">
-              <Mail className="h-5 w-5" />
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#cba6f7] to-[#b4befe] opacity-30 blur-sm animate-pulse"></div>
+                <div className="relative p-1.5 bg-gradient-to-br from-[#cba6f7] to-[#b4befe] transition-transform duration-300 hover:scale-110">
+                  <Mail className="h-5 w-5 text-ctp-crust" />
+                </div>
+              </div>
               Change Email
             </CardTitle>
           </CardHeader>
@@ -551,7 +561,12 @@ const UserSettings = () => {
         <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-ctp-text">
-              <Lock className="h-5 w-5" />
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#cba6f7] to-[#b4befe] opacity-30 blur-sm animate-pulse"></div>
+                <div className="relative p-1.5 bg-gradient-to-br from-[#cba6f7] to-[#b4befe] transition-transform duration-300 hover:scale-110">
+                  <Lock className="h-5 w-5 text-ctp-crust" />
+                </div>
+              </div>
               Change Password
             </CardTitle>
           </CardHeader>
@@ -592,8 +607,13 @@ const UserSettings = () => {
         {/* Claim Runs */}
         <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Trophy className="h-5 w-5" />
+            <CardTitle className="flex items-center gap-2 text-ctp-text">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#cba6f7] to-[#b4befe] opacity-30 blur-sm animate-pulse"></div>
+                <div className="relative p-1.5 bg-gradient-to-br from-[#cba6f7] to-[#b4befe] transition-transform duration-300 hover:scale-110">
+                  <Trophy className="h-5 w-5 text-ctp-crust" />
+                </div>
+              </div>
               Claim Your Runs
             </CardTitle>
           </CardHeader>

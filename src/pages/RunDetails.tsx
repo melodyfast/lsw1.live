@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, User, Users, Timer, Calendar, CheckCircle, UserCircle, Trophy, Edit2, Save, X, Trash2 } from "lucide-react";
+import { ArrowLeft, User, Users, Timer, Calendar, CheckCircle, UserCircle, Trophy, Edit2, Save, X, Trash2, Plus } from "lucide-react";
 import { getLeaderboardEntryById, getPlayerByUid, getPlayerByDisplayName, getCategories, getPlatforms, runTypes, updateLeaderboardEntry, deleteLeaderboardEntry } from "@/lib/db";
 import { LeaderboardEntry, Player } from "@/types/database";
 import { VideoEmbed } from "@/components/VideoEmbed";
@@ -709,8 +709,8 @@ const RunDetails = () => {
                   <div>
                     <div className="text-base text-muted-foreground mb-2 font-medium">Points Earned</div>
                     <div className="flex items-center gap-2 text-lg">
-                      <Trophy className="h-5 w-5 text-yellow-500" />
-                      <span className="font-bold bg-gradient-to-r from-[#FFD700] to-[#FFA500] bg-clip-text text-transparent">
+                      <Plus className="h-5 w-5 text-[#fab387]" />
+                      <span className="font-bold text-[#fab387]">
                         +{displayPoints.toLocaleString()}
                       </span>
                       <span className="text-muted-foreground text-sm">points</span>

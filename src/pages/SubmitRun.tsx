@@ -276,12 +276,15 @@ const SubmitRun = () => {
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
                 <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)] py-4">
                   <CardTitle className="flex items-center gap-2 text-xl text-[#eba0ac]">
-                    <div className="p-1.5 bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                      <Timer className="h-5 w-5 text-[hsl(240,21%,15%)]" />
-                  </div>
-                  <span>
-                    Run Details
-                  </span>
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#eba0ac] to-[#f38ba8] opacity-30 blur-sm animate-pulse"></div>
+                      <div className="relative p-1.5 bg-gradient-to-br from-[#eba0ac] to-[#f38ba8] transition-transform duration-300 hover:scale-110">
+                        <Timer className="h-5 w-5 text-ctp-crust" />
+                      </div>
+                    </div>
+                    <span>
+                      Run Details
+                    </span>
                 </CardTitle>
               </CardHeader>
                 <CardContent className="p-6">
@@ -419,12 +422,12 @@ const SubmitRun = () => {
                       )}
                     </Label>
                     <Tabs value={formData.category} onValueChange={(value) => handleSelectChange("category", value)}>
-                      <TabsList className="grid w-full rounded-lg p-0.5 gap-1" style={{ gridTemplateColumns: `repeat(${availableCategories.length}, 1fr)` }}>
+                      <TabsList className="grid w-full p-0.5 gap-1" style={{ gridTemplateColumns: `repeat(${availableCategories.length}, 1fr)` }}>
                         {availableCategories.map((category, index) => (
                           <TabsTrigger 
                             key={category.id} 
                             value={category.id} 
-                            className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-2 px-3 text-sm"
+                            className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-2 px-3 text-sm"
                             style={{ animationDelay: `${index * 50}ms` }}
                           >
                             {category.name}

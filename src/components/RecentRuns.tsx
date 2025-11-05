@@ -50,8 +50,11 @@ export function RecentRuns({ runs, loading, showRankBadge = true }: RecentRunsPr
     <Card className="bg-gradient-to-br from-[hsl(240,21%,15%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
       <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
         <CardTitle className="flex items-center gap-2 text-ctp-text">
-          <div className="p-2 bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-            <TrendingUp className="h-5 w-5 text-[hsl(240,21%,15%)]" />
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-ctp-mauve to-ctp-lavender opacity-30 blur-sm animate-pulse"></div>
+            <div className="relative p-1.5 bg-gradient-to-br from-ctp-mauve to-ctp-lavender transition-transform duration-300 hover:scale-110">
+              <TrendingUp className="h-5 w-5 text-ctp-crust" />
+            </div>
           </div>
           <span>
             Recent Runs

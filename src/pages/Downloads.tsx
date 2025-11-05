@@ -31,13 +31,13 @@ const Downloads = () => {
   const getCategoryIcon = (category: string) => {
     switch (category.toLowerCase()) {
       case "tools":
-        return <Wrench className="h-6 w-6 text-[#cba6f7] transition-transform duration-300 group-hover:rotate-12" />;
+        return <Wrench className="h-5 w-5 text-ctp-crust" />;
       case "guides":
-        return <Book className="h-6 w-6 text-[#cba6f7] transition-transform duration-300 group-hover:scale-110" />;
+        return <Book className="h-5 w-5 text-ctp-crust" />;
       case "save files":
-        return <Save className="h-6 w-6 text-[#cba6f7] transition-transform duration-300 group-hover:scale-110" />;
+        return <Save className="h-5 w-5 text-ctp-crust" />;
       default:
-        return <Download className="h-6 w-6 text-[#cba6f7] transition-transform duration-300 group-hover:scale-110" />;
+        return <Download className="h-5 w-5 text-ctp-crust" />;
     }
   };
 
@@ -87,7 +87,12 @@ const Downloads = () => {
                 
                 <CardContent className="relative pt-6 pb-6">
                   <CardTitle className="text-xl font-semibold flex items-center gap-3 mb-3 text-[#cba6f7] transition-colors duration-300">
-                    {getCategoryIcon(entry.category)}
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#cba6f7] to-[#b4befe] opacity-30 blur-sm animate-pulse"></div>
+                      <div className="relative p-1.5 bg-gradient-to-br from-[#cba6f7] to-[#b4befe] transition-transform duration-300 hover:scale-110">
+                        {getCategoryIcon(entry.category)}
+                      </div>
+                    </div>
                     <span>
                     {entry.name}
                     </span>

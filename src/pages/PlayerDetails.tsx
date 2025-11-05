@@ -7,6 +7,7 @@ import { PlayerProfile } from "@/components/PlayerProfile";
 import { ArrowLeft, Trophy, User, Users, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getPlayerRuns, getPlayerByUid, getCategories, getPlatforms, getPlayerPendingRuns } from "@/lib/db";
+import LegoStudIcon from "@/components/icons/LegoStudIcon";
 import { Player, LeaderboardEntry } from "@/types/database";
 import { formatDate, formatTime } from "@/lib/utils";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
@@ -136,7 +137,12 @@ const PlayerDetails = () => {
           <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] mt-8 shadow-xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-ctp-text">
-                <Clock className="h-5 w-5 text-[#f9e2af]" />
+                <div className="relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-ctp-mauve to-ctp-lavender opacity-30 blur-sm animate-pulse"></div>
+                  <div className="relative p-1.5 bg-gradient-to-br from-ctp-mauve to-ctp-lavender transition-transform duration-300 hover:scale-110">
+                    <Clock className="h-5 w-5 text-ctp-crust" />
+                  </div>
+                </div>
                 Pending Submissions
               </CardTitle>
             </CardHeader>
@@ -194,7 +200,12 @@ const PlayerDetails = () => {
         <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] mt-8 shadow-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-ctp-text">
-              <Trophy className="h-5 w-5 text-[#cba6f7]" />
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-ctp-mauve to-ctp-lavender opacity-30 blur-sm animate-pulse"></div>
+                <div className="relative p-1.5 bg-gradient-to-br from-ctp-mauve to-ctp-lavender transition-transform duration-300 hover:scale-110">
+                  <Trophy className="h-5 w-5 text-ctp-crust" />
+                </div>
+              </div>
               Recent Runs
             </CardTitle>
           </CardHeader>
@@ -227,12 +238,17 @@ const PlayerDetails = () => {
                         >
                           <td className="py-3 px-4">
                             {run.rank ? (
-                              <Badge 
-                                variant={run.rank <= 3 ? "default" : "secondary"} 
-                                className={run.rank === 1 ? "bg-gradient-to-br from-[#f9e2af] to-[#f5c2e7]" : run.rank === 2 ? "bg-gradient-to-br from-[#bac2de] to-[#89b4fa]" : run.rank === 3 ? "bg-gradient-to-br from-[#fab387] to-[#74c7ec]" : ""}
-                              >
-                                #{run.rank}
-                              </Badge>
+                              run.rank === 1 ? (
+                                <LegoStudIcon size={36} color="#0055BF" />
+                              ) : run.rank === 2 ? (
+                                <LegoStudIcon size={36} color="#FFD700" />
+                              ) : run.rank === 3 ? (
+                                <LegoStudIcon size={36} color="#C0C0C0" />
+                              ) : (
+                                <span className="font-bold text-base text-ctp-text w-9 h-9 flex items-center justify-center">
+                                  #{run.rank}
+                                </span>
+                              )
                             ) : (
                               <span className="text-ctp-overlay0">—</span>
                             )}

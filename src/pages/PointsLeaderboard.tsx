@@ -49,8 +49,11 @@ const PointsLeaderboard = () => {
         <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
           <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
             <CardTitle className="flex items-center gap-2 text-xl text-[#fab387]">
-              <div className="p-1.5 bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
-                <TrendingUp className="h-5 w-5 text-[hsl(240,21%,15%)]" />
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#fab387] to-[#fe8019] opacity-30 blur-sm animate-pulse"></div>
+                <div className="relative p-1.5 bg-gradient-to-br from-[#fab387] to-[#fe8019] transition-transform duration-300 hover:scale-110">
+                  <TrendingUp className="h-5 w-5 text-ctp-crust" />
+                </div>
               </div>
               <span>
                 Top Players by Points
@@ -129,8 +132,8 @@ const PointsLeaderboard = () => {
                           {/* Points */}
                           <div className="text-right flex-shrink-0">
                             <div className="flex items-center gap-1.5 justify-end mb-1">
-                              <Plus className="h-5 w-5 text-[#FFD700] group-hover:scale-110 transition-transform duration-300" />
-                              <div className="text-2xl font-bold bg-gradient-to-r from-[#FFD700] via-[#FFA500] to-[#FFD700] bg-clip-text text-transparent group-hover:scale-110 transition-transform duration-300">
+                              <Plus className="h-5 w-5 text-[#fab387] group-hover:scale-110 transition-transform duration-300" />
+                              <div className="text-2xl font-bold text-[#fab387] group-hover:scale-110 transition-transform duration-300">
                                 {formatPoints(points)}
                               </div>
                             </div>
