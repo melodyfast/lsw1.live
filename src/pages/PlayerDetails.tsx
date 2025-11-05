@@ -137,12 +137,6 @@ const PlayerDetails = () => {
           <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] mt-8 shadow-xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-ctp-text">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-ctp-mauve to-ctp-lavender opacity-30 blur-sm animate-pulse"></div>
-                  <div className="relative p-1.5 bg-gradient-to-br from-ctp-mauve to-ctp-lavender transition-transform duration-300 hover:scale-110">
-                    <Clock className="h-5 w-5 text-ctp-crust" />
-                  </div>
-                </div>
                 Pending Submissions
               </CardTitle>
             </CardHeader>
@@ -200,12 +194,6 @@ const PlayerDetails = () => {
         <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] mt-8 shadow-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-ctp-text">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-ctp-mauve to-ctp-lavender opacity-30 blur-sm animate-pulse"></div>
-                <div className="relative p-1.5 bg-gradient-to-br from-ctp-mauve to-ctp-lavender transition-transform duration-300 hover:scale-110">
-                  <Trophy className="h-5 w-5 text-ctp-crust" />
-                </div>
-              </div>
               Recent Runs
             </CardTitle>
           </CardHeader>
@@ -239,11 +227,26 @@ const PlayerDetails = () => {
                           <td className="py-3 px-4">
                             {run.rank ? (
                               run.rank === 1 ? (
-                                <LegoStudIcon size={36} color="#0055BF" />
+                                <div className="flex items-center gap-2">
+                                  <LegoStudIcon size={36} color="#0055BF" />
+                                  <span className="font-bold text-base text-ctp-text">
+                                    #{run.rank}
+                                  </span>
+                                </div>
                               ) : run.rank === 2 ? (
-                                <LegoStudIcon size={36} color="#FFD700" />
+                                <div className="flex items-center gap-2">
+                                  <LegoStudIcon size={36} color="#FFD700" />
+                                  <span className="font-bold text-base text-ctp-text">
+                                    #{run.rank}
+                                  </span>
+                                </div>
                               ) : run.rank === 3 ? (
-                                <LegoStudIcon size={36} color="#C0C0C0" />
+                                <div className="flex items-center gap-2">
+                                  <LegoStudIcon size={36} color="#C0C0C0" />
+                                  <span className="font-bold text-base text-ctp-text">
+                                    #{run.rank}
+                                  </span>
+                                </div>
                               ) : (
                                 <span className="font-bold text-base text-ctp-text w-9 h-9 flex items-center justify-center">
                                   #{run.rank}

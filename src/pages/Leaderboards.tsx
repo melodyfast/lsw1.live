@@ -297,12 +297,6 @@ const Leaderboards = () => {
         <Card className="bg-gradient-to-br from-ctp-base to-ctp-mantle border-ctp-surface1 shadow-xl transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-ctp-mauve/20 hover:border-ctp-mauve/50 animate-slide-up-delay-2">
           <CardHeader className="bg-gradient-to-r from-ctp-base to-ctp-mantle border-b border-ctp-surface1">
             <CardTitle className="flex items-center gap-2 text-xl text-[#a6e3a1]">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-[#a6e3a1] to-[#94e2d5] opacity-30 blur-sm animate-pulse"></div>
-                <div className="relative p-1.5 bg-gradient-to-br from-[#a6e3a1] to-[#94e2d5] transition-transform duration-300 hover:scale-110">
-                  <TrendingUp className="h-5 w-5 text-ctp-crust" />
-                </div>
-              </div>
               <span>
                 {availableCategories.find(c => c.id === selectedCategory)?.name || "Leaderboards"}
               </span>

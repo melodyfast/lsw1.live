@@ -276,12 +276,6 @@ const SubmitRun = () => {
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
                 <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)] py-4">
                   <CardTitle className="flex items-center gap-2 text-xl text-[#eba0ac]">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-br from-[#eba0ac] to-[#f38ba8] opacity-30 blur-sm animate-pulse"></div>
-                      <div className="relative p-1.5 bg-gradient-to-br from-[#eba0ac] to-[#f38ba8] transition-transform duration-300 hover:scale-110">
-                        <Timer className="h-5 w-5 text-ctp-crust" />
-                      </div>
-                    </div>
                     <span>
                       Run Details
                     </span>
