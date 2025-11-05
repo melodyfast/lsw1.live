@@ -133,8 +133,8 @@ const Leaderboards = () => {
   }, [selectedCategory, selectedPlatform, selectedRunType, selectedLevel, showObsoleteRuns, leaderboardType]);
 
   return (
-    <div className="min-h-screen bg-[#1e1e2e] text-ctp-text py-6">
-      <div className="max-w-7xl mx-auto px-6">
+    <div className="min-h-screen bg-[#1e1e2e] text-ctp-text py-4 sm:py-6">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
         <div className="text-center mb-8 animate-fade-in">
           <div className="flex items-center justify-center gap-2 mb-4">
             <Trophy className="h-6 w-6 text-[#a6e3a1]" />
@@ -149,27 +149,30 @@ const Leaderboards = () => {
 
         {/* Tabs */}
         <Tabs value={leaderboardType} onValueChange={(value) => setLeaderboardType(value as 'regular' | 'individual-level' | 'community-golds')} className="mb-6">
-          <TabsList className="grid w-full grid-cols-3 mb-6 p-0.5 gap-1">
+          <TabsList className="grid w-full grid-cols-3 mb-4 sm:mb-6 p-0.5 gap-1">
             <TabsTrigger 
               value="regular" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-xs sm:text-sm py-1.5 sm:py-2 px-2 sm:px-3 whitespace-nowrap"
             >
-              <Trophy className="h-3.5 w-3.5 mr-1.5" />
-              Full Game
+              <Trophy className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 sm:mr-1.5" />
+              <span className="hidden min-[375px]:inline">Full Game</span>
+              <span className="min-[375px]:hidden">Game</span>
             </TabsTrigger>
             <TabsTrigger 
               value="individual-level" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-xs sm:text-sm py-1.5 sm:py-2 px-2 sm:px-3 whitespace-nowrap"
             >
-              <Star className="h-3.5 w-3.5 mr-1.5" />
-              Individual Levels
+              <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 sm:mr-1.5" />
+              <span className="hidden sm:inline">Individual Levels</span>
+              <span className="sm:hidden">ILs</span>
             </TabsTrigger>
             <TabsTrigger 
               value="community-golds" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-xs sm:text-sm py-1.5 sm:py-2 px-2 sm:px-3 whitespace-nowrap"
             >
-              <Gem className="h-3.5 w-3.5 mr-1.5" />
-              Community Golds
+              <Gem className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 sm:mr-1.5" />
+              <span className="hidden sm:inline">Community Golds</span>
+              <span className="sm:hidden">CGs</span>
             </TabsTrigger>
           </TabsList>
 
@@ -178,12 +181,12 @@ const Leaderboards = () => {
             {availableCategories.length > 0 && (
               <div className="mb-6 animate-slide-up">
                 <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <TabsList className="grid w-full p-0.5 gap-1" style={{ gridTemplateColumns: `repeat(${availableCategories.length}, 1fr)` }}>
+                  <TabsList className="grid w-full p-0.5 gap-1 overflow-x-auto" style={{ gridTemplateColumns: `repeat(${availableCategories.length}, 1fr)` }}>
                     {availableCategories.map((category, index) => (
                       <TabsTrigger 
                         key={category.id} 
                         value={category.id} 
-                        className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-2 px-3 text-sm"
+                        className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap"
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
                         {category.name}
@@ -209,8 +212,8 @@ const Leaderboards = () => {
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <CardContent className="p-3 sm:p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {(leaderboardType === 'individual-level' || leaderboardType === 'community-golds') && (
                 <div className="animate-fade-in" style={{ animationDelay: '100ms' }}>
                   <label className="block text-sm font-semibold mb-2 text-ctp-text flex items-center gap-2">

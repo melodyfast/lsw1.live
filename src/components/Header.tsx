@@ -107,17 +107,17 @@ export function Header() {
 
   return (
     <>
-      <header className="bg-[#1e1e2e] border-b border-ctp-surface1 shadow-lg">
-        <div className="flex items-center justify-between h-16 px-4">
+      <header className="bg-[#1e1e2e] border-b border-ctp-surface1 shadow-lg sticky top-0 z-40">
+        <div className="flex items-center justify-between h-16 px-2 sm:px-4">
           <div className="flex items-center gap-4 md:gap-10">
-            <Link to="/" className="flex items-center space-x-2 group transition-transform duration-300 hover:scale-105">
+            <Link to="/" className="flex items-center space-x-1 sm:space-x-2 group transition-transform duration-300 hover:scale-105">
               <div className="transition-transform duration-300 group-hover:rotate-12">
-                <LegoStudIcon size={32} color="#60a5fa" />
+                <LegoStudIcon size={28} className="sm:w-8 sm:h-8" color="#60a5fa" />
               </div>
-              <span className="text-lg md:text-xl font-bold text-[#74c7ec]">lsw1.dev</span>
+              <span className="text-base sm:text-lg md:text-xl font-bold text-[#74c7ec]">lsw1.dev</span>
             </Link>
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex space-x-6">
+            <nav className="hidden md:flex space-x-4 lg:space-x-6">
               <NavLinks />
             </nav>
           </div>
@@ -130,7 +130,8 @@ export function Header() {
                 <Button 
                   variant="ghost" 
                   size="icon"
-                  className="text-[hsl(220,17%,92%)] hover:bg-[#89b4fa]/20 hover:text-[#89b4fa]"
+                  className="text-[hsl(220,17%,92%)] hover:bg-[#89b4fa]/20 hover:text-[#89b4fa] z-50"
+                  aria-label="Open navigation menu"
                 >
                   <Menu className="h-6 w-6" />
                   <span className="sr-only">Open menu</span>
