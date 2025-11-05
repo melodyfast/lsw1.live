@@ -399,7 +399,7 @@ const RunDetails = () => {
             <Card ref={detailsCardRef} className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] overflow-y-auto shadow-xl">
               <CardHeader className="pb-6 px-6 pt-6">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-2xl text-card-foreground">Run Details</CardTitle>
+                  <CardTitle className="text-2xl text-[#a6e3a1]">Run Details</CardTitle>
                   {!isEditing && (
                     <div className="flex gap-2">
                       {/* Show edit button for run owner (non-admin) */}

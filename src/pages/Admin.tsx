@@ -1154,40 +1154,40 @@ const Admin = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6 mb-6 rounded-lg p-0.5 gap-1">
+          <TabsList className="grid w-full grid-cols-6 mb-6 p-0.5 gap-1">
             <TabsTrigger 
               value="runs" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
             >
               Unverified Runs
             </TabsTrigger>
             <TabsTrigger 
               value="categories" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
             >
               Categories
             </TabsTrigger>
             <TabsTrigger 
               value="levels" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
             >
               Levels
             </TabsTrigger>
             <TabsTrigger 
               value="platforms" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
             >
               Platforms
             </TabsTrigger>
             <TabsTrigger 
               value="downloads" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
             >
               Downloads
             </TabsTrigger>
             <TabsTrigger 
               value="tools" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
             >
               Tools
             </TabsTrigger>
@@ -1198,11 +1198,11 @@ const Admin = () => {
             {/* Backfill Points Card */}
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#FFD700] to-[#FFA500]">
+                <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
+                  <div className="p-1.5 bg-gradient-to-br from-[#FFD700] to-[#FFA500]">
                     <Trophy className="h-5 w-5 text-black" />
                   </div>
-                  <span className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] bg-clip-text text-transparent">
+                  <span>
                     Backfill Points for All Runs
                   </span>
                 </CardTitle>

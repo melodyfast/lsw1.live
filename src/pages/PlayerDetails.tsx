@@ -135,7 +135,7 @@ const PlayerDetails = () => {
         {isOwnProfile && (
           <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] mt-8 shadow-xl">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-ctp-text">
                 <Clock className="h-5 w-5 text-[#f9e2af]" />
                 Pending Submissions
               </CardTitle>
@@ -193,7 +193,7 @@ const PlayerDetails = () => {
 
         <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] mt-8 shadow-xl">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-ctp-text">
               <Trophy className="h-5 w-5 text-[#cba6f7]" />
               Recent Runs
             </CardTitle>

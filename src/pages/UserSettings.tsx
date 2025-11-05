@@ -347,7 +347,7 @@ const UserSettings = () => {
         {/* Profile Settings */}
         <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-ctp-text">
               <User className="h-5 w-5" />
               Profile Information
             </CardTitle>
@@ -522,7 +522,7 @@ const UserSettings = () => {
         {/* Email Settings */}
         <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-ctp-text">
               <Mail className="h-5 w-5" />
               Change Email
             </CardTitle>
@@ -550,7 +550,7 @@ const UserSettings = () => {
         {/* Password Settings */}
         <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-ctp-text">
               <Lock className="h-5 w-5" />
               Change Password
             </CardTitle>

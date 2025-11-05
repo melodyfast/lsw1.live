@@ -48,11 +48,11 @@ const PointsLeaderboard = () => {
 
         <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
           <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+            <CardTitle className="flex items-center gap-2 text-xl text-[#fab387]">
+              <div className="p-1.5 bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
                 <TrendingUp className="h-5 w-5 text-[hsl(240,21%,15%)]" />
               </div>
-              <span className="bg-gradient-to-r from-[#cba6f7] to-[#f5c2e7] bg-clip-text text-transparent">
+              <span>
                 Top Players by Points
               </span>
             </CardTitle>
@@ -81,7 +81,7 @@ const PointsLeaderboard = () => {
                       className="block group"
                     >
                       <div
-                        className={`relative overflow-hidden rounded-xl transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl animate-fade-in ${
+                        className={`relative overflow-hidden transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl animate-fade-in ${
                           rank === 1
                             ? "bg-gradient-to-br from-[#89b4fa]/20 via-[#89b4fa]/15 to-[#89b4fa]/10 border-2 border-[#89b4fa]/50 hover:border-[#89b4fa] hover:shadow-[#89b4fa]/30"
                             : rank === 2

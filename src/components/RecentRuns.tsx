@@ -49,11 +49,11 @@ export function RecentRuns({ runs, loading, showRankBadge = true }: RecentRunsPr
   return (
     <Card className="bg-gradient-to-br from-[hsl(240,21%,15%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
       <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-        <CardTitle className="flex items-center gap-2 text-[hsl(220,17%,92%)]">
-          <div className="p-2 rounded-lg bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
+        <CardTitle className="flex items-center gap-2 text-ctp-text">
+          <div className="p-2 bg-gradient-to-br from-[#cba6f7] to-[#b4a0e2]">
             <TrendingUp className="h-5 w-5 text-[hsl(240,21%,15%)]" />
           </div>
-          <span className="bg-gradient-to-r from-[#cba6f7] to-[#f5c2e7] bg-clip-text text-transparent">
+          <span>
             Recent Runs
           </span>
         </CardTitle>
@@ -82,7 +82,7 @@ export function RecentRuns({ runs, loading, showRankBadge = true }: RecentRunsPr
                     {showRankBadge && (
                       <div className="flex-shrink-0">
                         {index < 3 ? (
-                          <div className={`relative flex items-center justify-center w-12 h-12 rounded-full font-bold text-lg shadow-lg ${
+                          <div className={`relative flex items-center justify-center w-12 h-12 font-bold text-lg shadow-lg ${
                             index === 0 
                               ? "bg-gradient-to-br from-[#FFD700] to-[#FFA500] text-[hsl(240,21%,15%)]" 
                               : index === 1 
@@ -95,7 +95,7 @@ export function RecentRuns({ runs, loading, showRankBadge = true }: RecentRunsPr
                         ) : (
                           <Badge 
                             variant="secondary"
-                            className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold bg-gradient-to-br from-[hsl(235,13%,25%)] to-[hsl(235,13%,22%)] text-[hsl(222,15%,70%)] border border-[hsl(235,13%,30%)]"
+                            className="w-12 h-12 flex items-center justify-center text-lg font-bold bg-gradient-to-br from-[hsl(235,13%,25%)] to-[hsl(235,13%,22%)] text-[hsl(222,15%,70%)] border border-[hsl(235,13%,30%)]"
                           >
                             #{index + 1}
                           </Badge>

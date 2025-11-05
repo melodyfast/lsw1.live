@@ -86,9 +86,9 @@ const Downloads = () => {
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent" />
                 
                 <CardContent className="relative pt-6 pb-6">
-                  <CardTitle className="text-xl font-semibold flex items-center gap-3 mb-3 group-hover:text-[#cba6f7] transition-colors duration-300">
+                  <CardTitle className="text-xl font-semibold flex items-center gap-3 mb-3 text-[#cba6f7] transition-colors duration-300">
                     {getCategoryIcon(entry.category)}
-                    <span className="bg-gradient-to-r from-[hsl(220,17%,92%)] to-[#cba6f7] bg-clip-text text-transparent group-hover:from-[#cba6f7] group-hover:to-[#b4a0e2] transition-all duration-300">
+                    <span>
                     {entry.name}
                     </span>
                   </CardTitle>

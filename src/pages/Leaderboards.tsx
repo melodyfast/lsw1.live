@@ -149,24 +149,24 @@ const Leaderboards = () => {
 
         {/* Tabs */}
         <Tabs value={leaderboardType} onValueChange={(value) => setLeaderboardType(value as 'regular' | 'individual-level' | 'community-golds')} className="mb-6">
-          <TabsList className="grid w-full grid-cols-3 mb-6 rounded-lg p-0.5 gap-1">
+          <TabsList className="grid w-full grid-cols-3 mb-6 p-0.5 gap-1">
             <TabsTrigger 
               value="regular" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
             >
               <Trophy className="h-3.5 w-3.5 mr-1.5" />
               Full Game
             </TabsTrigger>
             <TabsTrigger 
               value="individual-level" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
             >
               <Star className="h-3.5 w-3.5 mr-1.5" />
               Individual Levels
             </TabsTrigger>
             <TabsTrigger 
               value="community-golds" 
-              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-sm py-2 px-3"
             >
               <Gem className="h-3.5 w-3.5 mr-1.5" />
               Community Golds
@@ -178,12 +178,12 @@ const Leaderboards = () => {
             {availableCategories.length > 0 && (
               <div className="mb-6 animate-slide-up">
                 <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <TabsList className="grid w-full rounded-lg p-0.5 gap-1" style={{ gridTemplateColumns: `repeat(${availableCategories.length}, 1fr)` }}>
+                  <TabsList className="grid w-full p-0.5 gap-1" style={{ gridTemplateColumns: `repeat(${availableCategories.length}, 1fr)` }}>
                     {availableCategories.map((category, index) => (
                       <TabsTrigger 
                         key={category.id} 
                         value={category.id} 
-                        className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-2 px-3 text-sm"
+                        className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-2 px-3 text-sm"
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
                         {category.name}
@@ -296,14 +296,14 @@ const Leaderboards = () => {
         {/* Leaderboard Table */}
         <Card className="bg-gradient-to-br from-ctp-base to-ctp-mantle border-ctp-surface1 shadow-xl transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-ctp-mauve/20 hover:border-ctp-mauve/50 animate-slide-up-delay-2">
           <CardHeader className="bg-gradient-to-r from-ctp-base to-ctp-mantle border-b border-ctp-surface1">
-            <CardTitle className="flex items-center gap-2 text-xl">
+            <CardTitle className="flex items-center gap-2 text-xl text-[#a6e3a1]">
               <div className="relative">
-                <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-ctp-mauve to-ctp-lavender opacity-30 blur-sm animate-pulse"></div>
-                <div className="relative p-1.5 rounded-lg bg-gradient-to-br from-ctp-mauve to-ctp-lavender transition-transform duration-300 hover:scale-110">
+                <div className="absolute inset-0 bg-gradient-to-br from-ctp-mauve to-ctp-lavender opacity-30 blur-sm animate-pulse"></div>
+                <div className="relative p-1.5 bg-gradient-to-br from-ctp-mauve to-ctp-lavender transition-transform duration-300 hover:scale-110">
                   <TrendingUp className="h-5 w-5 text-ctp-crust" />
                 </div>
               </div>
-              <span className="bg-gradient-to-r from-ctp-mauve to-ctp-pink bg-clip-text text-transparent">
+              <span>
                 {availableCategories.find(c => c.id === selectedCategory)?.name || "Leaderboards"}
               </span>
               {leaderboardData.length > 0 && (
