@@ -219,6 +219,52 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "leaderboardEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "verified",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "platform",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "runType",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "leaderboardEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "playerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "verified",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "players",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "displayName",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

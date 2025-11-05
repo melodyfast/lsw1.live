@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase";
-import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, query, where, orderBy, limit as firestoreLimit, deleteField, startAfter, and } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, query, where, orderBy, limit as firestoreLimit, deleteField } from "firebase/firestore";
 import { Player, LeaderboardEntry, DownloadEntry, Category, Platform, Level, PointsConfig } from "@/types/database";
 import { calculatePoints } from "@/lib/utils";
 
@@ -47,7 +47,7 @@ export const getLeaderboardEntriesFirestore = async (
       constraints.push(where("level", "==", levelId));
     }
 
-    // Set limit - fetch more than needed since we'll filter client-side for some edge cases
+    // Fetch extra entries to account for client-side filtering (obsolete entries, legacy leaderboardType)
     constraints.push(firestoreLimit(200));
     
     const q = query(collection(db, "leaderboardEntries"), ...constraints);
@@ -59,8 +59,7 @@ export const getLeaderboardEntriesFirestore = async (
         // Filter obsolete entries if not including them
         if (!includeObsolete && entry.isObsolete) return false;
         
-        // Handle regular leaderboardType - filter out non-regular entries
-        // (Firestore 'in' query includes both 'regular' and null, so filter null/undefined)
+        // Filter out non-regular entries when querying for regular leaderboard type
         if (!leaderboardType || leaderboardType === 'regular') {
           const entryLeaderboardType = entry.leaderboardType || 'regular';
           if (entryLeaderboardType !== 'regular') return false;
@@ -208,7 +207,7 @@ export const getPlayerByUidFirestore = async (uid: string): Promise<Player | nul
 export const getPlayerByDisplayNameFirestore = async (displayName: string): Promise<Player | null> => {
   if (!db) return null;
   try {
-    // Try to find by displayName first (if indexed)
+    // Try direct lookup by displayName (indexed query)
     const normalizedDisplayName = displayName.trim();
     const q = query(
       collection(db, "players"),
@@ -222,9 +221,7 @@ export const getPlayerByDisplayNameFirestore = async (displayName: string): Prom
       return { id: doc.id, ...doc.data() } as Player;
     }
     
-    // Fallback: search by email prefix (if displayName search didn't find anything)
-    // Note: This still requires fetching all players, but only as fallback
-    // Consider adding a displayName index if this becomes a bottleneck
+    // Fallback: search by email prefix (only if displayName query fails)
     const allPlayersQuery = query(collection(db, "players"), firestoreLimit(500));
     const allPlayersSnapshot = await getDocs(allPlayersQuery);
     const normalizedSearch = normalizedDisplayName.toLowerCase();
@@ -450,17 +447,24 @@ export const getPlayerRunsFirestore = async (playerId: string): Promise<Leaderbo
       combinations.add(key);
     });
 
-    // Fetch all verified entries once (with higher limit to ensure we get all relevant entries)
-    const allEntriesQuery = query(
-      collection(db, "leaderboardEntries"),
-      where("verified", "==", true),
-      firestoreLimit(500)
-    );
-    
-    const allEntriesSnapshot = await getDocs(allEntriesQuery);
-    const allEntries = allEntriesSnapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
-      .filter(entry => !entry.isObsolete);
+    // Fetch verified entries for only the relevant combinations to reduce data transfer
+    const allEntries: LeaderboardEntry[] = [];
+    for (const combinationKey of combinations) {
+      const [categoryId, platformId, runType] = combinationKey.split('_');
+      const comboQuery = query(
+        collection(db, "leaderboardEntries"),
+        where("verified", "==", true),
+        where("category", "==", categoryId),
+        where("platform", "==", platformId),
+        where("runType", "==", runType),
+        firestoreLimit(200)
+      );
+      const comboSnapshot = await getDocs(comboQuery);
+      const comboEntries = comboSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
+        .filter(entry => !entry.isObsolete);
+      allEntries.push(...comboEntries);
+    }
 
     // Create a map to store ranks for each combination
     const rankMap = new Map<string, Map<string, number>>(); // combination -> runId -> rank
@@ -767,32 +771,26 @@ export const updateLeaderboardEntryFirestore = async (runId: string, data: Parti
     }
     
     if (runData.verified && (data.time || data.category || data.platform)) {
-      // Get category and platform names for points calculation
-      let categoryName = "Unknown";
-      let platformName = "Unknown";
-      
-      const newCategoryId = data.category || runData.category;
-      const newPlatformId = data.platform || runData.platform;
-      const newTime = data.time || runData.time;
-      
-      try {
-        const categoryDocRef = doc(db, "categories", newCategoryId);
-        const categoryDocSnap = await getDoc(categoryDocRef);
-        if (categoryDocSnap.exists()) {
+        // Get category and platform names for points calculation
+        const newCategoryId = data.category || runData.category;
+        const newPlatformId = data.platform || runData.platform;
+        const newTime = data.time || runData.time;
+        
+        let categoryName = "Unknown";
+        let platformName = "Unknown";
+        
+        // Fetch category and platform in parallel for better performance
+        const [categoryDocSnap, platformDocSnap] = await Promise.all([
+          getDoc(doc(db, "categories", newCategoryId)).catch(() => null),
+          getDoc(doc(db, "platforms", newPlatformId)).catch(() => null)
+        ]);
+        
+        if (categoryDocSnap?.exists()) {
           categoryName = categoryDocSnap.data().name || "Unknown";
         }
-      } catch (error) {
-        // Silent fail - use default
-      }
-      try {
-        const platformDocRef = doc(db, "platforms", newPlatformId);
-        const platformDocSnap = await getDoc(platformDocRef);
-        if (platformDocSnap.exists()) {
+        if (platformDocSnap?.exists()) {
           platformName = platformDocSnap.data().name || "Unknown";
         }
-      } catch (error) {
-        // Silent fail - use default
-      }
       
       // Get points config and recalculate points
       const pointsConfig = await getPointsConfigFirestore();
@@ -842,29 +840,21 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
       updateData.verifiedBy = verifiedBy;
       
       // Calculate and store points when verifying (always recalculate to ensure accuracy)
-        // Get category and platform names
-        let categoryName = "Unknown";
-        let platformName = "Unknown";
-        try {
-          const categoryDocRef = doc(db, "categories", runData.category);
-          const categoryDocSnap = await getDoc(categoryDocRef);
-          if (categoryDocSnap.exists()) {
-            categoryName = categoryDocSnap.data().name || "Unknown";
-          }
-        } catch (error) {
-        console.error("Error fetching category:", error);
-          // Silent fail - use default
-        }
-        try {
-          const platformDocRef = doc(db, "platforms", runData.platform);
-          const platformDocSnap = await getDoc(platformDocRef);
-          if (platformDocSnap.exists()) {
-            platformName = platformDocSnap.data().name || "Unknown";
-          }
-        } catch (error) {
-        console.error("Error fetching platform:", error);
-          // Silent fail - use default
-        }
+      // Fetch category and platform names in parallel for better performance
+      let categoryName = "Unknown";
+      let platformName = "Unknown";
+      
+      const [categoryDocSnap, platformDocSnap] = await Promise.all([
+        getDoc(doc(db, "categories", runData.category)).catch(() => null),
+        getDoc(doc(db, "platforms", runData.platform)).catch(() => null)
+      ]);
+      
+      if (categoryDocSnap?.exists()) {
+        categoryName = categoryDocSnap.data().name || "Unknown";
+      }
+      if (platformDocSnap?.exists()) {
+        platformName = platformDocSnap.data().name || "Unknown";
+      }
         
       // Get points config and calculate points
       const pointsConfig = await getPointsConfigFirestore();
@@ -891,14 +881,9 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
         if (runData.runType === 'co-op' && runData.player2Name) {
           try {
             const player2NameTrimmed = runData.player2Name.trim();
-            console.log(`Looking up player2 for co-op run ${runId}: "${player2NameTrimmed}"`);
             const player2 = await getPlayerByDisplayNameFirestore(player2NameTrimmed);
             if (player2) {
-              console.log(`Found player2 "${player2.displayName}" (UID: ${player2.uid}), recalculating points...`);
               await recalculatePlayerPointsFirestore(player2.uid);
-              console.log(`Successfully recalculated points for player2 "${player2.displayName}"`);
-            } else {
-              console.warn(`Player2 "${player2NameTrimmed}" not found for co-op run ${runId}. Points will only be awarded to player1.`);
             }
           } catch (error) {
             console.error("Error recalculating player2 points on verify:", error);
@@ -925,8 +910,6 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
             const player2 = await getPlayerByDisplayNameFirestore(player2NameTrimmed);
             if (player2) {
               await recalculatePlayerPointsFirestore(player2.uid);
-            } else {
-              console.warn(`Player2 "${player2NameTrimmed}" not found for co-op run ${runId} during unverify`);
             }
           } catch (error) {
             console.error("Error recalculating player2 points on unverify:", error);
@@ -1013,10 +996,7 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
         continue;
       }
       
-      // Skip co-op runs - they don't award points
-      if (runData.runType === 'co-op') {
-        continue;
-      }
+      // Co-op runs are now included in points calculation
       
       const categoryName = categoryMap.get(runData.category) || "Unknown";
       const platformName = platformMap.get(runData.platform) || "Unknown";

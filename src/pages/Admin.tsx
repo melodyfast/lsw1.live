@@ -1331,7 +1331,7 @@ const Admin = () => {
                           <li>Full game runs only (not Individual Levels or Community Golds)</li>
                           <li>GameCube platform only</li>
                           <li>Any% and Nocuts Noships categories only</li>
-                          <li>Runs UNDER the threshold time for each category</li>
+                          <li>All runs get points, but runs UNDER the threshold time get a bonus multiplier</li>
                           <li>Both solo and co-op runs are eligible</li>
                         </ul>
                       </div>
@@ -1339,7 +1339,7 @@ const Admin = () => {
                       <div>
                         <Label className="text-base font-semibold mb-2 block">Category Threshold Times</Label>
                         <p className="text-sm text-ctp-overlay0 mb-4">
-                          Set the threshold time for each category. Only runs UNDER these times will receive points. Points are calculated exponentially - faster times get exponentially more points.
+                          Set the threshold time for each category. Runs UNDER these times receive a bonus multiplier. All runs get points, but faster times get exponentially more. Points are calculated exponentially - faster times get exponentially more points.
                         </p>
                         <div className="space-y-4">
                           <div>
@@ -1417,7 +1417,7 @@ const Admin = () => {
                               className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] font-mono"
                             />
                             <p className="text-sm text-ctp-overlay0 mt-1">
-                              Only Any% runs under this time will receive points. Default: 00:55:00 (55 minutes). You can type in HH:MM:SS, MM:SS, or just seconds.
+                              Any% runs under this time receive a bonus multiplier. All runs get points. Default: 00:55:00 (55 minutes). You can type in HH:MM:SS, MM:SS, or just seconds.
                             </p>
                           </div>
 
@@ -1496,7 +1496,7 @@ const Admin = () => {
                               className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] font-mono"
                             />
                             <p className="text-sm text-ctp-overlay0 mt-1">
-                              Only Nocuts Noships runs under this time will receive points. Default: 00:29:00 (29 minutes). You can type in HH:MM:SS, MM:SS, or just seconds.
+                              Nocuts Noships runs under this time receive a bonus multiplier. All runs get points. Default: 00:29:00 (29 minutes). You can type in HH:MM:SS, MM:SS, or just seconds.
                             </p>
                           </div>
                         </div>

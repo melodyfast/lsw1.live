@@ -86,12 +86,15 @@ export function formatTime(timeString: string): string {
 }
 
 /**
- * Calculate points for a run based on time, category, and platform
- * Uses exponential scaling - faster times earn exponentially more points
- * Premium categories (Any%, Nocuts Noships) get full points
- * All other categories (including Free Play) get 0 points
- * Only GameCube platform runs earn points
- * Special bonuses for category milestones
+ * Calculate points for a run
+ * Points are awarded for:
+ * - Full game runs (not ILs or community golds)
+ * - GameCube platform
+ * - Any% or Nocuts Noships categories
+ * - Both solo and co-op runs are eligible
+ * 
+ * Points are calculated exponentially: faster times get exponentially more points
+ * Runs UNDER the threshold time get a bonus multiplier
  * 
  * @param timeString - Time string in HH:MM:SS format
  * @param categoryName - Name of the category (e.g., "Any%")
@@ -100,17 +103,6 @@ export function formatTime(timeString: string): string {
  * @param platformId - Optional platform ID for config lookup
  * @param pointsConfig - Optional points configuration, if not provided will use defaults
  * @returns Points awarded for the run (0 for non-supported categories or platforms)
- */
-/**
- * Calculate points for a run
- * Points are ONLY awarded for:
- * - Full game runs (not ILs or community golds)
- * - GameCube platform
- * - Any% or Nocuts Noships categories
- * - Runs UNDER the threshold time for that category
- * - Both solo and co-op runs are eligible
- * 
- * Points are calculated exponentially: faster times get exponentially more points
  */
 export function calculatePoints(
   timeString: string, 
@@ -170,18 +162,25 @@ export function calculatePoints(
     thresholdSeconds = config.nocutsNoshipsThreshold ?? 1740; // 29 minutes default
   }
 
-  // Only award points if run is UNDER the threshold time
-  if (totalSeconds >= thresholdSeconds) {
-    return 0;
-  }
-
-  // Calculate points exponentially
+  // Calculate base points exponentially for all runs
   // Formula: points = baseMultiplier * e^(-time/scaleFactor)
-  // We want points to scale exponentially, with faster times getting much more points
   // Scale factor determines how fast the exponential decay is
-  // Using a scale factor that makes the exponential curve work well
   const scaleFactor = thresholdSeconds / 2; // Half the threshold time as scale factor for good curve
-  const points = baseMultiplier * Math.exp(-totalSeconds / scaleFactor);
+  let points = baseMultiplier * Math.exp(-totalSeconds / scaleFactor);
+
+  // Apply bonus multiplier for runs UNDER the threshold time
+  // The closer to the threshold, the smaller the bonus. Faster times get exponentially larger bonuses
+  if (totalSeconds < thresholdSeconds) {
+    // Calculate a multiplier that increases as the time gets faster
+    // At exactly the threshold time, multiplier = 1.0 (no bonus)
+    // As time approaches 0, multiplier approaches infinity (but we cap it reasonably)
+    const timeRatio = totalSeconds / thresholdSeconds; // 0 to 1, where 1 = at threshold
+    // Bonus multiplier: 1.0 at threshold, increases exponentially as time decreases
+    // Using: multiplier = 1 + (1 - timeRatio)^2 * 2
+    // This gives: 1.0 at threshold, 1.5 at 50% of threshold, 3.0 at 0
+    const bonusMultiplier = 1.0 + Math.pow(1 - timeRatio, 2) * 2.0;
+    points *= bonusMultiplier;
+  }
 
   // Round to nearest integer
   return Math.round(points);

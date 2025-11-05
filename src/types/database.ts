@@ -85,8 +85,9 @@ export interface CustomUser extends FirebaseAuthUser {
 export interface PointsConfig {
   id: string;
   baseMultiplier: number;
-  // Threshold times in seconds - only runs UNDER these times get points
-  // Points are calculated exponentially: faster times get exponentially more points
+  // Threshold times in seconds - runs UNDER these times get a bonus multiplier
+  // All runs get points, but faster times get exponentially more points
+  // Runs under the threshold get an additional bonus multiplier
   anyPercentThreshold: number; // Threshold time for Any% (in seconds)
   nocutsNoshipsThreshold: number; // Threshold time for Nocuts Noships (in seconds)
   enabled: boolean; // Master switch to enable/disable points
