@@ -101,7 +101,7 @@ const Leaderboards = () => {
   }, [selectedCategory, selectedPlatform, selectedRunType, selectedLevel, showObsoleteRuns, leaderboardType]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-ctp-base to-ctp-mantle text-ctp-text py-6">
+    <div className="min-h-screen bg-gradient-to-b from-[hsl(240,21%,15%)] to-[hsl(235,19%,13%)] text-[hsl(220,17%,92%)] py-6">
       <div className="max-w-7xl mx-auto px-6">
         <div className="text-center mb-8 animate-fade-in">
           <h1 className="text-3xl md:text-4xl font-bold text-ctp-yellow mb-4">
@@ -114,26 +114,26 @@ const Leaderboards = () => {
 
         {/* Tabs */}
         <Tabs value={leaderboardType} onValueChange={(value) => setLeaderboardType(value as 'regular' | 'individual-level' | 'community-golds')} className="mb-6">
-          <TabsList className="grid w-full grid-cols-3 bg-ctp-base border border-ctp-surface1 mb-6 shadow-lg rounded-lg p-1 transition-all duration-300 hover:shadow-xl hover:border-ctp-surface2">
+          <TabsList className="grid w-full grid-cols-3 mb-6 rounded-lg p-0.5 gap-1">
             <TabsTrigger 
               value="regular" 
-              className="data-[state=active]:bg-ctp-yellow data-[state=active]:text-ctp-crust data-[state=active]:shadow-lg transition-all duration-300 rounded-md font-medium hover:bg-ctp-surface0"
+              className="data-[state=active]:bg-ctp-yellow data-[state=active]:text-ctp-crust bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium hover:bg-ctp-surface1 text-sm py-2 px-3"
             >
-              <Trophy className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" />
+              <Trophy className="h-3.5 w-3.5 mr-1.5" />
               Full Game
             </TabsTrigger>
             <TabsTrigger 
               value="individual-level" 
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-ctp-mauve data-[state=active]:to-ctp-lavender data-[state=active]:text-ctp-crust data-[state=active]:shadow-lg transition-all duration-300 rounded-md font-medium hover:bg-ctp-surface0"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-ctp-mauve data-[state=active]:to-ctp-lavender data-[state=active]:text-ctp-crust bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium hover:bg-ctp-surface1 text-sm py-2 px-3"
             >
-              <Star className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" />
+              <Star className="h-3.5 w-3.5 mr-1.5" />
               Individual Levels
             </TabsTrigger>
             <TabsTrigger 
               value="community-golds" 
-              className="data-[state=active]:bg-ctp-yellow data-[state=active]:text-ctp-crust data-[state=active]:shadow-lg transition-all duration-300 rounded-md font-medium hover:bg-ctp-surface0"
+              className="data-[state=active]:bg-ctp-yellow data-[state=active]:text-ctp-crust bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium hover:bg-ctp-surface1 text-sm py-2 px-3"
             >
-              <Gem className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" />
+              <Gem className="h-3.5 w-3.5 mr-1.5" />
               Community Golds
             </TabsTrigger>
           </TabsList>
@@ -143,12 +143,12 @@ const Leaderboards = () => {
             {availableCategories.length > 0 && (
               <div className="mb-6 animate-slide-up">
                 <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <TabsList className="grid w-full rounded-lg p-2 gap-2 bg-ctp-base border border-ctp-surface1 transition-all duration-300 hover:border-ctp-surface2" style={{ gridTemplateColumns: `repeat(${availableCategories.length}, 1fr)` }}>
+                  <TabsList className="grid w-full rounded-lg p-0.5 gap-1" style={{ gridTemplateColumns: `repeat(${availableCategories.length}, 1fr)` }}>
                     {availableCategories.map((category, index) => (
                       <TabsTrigger 
                         key={category.id} 
                         value={category.id} 
-                        className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-ctp-mauve data-[state=active]:to-ctp-lavender data-[state=active]:text-ctp-crust data-[state=active]:shadow-lg transition-all duration-300 rounded-md font-medium hover:bg-ctp-surface0 py-3 px-4 text-base"
+                        className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-ctp-mauve data-[state=active]:to-ctp-lavender data-[state=active]:text-ctp-crust bg-ctp-surface0 text-ctp-text transition-all duration-300 rounded-md font-medium hover:bg-ctp-surface1 py-2 px-3 text-sm"
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
                         {category.name}

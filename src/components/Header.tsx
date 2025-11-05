@@ -9,7 +9,6 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { LoginModal } from "@/components/LoginModal";
 import { useToast } from "@/hooks/use-toast";
-import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 export function Header() {
   const { currentUser, loading } = useAuth();
@@ -182,7 +181,6 @@ export function Header() {
                     )}
                   </div>
                   <div className="flex gap-4 pt-4 border-t border-[hsl(235,13%,30%)]">
-                    <ThemeSwitcher />
                     <a
                       href="https://discord.gg/6A5MNqaK49"
                       target="_blank"
@@ -210,7 +208,6 @@ export function Header() {
 
             {/* Desktop Social Links & Auth */}
             <div className="hidden md:flex items-center gap-3">
-              <ThemeSwitcher />
               <a
                 href="https://discord.gg/6A5MNqaK49"
                 target="_blank"

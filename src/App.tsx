@@ -17,15 +17,13 @@ import Live from "./pages/Live";
 import Downloads from "./pages/Downloads";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "@/components/AuthProvider";
-import { ThemeProvider } from "@/contexts/ThemeContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <AuthProvider>
-        <TooltipProvider>
+    <AuthProvider>
+      <TooltipProvider>
         <Toaster />
         <Sonner />
         <BrowserRouter>
@@ -51,7 +49,6 @@ const App = () => (
         <Analytics />
       </TooltipProvider>
     </AuthProvider>
-    </ThemeProvider>
   </QueryClientProvider>
 );
 
