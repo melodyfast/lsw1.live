@@ -1189,11 +1189,18 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
       nonObsoleteRuns.forEach((run, index) => {
         const rank = index + 1;
         rankMap.set(run.id, rank);
+        // Debug: Log rank #1 runs
+        if (rank === 1) {
+          console.log(`[recalculatePlayerPointsFirestore] Rank #1 run found: ${run.id} (${run.playerName}) - ${run.time} in ${groupKey}`);
+        }
       });
       
       // Process all player runs (including obsolete) - obsolete runs get base points only
       for (const playerRun of runs) {
         const rank = playerRun.isObsolete ? undefined : rankMap.get(playerRun.id);
+        if (rank === 1) {
+          console.log(`[recalculatePlayerPointsFirestore] Processing rank #1 run: ${playerRun.id} (${playerRun.playerName})`);
+        }
         allRunsWithRanks.push({ run: playerRun, rank: rank });
       }
     }
@@ -1201,27 +1208,29 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
     let totalPoints = 0;
     const runsToUpdate: { id: string; points: number }[] = [];
     
-    // Calculate points with ranks
+    // Calculate points with ranks - always recalculate to ensure accuracy with current config and ranks
     for (const { run: runData, rank } of allRunsWithRanks) {
-      // Use stored points if available, otherwise recalculate
-      let points = runData.points;
+      // Always recalculate points to ensure we use the latest rank and config
+      const categoryName = categoryMap.get(runData.category) || "Unknown";
+      const platformName = platformMap.get(runData.platform) || "Unknown";
       
-      if (points === undefined || points === null) {
-        // Recalculate if points not stored
-        const categoryName = categoryMap.get(runData.category) || "Unknown";
-        const platformName = platformMap.get(runData.platform) || "Unknown";
-        
-        points = calculatePoints(
-          runData.time, 
-          categoryName, 
-          platformName,
-          runData.category,
-          runData.platform,
-          pointsConfig,
-          rank
-        );
-        runsToUpdate.push({ id: runData.id, points });
+      const points = calculatePoints(
+        runData.time, 
+        categoryName, 
+        platformName,
+        runData.category,
+        runData.platform,
+        pointsConfig,
+        rank
+      );
+      
+      // Debug: Log rank #1 runs and their points
+      if (rank === 1) {
+        console.log(`[recalculatePlayerPointsFirestore] Rank #1 run ${runData.id} calculated points: ${points} (base: 100 + bonus: ${pointsConfig.top3BonusPoints?.rank1 || 0})`);
       }
+      
+      // Always update the run with recalculated points
+      runsToUpdate.push({ id: runData.id, points });
       
       totalPoints += points;
     }
