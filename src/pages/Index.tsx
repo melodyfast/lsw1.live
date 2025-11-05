@@ -57,32 +57,34 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-[#1e1e2e] text-ctp-text">
       <div className="py-20 px-4 animate-fade-in">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col lg:flex-row items-center lg:items-start gap-8 lg:gap-6">
-            {/* Left Card - Verified Runs */}
-            <Card className="bg-gradient-to-br from-ctp-base via-ctp-mantle to-ctp-crust border-ctp-surface1 w-full lg:w-[250px] lg:flex-shrink-0 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-ctp-green/30 hover:border-ctp-green/50 group order-2 lg:order-1">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-card-foreground">
-                  <CheckCircle className="h-5 w-5 text-ctp-green transition-transform duration-300 group-hover:scale-125 group-hover:rotate-12" />
-                  Verified Runs
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {statsLoading ? (
-                  <Skeleton className="h-10 w-24 mb-2" />
-                ) : (
-                  <div className="text-3xl font-bold text-ctp-green transition-all duration-300">
-                    {totalVerifiedRuns.toLocaleString()}
-                  </div>
-                )}
-                <p className="text-sm text-muted-foreground mt-2">
-                  Total verified speedruns
-                </p>
-              </CardContent>
-            </Card>
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            {/* Left Side - Verified Runs Card */}
+            <div className="lg:col-span-3 lg:order-1">
+              <Card className="bg-gradient-to-br from-ctp-base via-ctp-mantle to-ctp-crust border-ctp-surface1 w-full transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-ctp-green/30 hover:border-ctp-green/50 group">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-card-foreground text-xl">
+                    <CheckCircle className="h-6 w-6 text-ctp-green transition-transform duration-300 group-hover:scale-125 group-hover:rotate-12" />
+                    Verified Runs
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {statsLoading ? (
+                    <Skeleton className="h-12 w-32 mb-2" />
+                  ) : (
+                    <div className="text-4xl md:text-5xl font-bold text-ctp-green transition-all duration-300">
+                      {totalVerifiedRuns.toLocaleString()}
+                    </div>
+                  )}
+                  <p className="text-base text-muted-foreground mt-3">
+                    Total verified speedruns
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Center Content - Title, Subtext, Buttons */}
-            <div className="flex-1 text-center order-1 lg:order-2">
+            <div className="lg:col-span-6 text-center lg:order-2">
               <h1 className="text-5xl md:text-6xl font-bold mb-6 text-[#74c7ec]">
                 lsw1.dev
               </h1>
@@ -99,27 +101,29 @@ const Index = () => {
               </div>
             </div>
 
-            {/* Right Card - Total Time */}
-            <Card className="bg-gradient-to-br from-ctp-base via-ctp-mantle to-ctp-crust border-ctp-surface1 w-full lg:w-[250px] lg:flex-shrink-0 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-ctp-mauve/30 hover:border-ctp-mauve/50 group order-3 lg:order-3">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-card-foreground">
-                  <Clock className="h-5 w-5 text-ctp-mauve transition-transform duration-300 group-hover:scale-125 group-hover:rotate-12" />
-                  Total Time
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {statsLoading ? (
-                  <Skeleton className="h-10 w-32 mb-2" />
-                ) : (
-                  <div className="text-3xl font-bold text-ctp-text font-mono transition-all duration-300">
-                    {totalTime}
-                  </div>
-                )}
-                <p className="text-sm text-muted-foreground mt-2">
-                  Combined runtime
-                </p>
-              </CardContent>
-            </Card>
+            {/* Right Side - Total Time Card */}
+            <div className="lg:col-span-3 lg:order-3">
+              <Card className="bg-gradient-to-br from-ctp-base via-ctp-mantle to-ctp-crust border-ctp-surface1 w-full transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-ctp-mauve/30 hover:border-ctp-mauve/50 group">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-card-foreground text-xl">
+                    <Clock className="h-6 w-6 text-ctp-mauve transition-transform duration-300 group-hover:scale-125 group-hover:rotate-12" />
+                    Total Time
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {statsLoading ? (
+                    <Skeleton className="h-12 w-40 mb-2" />
+                  ) : (
+                    <div className="text-4xl md:text-5xl font-bold text-ctp-text font-mono transition-all duration-300">
+                      {totalTime}
+                    </div>
+                  )}
+                  <p className="text-base text-muted-foreground mt-3">
+                    Combined runtime
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>

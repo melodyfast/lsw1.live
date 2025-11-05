@@ -255,16 +255,6 @@
           "order": "ASCENDING"
         }
       ]
-    },
-    {
-      "collectionGroup": "players",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "displayName",
-          "order": "ASCENDING"
-        }
-      ]
     }
   ],
   "fieldOverrides": []

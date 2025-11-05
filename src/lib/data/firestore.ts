@@ -953,8 +953,9 @@ export const updatePlayerPointsFirestore = async (playerId: string, pointsToAdd:
 };
 
 /**
- * Recalculate total points for a player based on all their verified solo runs
- * Co-op runs do not award points
+ * Recalculate total points for a player based on all their verified full game runs
+ * Includes both solo runs (where player is player1) and co-op runs (where player is player2)
+ * Only full game runs (regular leaderboardType) count for points
  */
 export const recalculatePlayerPointsFirestore = async (playerId: string): Promise<boolean> => {
   if (!db) return false;
@@ -969,14 +970,37 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
       playerDocSnap = null;
     }
     
-    // Get all verified solo runs where this player is player1
-    // Co-op runs are excluded from points
+    // Get all verified full game runs where this player is player1
+    // Only full game runs (regular leaderboardType) count for points
+    // Co-op runs are now included in points calculation
     const q = query(
       collection(db, "leaderboardEntries"),
       where("playerId", "==", playerId),
-      where("verified", "==", true)
+      where("verified", "==", true),
+      where("leaderboardType", "==", "regular"), // Only full game runs
+      firestoreLimit(200)
     );
     const querySnapshot = await getDocs(q);
+    
+    // Also check for co-op runs where this player is player2
+    let player2Runs: LeaderboardEntry[] = [];
+    const player = await getPlayerByUidFirestore(playerId);
+    if (player?.displayName) {
+      const coOpQuery = query(
+        collection(db, "leaderboardEntries"),
+        where("verified", "==", true),
+        where("leaderboardType", "==", "regular"),
+        where("runType", "==", "co-op"),
+        firestoreLimit(200)
+      );
+      const coOpSnapshot = await getDocs(coOpQuery);
+      player2Runs = coOpSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
+        .filter(entry => 
+          entry.player2Name?.trim().toLowerCase() === player.displayName.trim().toLowerCase() &&
+          !entry.isObsolete
+        );
+    }
     
     // Get all categories and platforms for lookup
     const categories = await getCategoriesFirestore();
@@ -984,27 +1008,23 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
     const categoryMap = new Map(categories.map(c => [c.id, c.name]));
     const platformMap = new Map(platforms.map(p => [p.id, p.name]));
     
+    // Get points config once for all calculations
+    const pointsConfig = await getPointsConfigFirestore();
+    
     let totalPoints = 0;
     const runsToUpdate: { id: string; points: number }[] = [];
     
-    // Calculate points only for solo runs (co-op runs are skipped)
-    for (const runDoc of querySnapshot.docs) {
-      const runData = runDoc.data() as LeaderboardEntry;
-      
-      // Skip obsolete runs - they don't count for points
-      if (runData.isObsolete) {
-        continue;
-      }
-      
-      // Co-op runs are now included in points calculation
-      
+    // Process all runs (solo and co-op) for this player
+    const allRuns = [
+      ...querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry)),
+      ...player2Runs
+    ].filter(run => !run.isObsolete);
+    
+    for (const runData of allRuns) {
       const categoryName = categoryMap.get(runData.category) || "Unknown";
       const platformName = platformMap.get(runData.platform) || "Unknown";
       
-      // Get points config for calculation
-      const pointsConfig = await getPointsConfigFirestore();
-      
-      // Recalculate points for all solo runs with the new formula
+      // Calculate points using the new system (includes co-op runs)
       const points = calculatePoints(
         runData.time, 
         categoryName, 
@@ -1013,7 +1033,7 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
         runData.platform,
         pointsConfig
       );
-      runsToUpdate.push({ id: runDoc.id, points });
+      runsToUpdate.push({ id: runData.id, points });
       totalPoints += points;
     }
     
@@ -2302,10 +2322,13 @@ export const updatePointsConfigFirestore = async (config: Partial<PointsConfig>)
     const configDocRef = doc(db, "pointsConfig", "default");
     const configDocSnap = await getDoc(configDocRef);
     
+    // Remove 'id' field if present (Firestore doesn't allow updating document IDs)
+    const { id, ...updateData } = config as any;
+    
     if (configDocSnap.exists()) {
-      await updateDoc(configDocRef, config);
+      await updateDoc(configDocRef, updateData);
     } else {
-      await setDoc(configDocRef, { id: "default", ...DEFAULT_POINTS_CONFIG, ...config });
+      await setDoc(configDocRef, { id: "default", ...DEFAULT_POINTS_CONFIG, ...updateData });
     }
     
     return true;

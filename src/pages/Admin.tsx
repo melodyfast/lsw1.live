@@ -2061,12 +2061,18 @@ const Admin = () => {
               setCategoryLeaderboardType(value as 'regular' | 'individual-level');
               fetchCategories(value as 'regular' | 'individual-level');
             }}>
-              <TabsList className="grid w-full grid-cols-2 bg-[hsl(240,21%,16%)] border border-[hsl(235,13%,30%)] mb-4">
-                <TabsTrigger value="regular" className="data-[state=active]:bg-[hsl(240,21%,18%)]">
+              <TabsList className="grid w-full grid-cols-2 rounded-lg p-0.5 gap-1 mb-4">
+                <TabsTrigger 
+                  value="regular" 
+                  className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-2 px-3 text-sm"
+                >
                   <Trophy className="h-4 w-4 mr-2" />
                   Full Game
                 </TabsTrigger>
-                <TabsTrigger value="individual-level" className="data-[state=active]:bg-[hsl(240,21%,18%)]">
+                <TabsTrigger 
+                  value="individual-level" 
+                  className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-2 px-3 text-sm"
+                >
                   <Star className="h-4 w-4 mr-2" />
                   Individual Level
                 </TabsTrigger>
@@ -2219,12 +2225,18 @@ const Admin = () => {
                 <Tabs value={levelLeaderboardType} onValueChange={(value) => {
                   setLevelLeaderboardType(value as 'individual-level' | 'community-golds');
                 }}>
-                  <TabsList className="grid w-full grid-cols-2 bg-[hsl(240,21%,16%)] border border-[hsl(235,13%,30%)] mb-4">
-                    <TabsTrigger value="individual-level" className="data-[state=active]:bg-[hsl(240,21%,18%)]">
+                  <TabsList className="grid w-full grid-cols-2 rounded-lg p-0.5 gap-1 mb-4">
+                    <TabsTrigger 
+                      value="individual-level" 
+                      className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-2 px-3 text-sm"
+                    >
                       <Star className="h-4 w-4 mr-2" />
                       Individual Level
                     </TabsTrigger>
-                    <TabsTrigger value="community-golds" className="data-[state=active]:bg-[hsl(240,21%,18%)]">
+                    <TabsTrigger 
+                      value="community-golds" 
+                      className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-2 px-3 text-sm"
+                    >
                       <Gem className="h-4 w-4 mr-2" />
                       Community Golds
                     </TabsTrigger>
