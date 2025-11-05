@@ -85,15 +85,9 @@ export interface CustomUser extends FirebaseAuthUser {
 export interface PointsConfig {
   id: string;
   baseMultiplier: number;
-  minPoints: number;
-  eligiblePlatforms: string[]; // Platform IDs or names
-  eligibleCategories: string[]; // Category IDs or names
-  categoryMinTimes: Record<string, number>; // Category ID -> minimum time in seconds (at this time, points = baseMultiplier * minTimePointRatio)
-  minTimePointRatio: number; // Ratio of baseMultiplier to award at minimum time (0.0 to 1.0, default 0.5 = 50%)
-  categoryMilestones: Record<string, {
-    thresholdSeconds: number;
-    minMultiplier: number;
-    maxMultiplier: number;
-  }>; // Category ID -> milestone config (optional bonuses)
+  // Threshold times in seconds - only runs UNDER these times get points
+  // Points are calculated exponentially: faster times get exponentially more points
+  anyPercentThreshold: number; // Threshold time for Any% (in seconds)
+  nocutsNoshipsThreshold: number; // Threshold time for Nocuts Noships (in seconds)
   enabled: boolean; // Master switch to enable/disable points
 }

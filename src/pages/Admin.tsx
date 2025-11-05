@@ -1269,8 +1269,8 @@ const Admin = () => {
                       setSavingPointsConfig(false);
                     }
                   }} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
                         <Label htmlFor="pointsEnabled">Enable Points System</Label>
                         <Select
                           value={pointsConfig.enabled ? "true" : "false"}
@@ -1301,275 +1301,112 @@ const Admin = () => {
                           className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                         />
                         <p className="text-sm text-ctp-overlay0 mt-1">
-                          Base multiplier for exponential point calculation. Default: 800
+                          Base multiplier for exponential point calculation. Faster times get exponentially more points. Default: 800
                         </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-base font-semibold mb-2 block">Points Eligibility</Label>
+                        <p className="text-sm text-ctp-overlay0 mb-4">
+                          Points are automatically awarded for:
+                        </p>
+                        <ul className="list-disc list-inside space-y-1 text-sm text-ctp-subtext1 ml-4">
+                          <li>Full game runs only (not Individual Levels or Community Golds)</li>
+                          <li>GameCube platform only</li>
+                          <li>Any% and Nocuts Noships categories only</li>
+                          <li>Runs UNDER the threshold time for each category</li>
+                          <li>Both solo and co-op runs are eligible</li>
+                        </ul>
                       </div>
 
                       <div>
-                        <Label htmlFor="minPoints">Minimum Points</Label>
-                        <Input
-                          id="minPoints"
-                          type="number"
-                          value={pointsConfig.minPoints}
-                          onChange={(e) => setPointsConfig({ ...pointsConfig, minPoints: Number(e.target.value) })}
-                          min="0"
-                          step="1"
-                          className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                        />
-                        <p className="text-sm text-ctp-overlay0 mt-1">
-                          Minimum points awarded (floor value). Default: 10
+                        <Label className="text-base font-semibold mb-2 block">Category Threshold Times</Label>
+                        <p className="text-sm text-ctp-overlay0 mb-4">
+                          Set the threshold time for each category. Only runs UNDER these times will receive points. Points are calculated exponentially - faster times get exponentially more points.
                         </p>
-                      </div>
-
-                      <div>
-                        <Label htmlFor="minTimePointRatio">Points at Minimum Time (%)</Label>
-                        <Input
-                          id="minTimePointRatio"
-                          type="number"
-                          value={Math.round((pointsConfig.minTimePointRatio ?? 0.5) * 100)}
-                          onChange={(e) => {
-                            const percent = Number(e.target.value);
-                            const ratio = Math.max(0.01, Math.min(0.99, percent / 100));
-                            setPointsConfig({ ...pointsConfig, minTimePointRatio: ratio });
-                          }}
-                          min="1"
-                          max="99"
-                          step="1"
-                          className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                        />
-                        <p className="text-sm text-ctp-overlay0 mt-1">
-                          At each category's minimum time, award this percentage of base multiplier points. Default: 50%
-                        </p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label>Eligible Platforms</Label>
-                      <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
-                        {firestorePlatforms.map((platform) => {
-                          const isSelected = pointsConfig.eligiblePlatforms.includes(platform.id) || 
-                                            pointsConfig.eligiblePlatforms.includes(platform.name);
-                          return (
-                            <div key={platform.id} className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                id={`platform-${platform.id}`}
-                                checked={isSelected}
-                                onChange={(e) => {
-                                  const newPlatforms = e.target.checked
-                                    ? [...pointsConfig.eligiblePlatforms, platform.id]
-                                    : pointsConfig.eligiblePlatforms.filter(p => p !== platform.id && p !== platform.name);
-                                  setPointsConfig({ ...pointsConfig, eligiblePlatforms: newPlatforms });
-                                }}
-                                className="w-4 h-4"
-                              />
-                              <Label htmlFor={`platform-${platform.id}`} className="cursor-pointer">
-                                {platform.name}
-                              </Label>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <p className="text-sm text-ctp-overlay0 mt-1">
-                        Select which platforms are eligible for points.
-                      </p>
-                    </div>
-
-                    <div>
-                      <Label>Eligible Categories</Label>
-                      <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
-                        {firestoreCategories.map((category) => {
-                          const isSelected = pointsConfig.eligibleCategories.includes(category.id) || 
-                                            pointsConfig.eligibleCategories.includes(category.name);
-                          return (
-                            <div key={category.id} className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                id={`category-${category.id}`}
-                                checked={isSelected}
-                                onChange={(e) => {
-                                  const newCategories = e.target.checked
-                                    ? [...pointsConfig.eligibleCategories, category.id]
-                                    : pointsConfig.eligibleCategories.filter(c => c !== category.id && c !== category.name);
-                                  setPointsConfig({ ...pointsConfig, eligibleCategories: newCategories });
-                                }}
-                                className="w-4 h-4"
-                              />
-                              <Label htmlFor={`category-${category.id}`} className="cursor-pointer">
-                                {category.name}
-                              </Label>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <p className="text-sm text-ctp-overlay0 mt-1">
-                        Select which categories are eligible for points.
-                      </p>
-                    </div>
-
-                    <div>
-                      <Label>Category Minimum Times</Label>
-                      <p className="text-sm text-ctp-overlay0 mb-2">
-                        Set the minimum time (in HH:MM:SS format) for each category. At this time, runs will receive {Math.round((pointsConfig.minTimePointRatio ?? 0.5) * 100)}% of the base multiplier points. Faster times get exponentially more points.
-                      </p>
-                      <div className="space-y-3 max-h-64 overflow-y-auto">
-                        {pointsConfig.eligibleCategories.map((categoryId) => {
-                          const category = firestoreCategories.find(c => c.id === categoryId || c.name === categoryId);
-                          const categoryKey = categoryId;
-                          const currentSeconds = pointsConfig.categoryMinTimes?.[categoryKey] || (categoryId.toLowerCase().includes("nocuts") ? 1740 : 3300);
-                          
-                          // Convert seconds to HH:MM:SS
-                          const hours = Math.floor(currentSeconds / 3600);
-                          const minutes = Math.floor((currentSeconds % 3600) / 60);
-                          const seconds = currentSeconds % 60;
-                          const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                          
-                          return (
-                            <div key={categoryKey} className="flex items-center gap-4">
-                              <Label className="w-40 text-sm">{category?.name || categoryId}</Label>
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="anyPercentThreshold">Any% Threshold Time</Label>
+                            <div className="flex items-center gap-4 mt-2">
                               <Input
+                                id="anyPercentThreshold"
                                 type="text"
-                                value={timeString}
+                                value={(() => {
+                                  const seconds = pointsConfig.anyPercentThreshold ?? 3300;
+                                  const hours = Math.floor(seconds / 3600);
+                                  const minutes = Math.floor((seconds % 3600) / 60);
+                                  const secs = seconds % 60;
+                                  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                                })()}
                                 onChange={(e) => {
                                   const timeStr = e.target.value.trim();
-                                  // Parse HH:MM:SS or MM:SS format
                                   const parts = timeStr.split(':').map(Number);
-                                  let totalSeconds = 0;
+                                  let totalSeconds = 3300;
                                   if (parts.length === 3) {
-                                    // HH:MM:SS
                                     totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
                                   } else if (parts.length === 2) {
-                                    // MM:SS
                                     totalSeconds = parts[0] * 60 + parts[1];
                                   } else if (parts.length === 1 && !isNaN(parts[0])) {
-                                    // Just seconds
                                     totalSeconds = parts[0];
                                   }
-                                  
                                   if (totalSeconds > 0) {
-                                    const newMinTimes = {
-                                      ...(pointsConfig.categoryMinTimes || {}),
-                                      [categoryKey]: totalSeconds
-                                    };
-                                    setPointsConfig({ ...pointsConfig, categoryMinTimes: newMinTimes });
+                                    setPointsConfig({ ...pointsConfig, anyPercentThreshold: totalSeconds });
                                   }
                                 }}
                                 placeholder="HH:MM:SS or MM:SS"
-                                className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] flex-1 font-mono"
+                                className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] font-mono flex-1"
                               />
-                              <span className="text-xs text-ctp-overlay0 w-24">
-                                ({Math.floor(currentSeconds / 60)}m {currentSeconds % 60}s)
+                              <span className="text-xs text-ctp-overlay0 w-32">
+                                ({Math.floor((pointsConfig.anyPercentThreshold ?? 3300) / 60)}m {(pointsConfig.anyPercentThreshold ?? 3300) % 60}s) - Default: 55:00
                               </span>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                            <p className="text-sm text-ctp-overlay0 mt-1">
+                              Only Any% runs under this time will receive points.
+                            </p>
+                          </div>
 
-                    <div>
-                      <Label>Category Milestones (Optional Bonuses)</Label>
-                      <p className="text-sm text-ctp-overlay0 mb-2">
-                        Configure optional milestone bonuses for exceptional times. Runs faster than the threshold time get bonus multipliers.
-                      </p>
-                      <div className="space-y-4 max-h-96 overflow-y-auto">
-                        {pointsConfig.eligibleCategories.map((categoryId) => {
-                          const category = firestoreCategories.find(c => c.id === categoryId || c.name === categoryId);
-                          const categoryKey = categoryId;
-                          const milestone = pointsConfig.categoryMilestones?.[categoryKey] || {
-                            thresholdSeconds: categoryId.toLowerCase().includes("nocuts") ? 1740 : 3300,
-                            minMultiplier: categoryId.toLowerCase().includes("nocuts") ? 1.3 : 1.2,
-                            maxMultiplier: categoryId.toLowerCase().includes("nocuts") ? 2.2 : 2.0,
-                          };
-                          
-                          // Convert threshold seconds to HH:MM:SS
-                          const thresholdHours = Math.floor(milestone.thresholdSeconds / 3600);
-                          const thresholdMinutes = Math.floor((milestone.thresholdSeconds % 3600) / 60);
-                          const thresholdSecs = milestone.thresholdSeconds % 60;
-                          const thresholdTimeString = `${thresholdHours.toString().padStart(2, '0')}:${thresholdMinutes.toString().padStart(2, '0')}:${thresholdSecs.toString().padStart(2, '0')}`;
-                          
-                          return (
-                            <Card key={categoryKey} className="bg-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] p-4">
-                              <h4 className="font-semibold mb-3">{category?.name || categoryId}</h4>
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                  <Label className="text-xs">Threshold Time</Label>
-                                  <Input
-                                    type="text"
-                                    value={thresholdTimeString}
-                                    onChange={(e) => {
-                                      const timeStr = e.target.value.trim();
-                                      const parts = timeStr.split(':').map(Number);
-                                      let totalSeconds = milestone.thresholdSeconds;
-                                      if (parts.length === 3) {
-                                        totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-                                      } else if (parts.length === 2) {
-                                        totalSeconds = parts[0] * 60 + parts[1];
-                                      } else if (parts.length === 1 && !isNaN(parts[0])) {
-                                        totalSeconds = parts[0];
-                                      }
-                                      
-                                      if (totalSeconds > 0) {
-                                        const newMilestones = {
-                                          ...(pointsConfig.categoryMilestones || {}),
-                                          [categoryKey]: {
-                                            ...milestone,
-                                            thresholdSeconds: totalSeconds
-                                          }
-                                        };
-                                        setPointsConfig({ ...pointsConfig, categoryMilestones: newMilestones });
-                                      }
-                                    }}
-                                    placeholder="HH:MM:SS"
-                                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] font-mono"
-                                  />
-                                  <p className="text-xs text-ctp-overlay0 mt-1">Runs faster than this get bonus</p>
-                                </div>
-                                <div>
-                                  <Label className="text-xs">Min Bonus Multiplier</Label>
-                                  <Input
-                                    type="number"
-                                    value={milestone.minMultiplier}
-                                    onChange={(e) => {
-                                      const newMilestones = {
-                                        ...(pointsConfig.categoryMilestones || {}),
-                                        [categoryKey]: {
-                                          ...milestone,
-                                          minMultiplier: Number(e.target.value)
-                                        }
-                                      };
-                                      setPointsConfig({ ...pointsConfig, categoryMilestones: newMilestones });
-                                    }}
-                                    min="1"
-                                    step="0.1"
-                                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                                  />
-                                  <p className="text-xs text-ctp-overlay0 mt-1">At threshold time</p>
-                                </div>
-                                <div>
-                                  <Label className="text-xs">Max Bonus Multiplier</Label>
-                                  <Input
-                                    type="number"
-                                    value={milestone.maxMultiplier}
-                                    onChange={(e) => {
-                                      const newMilestones = {
-                                        ...(pointsConfig.categoryMilestones || {}),
-                                        [categoryKey]: {
-                                          ...milestone,
-                                          maxMultiplier: Number(e.target.value)
-                                        }
-                                      };
-                                      setPointsConfig({ ...pointsConfig, categoryMilestones: newMilestones });
-                                    }}
-                                    min="1"
-                                    step="0.1"
-                                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                                  />
-                                  <p className="text-xs text-ctp-overlay0 mt-1">At extremely fast times</p>
-                                </div>
-                              </div>
-                            </Card>
-                          );
-                        })}
+                          <div>
+                            <Label htmlFor="nocutsNoshipsThreshold">Nocuts Noships Threshold Time</Label>
+                            <div className="flex items-center gap-4 mt-2">
+                              <Input
+                                id="nocutsNoshipsThreshold"
+                                type="text"
+                                value={(() => {
+                                  const seconds = pointsConfig.nocutsNoshipsThreshold ?? 1740;
+                                  const hours = Math.floor(seconds / 3600);
+                                  const minutes = Math.floor((seconds % 3600) / 60);
+                                  const secs = seconds % 60;
+                                  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                                })()}
+                                onChange={(e) => {
+                                  const timeStr = e.target.value.trim();
+                                  const parts = timeStr.split(':').map(Number);
+                                  let totalSeconds = 1740;
+                                  if (parts.length === 3) {
+                                    totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                                  } else if (parts.length === 2) {
+                                    totalSeconds = parts[0] * 60 + parts[1];
+                                  } else if (parts.length === 1 && !isNaN(parts[0])) {
+                                    totalSeconds = parts[0];
+                                  }
+                                  if (totalSeconds > 0) {
+                                    setPointsConfig({ ...pointsConfig, nocutsNoshipsThreshold: totalSeconds });
+                                  }
+                                }}
+                                placeholder="HH:MM:SS or MM:SS"
+                                className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] font-mono flex-1"
+                              />
+                              <span className="text-xs text-ctp-overlay0 w-32">
+                                ({Math.floor((pointsConfig.nocutsNoshipsThreshold ?? 1740) / 60)}m {(pointsConfig.nocutsNoshipsThreshold ?? 1740) % 60}s) - Default: 29:00
+                              </span>
+                            </div>
+                            <p className="text-sm text-ctp-overlay0 mt-1">
+                              Only Nocuts Noships runs under this time will receive points.
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
 

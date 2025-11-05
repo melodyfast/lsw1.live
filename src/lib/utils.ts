@@ -101,6 +101,17 @@ export function formatTime(timeString: string): string {
  * @param pointsConfig - Optional points configuration, if not provided will use defaults
  * @returns Points awarded for the run (0 for non-supported categories or platforms)
  */
+/**
+ * Calculate points for a run
+ * Points are ONLY awarded for:
+ * - Full game runs (not ILs or community golds)
+ * - GameCube platform
+ * - Any% or Nocuts Noships categories
+ * - Runs UNDER the threshold time for that category
+ * - Both solo and co-op runs are eligible
+ * 
+ * Points are calculated exponentially: faster times get exponentially more points
+ */
 export function calculatePoints(
   timeString: string, 
   categoryName: string, 
@@ -109,12 +120,8 @@ export function calculatePoints(
   platformId?: string,
   pointsConfig?: { 
     baseMultiplier?: number;
-    minPoints?: number;
-    eligiblePlatforms?: string[];
-    eligibleCategories?: string[];
-    categoryMinTimes?: Record<string, number>;
-    minTimePointRatio?: number;
-    categoryMilestones?: Record<string, { thresholdSeconds: number; minMultiplier: number; maxMultiplier: number }>;
+    anyPercentThreshold?: number;
+    nocutsNoshipsThreshold?: number;
     enabled?: boolean;
   }
 ): number {
@@ -127,134 +134,54 @@ export function calculatePoints(
   if (!enabled) return 0;
 
   const baseMultiplier = config.baseMultiplier ?? 800;
-  const minPoints = config.minPoints ?? 10;
 
-  // Check platform eligibility
+  // Hardcoded: Only GameCube platform is eligible
   const normalizedPlatform = platformName?.toLowerCase().trim() || "";
   const platformIdLower = platformId?.toLowerCase().trim() || "";
+  const isGameCube = normalizedPlatform === "gamecube" || 
+                     normalizedPlatform === "game cube" ||
+                     platformIdLower === "gamecube" ||
+                     platformIdLower === "game cube";
   
-  if (config.eligiblePlatforms && config.eligiblePlatforms.length > 0) {
-    // Check if platform ID or name matches eligible platforms
-    const isEligible = config.eligiblePlatforms.some(eligible => {
-      const eligibleLower = eligible.toLowerCase().trim();
-      return eligibleLower === normalizedPlatform || 
-             eligibleLower === platformIdLower ||
-             (eligibleLower === "gamecube" && (normalizedPlatform === "gamecube" || normalizedPlatform === "game cube"));
-    });
-    
-    if (!isEligible) {
-      return 0;
-    }
-  } else {
-    // Fallback to old behavior: only GameCube
-    const isGameCube = normalizedPlatform === "gamecube" || normalizedPlatform === "game cube";
-    if (!isGameCube) {
-      return 0;
-    }
-  }
-
-  // Check category eligibility
-  const normalizedCategory = categoryName.toLowerCase().trim();
-  const categoryIdLower = categoryId?.toLowerCase().trim() || "";
-  
-  let isEligibleCategory = false;
-  let categoryKey = categoryId || categoryName; // Use ID if available, otherwise name
-  
-  if (config.eligibleCategories && config.eligibleCategories.length > 0) {
-    isEligibleCategory = config.eligibleCategories.some(eligible => {
-      const eligibleLower = eligible.toLowerCase().trim();
-      return eligibleLower === normalizedCategory || 
-             eligibleLower === categoryIdLower ||
-             (eligibleLower === "any%" && normalizedCategory === "any%") ||
-             (eligibleLower.includes("nocuts") && (normalizedCategory === "nocuts noships" || normalizedCategory === "nocutsnoships"));
-    });
-    
-    // Find matching category key for config lookup
-    if (isEligibleCategory) {
-      const matchingEligible = config.eligibleCategories.find(eligible => {
-        const eligibleLower = eligible.toLowerCase().trim();
-        return eligibleLower === normalizedCategory || 
-               eligibleLower === categoryIdLower ||
-               (eligibleLower === "any%" && normalizedCategory === "any%") ||
-               (eligibleLower.includes("nocuts") && (normalizedCategory === "nocuts noships" || normalizedCategory === "nocutsnoships"));
-      });
-      if (matchingEligible) {
-        categoryKey = matchingEligible;
-      }
-    }
-  } else {
-    // Fallback to old behavior: Any% and Nocuts Noships
-  const isAnyPercent = normalizedCategory === "any%";
-  const isNocutsNoships = normalizedCategory === "nocuts noships" || normalizedCategory === "nocutsnoships";
-    isEligibleCategory = isAnyPercent || isNocutsNoships;
-  }
-  
-  if (!isEligibleCategory) {
+  if (!isGameCube) {
     return 0;
   }
 
-  // Get scale factor for this category from minimum time
-  // If categoryMinTimes is set, calculate scale factor from it
-  // Formula: at minTimeSeconds, points should be baseMultiplier * minTimePointRatio
-  // baseMultiplier * minTimePointRatio = baseMultiplier * e^(-minTimeSeconds/scaleFactor)
-  // minTimePointRatio = e^(-minTimeSeconds/scaleFactor)
-  // ln(minTimePointRatio) = -minTimeSeconds/scaleFactor
-  // scaleFactor = -minTimeSeconds / ln(minTimePointRatio)
-  let scaleFactor: number;
-  const minTimePointRatio = config.minTimePointRatio ?? 0.5;
+  // Hardcoded: Only Any% and Nocuts Noships categories are eligible
+  const normalizedCategory = categoryName.toLowerCase().trim();
+  const categoryIdLower = categoryId?.toLowerCase().trim() || "";
+  const isAnyPercent = normalizedCategory === "any%" || 
+                       categoryIdLower === "any%" ||
+                       categoryIdLower.includes("any%");
+  const isNocutsNoships = normalizedCategory === "nocuts noships" || 
+                          normalizedCategory === "nocutsnoships" ||
+                          categoryIdLower.includes("nocuts") ||
+                          categoryIdLower.includes("noships");
   
-  if (config.categoryMinTimes && categoryKey && config.categoryMinTimes[categoryKey]) {
-    const minTimeSeconds = config.categoryMinTimes[categoryKey];
-    if (minTimePointRatio > 0 && minTimePointRatio < 1 && minTimeSeconds > 0) {
-      scaleFactor = -minTimeSeconds / Math.log(minTimePointRatio);
-    } else {
-      // Fallback if invalid ratio or time
-      const isNocutsNoships = normalizedCategory === "nocuts noships" || normalizedCategory === "nocutsnoships";
-      scaleFactor = isNocutsNoships ? 1400 : 2400;
-    }
-  } else {
-    // Fallback to old defaults (convert old scale factors if needed, or use defaults)
-    const isNocutsNoships = normalizedCategory === "nocuts noships" || normalizedCategory === "nocutsnoships";
-    scaleFactor = isNocutsNoships ? 1400 : 2400;
+  if (!isAnyPercent && !isNocutsNoships) {
+    return 0;
   }
-  
-  // Base points calculation using exponential decay
-  // Formula: basePoints = base * e^(-time/scaleFactor)
-  const basePoints = baseMultiplier * Math.exp(-totalSeconds / scaleFactor);
-  let points = Math.max(basePoints, minPoints);
 
-  // Apply milestone bonuses if configured
-  if (config.categoryMilestones && categoryKey && config.categoryMilestones[categoryKey]) {
-    const milestone = config.categoryMilestones[categoryKey];
-    if (totalSeconds < milestone.thresholdSeconds) {
-      const timeRemaining = milestone.thresholdSeconds - totalSeconds;
-      const bonusMultiplier = milestone.minMultiplier + 
-        (timeRemaining / milestone.thresholdSeconds) * (milestone.maxMultiplier - milestone.minMultiplier);
-      points *= bonusMultiplier;
-    }
+  // Get threshold time for this category
+  let thresholdSeconds: number;
+  if (isAnyPercent) {
+    thresholdSeconds = config.anyPercentThreshold ?? 3300; // 55 minutes default
   } else {
-    // Fallback to old milestone bonuses
-    const isAnyPercent = normalizedCategory === "any%";
-    const isNocutsNoships = normalizedCategory === "nocuts noships" || normalizedCategory === "nocutsnoships";
-    
-    if (isAnyPercent) {
-      const fiftyFiveMinutesInSeconds = 3300;
-      if (totalSeconds < fiftyFiveMinutesInSeconds) {
-        const timeRemaining = fiftyFiveMinutesInSeconds - totalSeconds;
-        const bonusMultiplier = 1.2 + (timeRemaining / fiftyFiveMinutesInSeconds) * 0.8;
-        points *= bonusMultiplier;
-      }
-    }
-    
-    if (isNocutsNoships) {
-      const twentyNineMinutesInSeconds = 1740;
-      if (totalSeconds < twentyNineMinutesInSeconds) {
-        const timeRemaining = twentyNineMinutesInSeconds - totalSeconds;
-        const bonusMultiplier = 1.3 + (timeRemaining / twentyNineMinutesInSeconds) * 0.9;
-        points *= bonusMultiplier;
-      }
-    }
+    thresholdSeconds = config.nocutsNoshipsThreshold ?? 1740; // 29 minutes default
   }
+
+  // Only award points if run is UNDER the threshold time
+  if (totalSeconds >= thresholdSeconds) {
+    return 0;
+  }
+
+  // Calculate points exponentially
+  // Formula: points = baseMultiplier * e^(-time/scaleFactor)
+  // We want points to scale exponentially, with faster times getting much more points
+  // Scale factor determines how fast the exponential decay is
+  // Using a scale factor that makes the exponential curve work well
+  const scaleFactor = thresholdSeconds / 2; // Half the threshold time as scale factor for good curve
+  const points = baseMultiplier * Math.exp(-totalSeconds / scaleFactor);
 
   // Round to nearest integer
   return Math.round(points);

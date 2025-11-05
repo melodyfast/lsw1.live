@@ -1722,9 +1722,16 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
     
     // Recalculate points for the new player (the one claiming the run)
     // Only recalculate if the run is verified (verified runs count for points)
-    if (runData.verified && runData.runType !== 'co-op') {
+    if (runData.verified) {
       try {
         await recalculatePlayerPointsFirestore(userId);
+        // For co-op runs, also recalculate player2's points
+        if (runData.runType === 'co-op' && runData.player2Name) {
+          const player2 = await getPlayerByDisplayNameFirestore(runData.player2Name);
+          if (player2) {
+            await recalculatePlayerPointsFirestore(player2.uid);
+          }
+        }
       } catch (error) {
         console.error(`Error recalculating points for new player ${userId}:`, error);
         // Don't fail the claim if points recalculation fails
@@ -1756,10 +1763,11 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
 export const getPlayersByPointsFirestore = async (limit: number = 100): Promise<Player[]> => {
   if (!db) return [];
   try {
-    // Get all verified runs
+    // Get all verified full game runs
     const q = query(
       collection(db, "leaderboardEntries"),
       where("verified", "==", true),
+      where("leaderboardType", "==", "regular"), // Only full game runs
       firestoreLimit(2000)
     );
     const runsSnapshot = await getDocs(q);
@@ -1785,18 +1793,18 @@ export const getPlayersByPointsFirestore = async (limit: number = 100): Promise<
     // Get points config once for all calculations
     const pointsConfig = await getPointsConfigFirestore();
 
-    // Process each run (only solo runs count for points)
+    // Process each run (both solo and co-op runs count for points)
     for (const runDoc of runsSnapshot.docs) {
       const runData = runDoc.data() as LeaderboardEntry;
       
       if (!runData.playerId || runData.isObsolete) continue;
 
-      // Skip co-op runs - they don't award points
-      if (runData.runType === 'co-op') {
+      // Only process full game runs (not ILs or community golds)
+      if (runData.leaderboardType && runData.leaderboardType !== 'regular') {
         continue;
       }
 
-      // Recalculate points for all solo runs with the new formula
+      // Recalculate points for all eligible runs
       const categoryName = categoryMap.get(runData.category) || "Unknown";
       const platformName = platformMap.get(runData.platform) || "Unknown";
       const points = calculatePoints(
@@ -1966,12 +1974,13 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
     const categoryMap = new Map(categories.map(c => [c.id, c.name]));
     const platformMap = new Map(platforms.map(p => [p.id, p.name]));
 
-    // Get all verified runs - use a single query with high limit
+    // Get all verified full game runs - use a single query with high limit
     // Note: Firestore has a limit of 10,000 documents per query, but for most use cases this should be sufficient
     // If needed, we can implement pagination later for databases with >10k verified runs
     const q = query(
       collection(db, "leaderboardEntries"),
       where("verified", "==", true),
+      where("leaderboardType", "==", "regular"), // Only full game runs
       firestoreLimit(10000)
     );
     const querySnapshot = await getDocs(q);
@@ -2020,10 +2029,15 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
           playerId: runData.playerId,
         });
 
-        // Track player IDs for later recalculation (only for solo runs)
-        // Co-op runs don't award points, so we skip tracking player2
-        if (runData.runType !== 'co-op') {
+        // Track player IDs for later recalculation (both solo and co-op runs)
         playerIdsSet.add(runData.playerId);
+        // For co-op runs, also track player2 if they exist
+        if (runData.runType === 'co-op' && runData.player2Name) {
+          // Try to find player2 by name to get their ID
+          const player2 = await getPlayerByDisplayNameFirestore(runData.player2Name);
+          if (player2) {
+            playerIdsSet.add(player2.uid);
+          }
         }
       } catch (error) {
         result.errors.push(`Error processing run ${runData.id}: ${error instanceof Error ? error.message : String(error)}`);
@@ -2239,12 +2253,8 @@ export const moveLevelDownFirestore = async (id: string): Promise<boolean> => {
 // Points Configuration Management
 const DEFAULT_POINTS_CONFIG: Omit<PointsConfig, 'id'> = {
   baseMultiplier: 800,
-  minPoints: 10,
-  eligiblePlatforms: [], // Will be populated with GameCube platform ID
-  eligibleCategories: [], // Will be populated with Any% and Nocuts Noships category IDs
-  categoryMinTimes: {}, // Will be populated with category ID -> minimum time in seconds
-  minTimePointRatio: 0.5, // At minimum time, award 50% of baseMultiplier
-  categoryMilestones: {}, // Will be populated (optional bonuses)
+  anyPercentThreshold: 3300, // 55 minutes in seconds
+  nocutsNoshipsThreshold: 1740, // 29 minutes in seconds
   enabled: true,
 };
 
@@ -2259,33 +2269,40 @@ export const getPointsConfigFirestore = async (): Promise<PointsConfig> => {
     
     if (configDocSnap.exists()) {
       const data = configDocSnap.data();
-      // Ensure all required fields are present
-      // Migrate old categoryScaleFactors to categoryMinTimes if needed
-      let categoryMinTimes = data.categoryMinTimes ?? DEFAULT_POINTS_CONFIG.categoryMinTimes;
-      if (data.categoryScaleFactors && (!categoryMinTimes || Object.keys(categoryMinTimes).length === 0)) {
-        // Migration: Convert old scale factors to min times (approximate)
-        // For a scale factor SF, we calculate what time would give 50% points
-        // baseMultiplier * 0.5 = baseMultiplier * e^(-time/SF)
-        // 0.5 = e^(-time/SF)
-        // ln(0.5) = -time/SF
-        // time = -SF * ln(0.5) ≈ SF * 0.693
-        categoryMinTimes = {};
-        if (data.categoryScaleFactors) {
-          Object.entries(data.categoryScaleFactors).forEach(([catId, scaleFactor]) => {
-            categoryMinTimes[catId] = Math.round(scaleFactor * 0.693);
-          });
-        }
+      // Migrate old config format to new simplified format
+      let anyPercentThreshold = data.anyPercentThreshold ?? DEFAULT_POINTS_CONFIG.anyPercentThreshold;
+      let nocutsNoshipsThreshold = data.nocutsNoshipsThreshold ?? DEFAULT_POINTS_CONFIG.nocutsNoshipsThreshold;
+      
+      // Migration: If old format exists, extract threshold times
+      if (data.categoryMilestones) {
+        // Try to find Any% and Nocuts thresholds from old milestone config
+        Object.entries(data.categoryMilestones).forEach(([catId, milestone]: [string, any]) => {
+          const catLower = catId.toLowerCase();
+          if (catLower.includes("any%") || catLower === "any%") {
+            anyPercentThreshold = milestone.thresholdSeconds ?? anyPercentThreshold;
+          } else if (catLower.includes("nocuts") || catLower.includes("noships")) {
+            nocutsNoshipsThreshold = milestone.thresholdSeconds ?? nocutsNoshipsThreshold;
+          }
+        });
+      }
+      
+      // Also check categoryMinTimes for migration
+      if (data.categoryMinTimes) {
+        Object.entries(data.categoryMinTimes).forEach(([catId, time]: [string, any]) => {
+          const catLower = catId.toLowerCase();
+          if (catLower.includes("any%") || catLower === "any%") {
+            anyPercentThreshold = time ?? anyPercentThreshold;
+          } else if (catLower.includes("nocuts") || catLower.includes("noships")) {
+            nocutsNoshipsThreshold = time ?? nocutsNoshipsThreshold;
+          }
+        });
       }
       
       return {
         id: configDocSnap.id,
         baseMultiplier: data.baseMultiplier ?? DEFAULT_POINTS_CONFIG.baseMultiplier,
-        minPoints: data.minPoints ?? DEFAULT_POINTS_CONFIG.minPoints,
-        eligiblePlatforms: data.eligiblePlatforms ?? DEFAULT_POINTS_CONFIG.eligiblePlatforms,
-        eligibleCategories: data.eligibleCategories ?? DEFAULT_POINTS_CONFIG.eligibleCategories,
-        categoryMinTimes: categoryMinTimes,
-        minTimePointRatio: data.minTimePointRatio ?? DEFAULT_POINTS_CONFIG.minTimePointRatio,
-        categoryMilestones: data.categoryMilestones ?? DEFAULT_POINTS_CONFIG.categoryMilestones,
+        anyPercentThreshold: anyPercentThreshold,
+        nocutsNoshipsThreshold: nocutsNoshipsThreshold,
         enabled: data.enabled !== undefined ? data.enabled : DEFAULT_POINTS_CONFIG.enabled,
       } as PointsConfig;
     }
