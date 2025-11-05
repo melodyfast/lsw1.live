@@ -101,7 +101,7 @@ export function Header() {
               <div className="transition-transform duration-300 group-hover:rotate-12">
                 <LegoStudIcon size={32} color="#60a5fa" />
               </div>
-              <span className="text-lg md:text-xl font-bold bg-gradient-to-r from-ctp-blue to-ctp-mauve bg-clip-text text-transparent">lsw1.dev</span>
+              <span className="text-lg md:text-xl font-bold text-[#74c7ec]">lsw1.dev</span>
             </Link>
             {/* Desktop Navigation */}
             <nav className="hidden md:flex space-x-6">
@@ -127,7 +127,7 @@ export function Header() {
                 <div className="flex flex-col gap-6 mt-8">
                   <div className="flex items-center space-x-2 mb-4">
                     <LegoStudIcon size={28} color="#60a5fa" />
-                    <span className="text-lg font-bold bg-gradient-to-r from-ctp-blue to-ctp-mauve bg-clip-text text-transparent">lsw1.dev</span>
+                    <span className="text-lg font-bold text-[#74c7ec]">lsw1.dev</span>
                   </div>
                   <nav className="flex flex-col gap-4">
                     <NavLinks />

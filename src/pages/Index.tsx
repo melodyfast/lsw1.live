@@ -83,7 +83,7 @@ const Index = () => {
 
             {/* Center Content - Title, Subtext, Buttons */}
             <div className="flex-1 text-center order-1 lg:order-2">
-              <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-ctp-sapphire via-ctp-mauve to-ctp-lavender bg-clip-text text-transparent animate-gradient bg-[length:200%_auto]">
+              <h1 className="text-5xl md:text-6xl font-bold mb-6 text-[#74c7ec]">
                 lsw1.dev
               </h1>
               <p className="text-xl md:text-2xl mb-10 text-ctp-subtext1 max-w-2xl mx-auto animate-fade-in-delay">

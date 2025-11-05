@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase";
-import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, query, where, orderBy, limit as firestoreLimit, deleteField, startAfter } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, query, where, orderBy, limit as firestoreLimit, deleteField, startAfter, and } from "firebase/firestore";
 import { Player, LeaderboardEntry, DownloadEntry, Category, Platform, Level } from "@/types/database";
 import { calculatePoints } from "@/lib/utils";
 
@@ -14,122 +14,138 @@ export const getLeaderboardEntriesFirestore = async (
   if (!db) return [];
   
   try {
-    const initialLimit = 60;
-    let q = query(
-      collection(db, "leaderboardEntries"),
+    // Build query constraints dynamically based on filters
+    const constraints: any[] = [
       where("verified", "==", true),
-      firestoreLimit(initialLimit)
-    );
+    ];
+
+    // Add leaderboardType filter - use where clause for non-regular types
+    if (leaderboardType && leaderboardType !== 'regular') {
+      constraints.push(where("leaderboardType", "==", leaderboardType));
+    }
+    // Note: For regular type, we don't add a where clause for leaderboardType
+    // This allows us to get both entries with leaderboardType='regular' and legacy entries without the field
+    // We'll filter client-side to ensure we only get regular entries
+
+    // Add category filter
+    if (categoryId && categoryId !== "all") {
+      constraints.push(where("category", "==", categoryId));
+    }
+
+    // Add platform filter
+    if (platformId && platformId !== "all") {
+      constraints.push(where("platform", "==", platformId));
+    }
+
+    // Add runType filter
+    if (runType && (runType === "solo" || runType === "co-op")) {
+      constraints.push(where("runType", "==", runType));
+    }
+
+    // Add level filter for ILs and Community Golds
+    if (levelId && levelId !== "all") {
+      constraints.push(where("level", "==", levelId));
+    }
+
+    // Set limit - fetch more than needed since we'll filter client-side for some edge cases
+    constraints.push(firestoreLimit(200));
     
+    const q = query(collection(db, "leaderboardEntries"), ...constraints);
     const querySnapshot = await getDocs(q);
     
     let entries: LeaderboardEntry[] = querySnapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
       .filter(entry => {
+        // Filter obsolete entries if not including them
         if (!includeObsolete && entry.isObsolete) return false;
-        if (categoryId && categoryId !== "all" && entry.category !== categoryId) return false;
-        if (platformId && platformId !== "all" && entry.platform !== platformId) return false;
-        if (runType && (runType === "solo" || runType === "co-op") && entry.runType !== runType) return false;
-        // Filter by leaderboardType - strict matching
-        // If a specific leaderboardType is requested, only show entries with that exact type
-        // If leaderboardType is not specified or is 'regular', show entries with 'regular' or undefined (legacy entries)
-        if (leaderboardType && leaderboardType !== 'regular') {
-          // For individual-level or community-golds, only show entries with that exact type
-          const entryLeaderboardType = entry.leaderboardType;
-          if (entryLeaderboardType !== leaderboardType) return false;
-        } else {
-          // For regular leaderboard, show entries with 'regular' or undefined (legacy entries)
+        
+        // Handle regular leaderboardType - filter out non-regular entries
+        // (Firestore 'in' query includes both 'regular' and null, so filter null/undefined)
+        if (!leaderboardType || leaderboardType === 'regular') {
           const entryLeaderboardType = entry.leaderboardType || 'regular';
           if (entryLeaderboardType !== 'regular') return false;
         }
-        // Filter by level if specified
-        if (levelId && levelId !== "all" && entry.level !== levelId) return false;
+        
         return true;
       });
 
-    if (entries.length < 15 && querySnapshot.docs.length === initialLimit) {
-      const q2 = query(
-        collection(db, "leaderboardEntries"),
-        where("verified", "==", true),
-        firestoreLimit(120)
-      );
-      const querySnapshot2 = await getDocs(q2);
-      entries = querySnapshot2.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
-        .filter(entry => {
-          if (!includeObsolete && entry.isObsolete) return false;
-          if (categoryId && categoryId !== "all" && entry.category !== categoryId) return false;
-          if (platformId && platformId !== "all" && entry.platform !== platformId) return false;
-          if (runType && (runType === "solo" || runType === "co-op") && entry.runType !== runType) return false;
-          // Filter by leaderboardType - default to 'regular' if not specified
-          const entryLeaderboardType = entry.leaderboardType || 'regular';
-          const requestedType = leaderboardType || 'regular';
-          if (entryLeaderboardType !== requestedType) return false;
-          // Filter by level if specified
-          if (levelId && levelId !== "all" && entry.level !== levelId) return false;
-          return true;
-        });
-    }
-
+    // Sort by time in ascending order (fastest times first)
     const entriesWithTime = entries.map(entry => {
-      // Parse time string (HH:MM:SS format)
       const parts = entry.time.split(':').map(Number);
-      // Handle cases where time might be in MM:SS format (2 parts) or HH:MM:SS (3 parts)
       let totalSeconds = 0;
       if (parts.length === 3) {
-        // HH:MM:SS format
         totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
       } else if (parts.length === 2) {
-        // MM:SS format (treat as minutes:seconds)
         totalSeconds = parts[0] * 60 + parts[1];
       } else {
-        // Invalid format, default to a large number so it sorts last
         totalSeconds = Infinity;
       }
       return { entry, totalSeconds };
     });
-    // Sort by time in ascending order (fastest times first)
     entriesWithTime.sort((a, b) => a.totalSeconds - b.totalSeconds);
     entries = entriesWithTime.map(item => item.entry);
     entries = entries.slice(0, 100);
 
+    // Assign ranks
     entries.forEach((entry, index) => {
       entry.rank = index + 1;
     });
 
-    // Enrich entries with player display names and colors
-    const enrichedEntries = await Promise.all(entries.map(async (entry) => {
-      try {
-        const player = await getPlayerByUidFirestore(entry.playerId);
-        if (player) {
-          // Use displayName from player document if available
-          if (player.displayName) {
-            entry.playerName = player.displayName;
-          }
-          if (player.nameColor) {
-            entry.nameColor = player.nameColor;
-          }
-        }
-        // For co-op runs, also fetch player2 display name and color
-        if (entry.player2Name && entry.runType === 'co-op') {
-          // Try to find player2 by display name
-          const player2 = await getPlayerByDisplayNameFirestore(entry.player2Name);
-          if (player2) {
-            // Update player2Name to use displayName from player document
-            entry.player2Name = player2.displayName;
-            if (player2.nameColor) {
-              entry.player2Color = player2.nameColor;
-            }
-          }
-        }
-      } catch (error) {
-        // Silent fail - continue without enrichment
+    // Batch fetch all unique player IDs to avoid N+1 queries
+    const playerIds = new Set<string>();
+    const player2Names = new Set<string>();
+    entries.forEach(entry => {
+      playerIds.add(entry.playerId);
+      if (entry.player2Name && entry.runType === 'co-op') {
+        player2Names.add(entry.player2Name.trim().toLowerCase());
       }
+    });
+
+    // Fetch all players in batch
+    const playerMap = new Map<string, Player>();
+    if (playerIds.size > 0) {
+      const playerPromises = Array.from(playerIds).map(id => getPlayerByUidFirestore(id));
+      const players = await Promise.all(playerPromises);
+      players.forEach(player => {
+        if (player) {
+          playerMap.set(player.uid, player);
+          // Also index by displayName for player2 lookup
+          if (player.displayName) {
+            playerMap.set(player.displayName.toLowerCase(), player);
+          }
+        }
+      });
+    }
+
+    // Enrich entries with player data from the map
+    const enrichedEntries = entries.map(entry => {
+      const player = playerMap.get(entry.playerId);
+      if (player) {
+        if (player.displayName) {
+          entry.playerName = player.displayName;
+        }
+        if (player.nameColor) {
+          entry.nameColor = player.nameColor;
+        }
+      }
+      
+      // For co-op runs, look up player2
+      if (entry.player2Name && entry.runType === 'co-op') {
+        const player2 = playerMap.get(entry.player2Name.trim().toLowerCase());
+        if (player2) {
+          entry.player2Name = player2.displayName || entry.player2Name;
+          if (player2.nameColor) {
+            entry.player2Color = player2.nameColor;
+          }
+        }
+      }
+      
       return entry;
-    }));
+    });
 
     return enrichedEntries;
   } catch (error) {
+    console.error("Error fetching leaderboard entries:", error);
     return [];
   }
 };
@@ -192,15 +208,31 @@ export const getPlayerByUidFirestore = async (uid: string): Promise<Player | nul
 export const getPlayerByDisplayNameFirestore = async (displayName: string): Promise<Player | null> => {
   if (!db) return null;
   try {
-    const q = query(collection(db, "players"));
+    // Try to find by displayName first (if indexed)
+    const normalizedDisplayName = displayName.trim();
+    const q = query(
+      collection(db, "players"),
+      where("displayName", "==", normalizedDisplayName),
+      firestoreLimit(1)
+    );
     const querySnapshot = await getDocs(q);
     
-    const normalizedDisplayName = displayName.trim().toLowerCase();
-    const player = querySnapshot.docs.find(doc => {
+    if (!querySnapshot.empty) {
+      const doc = querySnapshot.docs[0];
+      return { id: doc.id, ...doc.data() } as Player;
+    }
+    
+    // Fallback: search by email prefix (if displayName search didn't find anything)
+    // Note: This still requires fetching all players, but only as fallback
+    // Consider adding a displayName index if this becomes a bottleneck
+    const allPlayersQuery = query(collection(db, "players"), firestoreLimit(500));
+    const allPlayersSnapshot = await getDocs(allPlayersQuery);
+    const normalizedSearch = normalizedDisplayName.toLowerCase();
+    
+    const player = allPlayersSnapshot.docs.find(doc => {
       const data = doc.data();
-      const playerDisplayName = (data.displayName || "").toLowerCase();
       const email = (data.email || "").toLowerCase();
-      return playerDisplayName === normalizedDisplayName || email.split('@')[0] === normalizedDisplayName;
+      return email.split('@')[0] === normalizedSearch;
     });
     
     if (player) {
@@ -208,6 +240,7 @@ export const getPlayerByDisplayNameFirestore = async (displayName: string): Prom
     }
     return null;
   } catch (error) {
+    console.error("Error fetching player by display name:", error);
     return null;
   }
 };
@@ -263,9 +296,11 @@ export const getRecentRunsFirestore = async (limitCount: number = 10): Promise<L
   if (!db) return [];
   try {
     const fetchLimit = Math.min(limitCount + 20, 50);
+    // Use orderBy instead of client-side sorting
     const q = query(
       collection(db, "leaderboardEntries"),
       where("verified", "==", true),
+      orderBy("date", "desc"),
       firestoreLimit(fetchLimit)
     );
     
@@ -275,41 +310,60 @@ export const getRecentRunsFirestore = async (limitCount: number = 10): Promise<L
       .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
       .filter(entry => !entry.isObsolete);
     
-    entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     entries = entries.slice(0, limitCount);
 
-    // Enrich entries with player display names and colors
-    const enrichedEntries = await Promise.all(entries.map(async (entry) => {
-      try {
-        const player = await getPlayerByUidFirestore(entry.playerId);
-        if (player) {
-          // Use displayName from player document if available
-          if (player.displayName) {
-            entry.playerName = player.displayName;
-          }
-          if (player.nameColor) {
-            entry.nameColor = player.nameColor;
-          }
-        }
-        // For co-op runs, also fetch player2 display name and color
-        if (entry.player2Name && entry.runType === 'co-op') {
-          const player2 = await getPlayerByDisplayNameFirestore(entry.player2Name);
-          if (player2) {
-            // Update player2Name to use displayName from player document
-            entry.player2Name = player2.displayName;
-            if (player2.nameColor) {
-              entry.player2Color = player2.nameColor;
-            }
-          }
-        }
-      } catch (error) {
-        // Silent fail - continue without enrichment
+    // Batch fetch players instead of N+1 queries
+    const playerIds = new Set<string>();
+    const player2Names = new Set<string>();
+    entries.forEach(entry => {
+      playerIds.add(entry.playerId);
+      if (entry.player2Name && entry.runType === 'co-op') {
+        player2Names.add(entry.player2Name.trim().toLowerCase());
       }
+    });
+
+    const playerMap = new Map<string, Player>();
+    if (playerIds.size > 0) {
+      const playerPromises = Array.from(playerIds).map(id => getPlayerByUidFirestore(id));
+      const players = await Promise.all(playerPromises);
+      players.forEach(player => {
+        if (player) {
+          playerMap.set(player.uid, player);
+          if (player.displayName) {
+            playerMap.set(player.displayName.toLowerCase(), player);
+          }
+        }
+      });
+    }
+
+    // Enrich entries with player data
+    const enrichedEntries = entries.map(entry => {
+      const player = playerMap.get(entry.playerId);
+      if (player) {
+        if (player.displayName) {
+          entry.playerName = player.displayName;
+        }
+        if (player.nameColor) {
+          entry.nameColor = player.nameColor;
+        }
+      }
+      
+      if (entry.player2Name && entry.runType === 'co-op') {
+        const player2 = playerMap.get(entry.player2Name.trim().toLowerCase());
+        if (player2) {
+          entry.player2Name = player2.displayName || entry.player2Name;
+          if (player2.nameColor) {
+            entry.player2Color = player2.nameColor;
+          }
+        }
+      }
+      
       return entry;
-    }));
+    });
 
     return enrichedEntries;
   } catch (error) {
+    console.error("Error fetching recent runs:", error);
     return [];
   }
 };
