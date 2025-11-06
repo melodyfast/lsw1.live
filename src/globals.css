@@ -422,10 +422,6 @@
 
   h1 {
     @apply text-4xl sm:text-5xl lg:text-6xl;
-    background: linear-gradient(135deg, #cdd6f4 0%, #cba6f7 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
   }
 
   h2 {

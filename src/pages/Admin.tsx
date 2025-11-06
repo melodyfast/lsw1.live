@@ -276,6 +276,56 @@ const Admin = () => {
     fetchLevelCategories();
   }, [levelLeaderboardType]);
 
+  // Initialize editingImportedRunForm when editingImportedRun changes
+  useEffect(() => {
+    if (editingImportedRun) {
+      setEditingImportedRunForm({
+        playerName: editingImportedRun.playerName || "",
+        player2Name: editingImportedRun.player2Name || "",
+        category: editingImportedRun.category || "",
+        subcategory: editingImportedRun.subcategory || "",
+        platform: editingImportedRun.platform || "",
+        level: editingImportedRun.level || "",
+        runType: editingImportedRun.runType || "",
+        leaderboardType: editingImportedRun.leaderboardType || "",
+        time: editingImportedRun.time || "",
+        date: editingImportedRun.date || "",
+        videoUrl: editingImportedRun.videoUrl || "",
+        comment: editingImportedRun.comment || "",
+      });
+    } else {
+      setEditingImportedRunForm({});
+    }
+  }, [editingImportedRun]);
+
+  // Fetch subcategories when editing category changes (only for regular leaderboard type)
+  const [editingSubcategories, setEditingSubcategories] = useState<Array<{ id: string; name: string; order?: number }>>([]);
+  useEffect(() => {
+    const fetchSubcategories = async () => {
+      if (editingImportedRun && editingImportedRun.leaderboardType === 'regular' && editingImportedRunForm.category) {
+        try {
+          const categories = await getCategoriesFromFirestore('regular');
+          const category = categories.find(c => c.id === editingImportedRunForm.category);
+          if (category && category.subcategories && category.subcategories.length > 0) {
+            const sorted = [...category.subcategories].sort((a, b) => {
+              const orderA = a.order ?? Infinity;
+              const orderB = b.order ?? Infinity;
+              return orderA - orderB;
+            });
+            setEditingSubcategories(sorted);
+          } else {
+            setEditingSubcategories([]);
+          }
+        } catch (error) {
+          setEditingSubcategories([]);
+        }
+      } else {
+        setEditingSubcategories([]);
+      }
+    };
+    fetchSubcategories();
+  }, [editingImportedRunForm.category, editingImportedRun]);
+
   const fetchImportedRunsCategories = async (leaderboardType: 'regular' | 'individual-level') => {
     try {
       const categoriesData = await getCategories(leaderboardType);
@@ -3887,7 +3937,6 @@ const Admin = () => {
                                           size="sm" 
                                           onClick={() => {
                                             setEditingImportedRun(run);
-                                            // Form will be initialized by useEffect
                                           }}
                                           className="text-blue-500 hover:bg-blue-900/20 transition-all duration-300 hover:scale-110 hover:shadow-md"
                                         >
@@ -6332,7 +6381,7 @@ const Admin = () => {
                     <Label htmlFor="edit-category">Category <span className="text-red-500">*</span></Label>
                     <Select
                       value={editingImportedRunForm.category ?? editingImportedRun.category ?? ""}
-                      onValueChange={(value) => setEditingImportedRunForm({ ...editingImportedRunForm, category: value })}
+                      onValueChange={(value) => setEditingImportedRunForm({ ...editingImportedRunForm, category: value, subcategory: "" })}
                     >
                       <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
                         <SelectValue placeholder="Select a category" />
@@ -6379,38 +6428,37 @@ const Admin = () => {
                   </div>
                 </div>
                 {/* Subcategory selector (only for regular leaderboard type) */}
-                {editingImportedRun.leaderboardType === 'regular' && (() => {
-                  const selectedCategoryId = editingImportedRunForm.category ?? editingImportedRun.category;
-                  const selectedCategory = firestoreCategories.find(c => c.id === selectedCategoryId);
-                  const subcategories = selectedCategory?.subcategories || [];
-                  const sortedSubcategories = [...subcategories].sort((a, b) => {
-                    const orderA = a.order ?? Infinity;
-                    const orderB = b.order ?? Infinity;
-                    return orderA - orderB;
-                  });
-                  
-                  return sortedSubcategories.length > 0 ? (
-                    <div>
-                      <Label htmlFor="edit-subcategory">Subcategory</Label>
-                      <Select
-                        value={editingImportedRunForm.subcategory ?? editingImportedRun.subcategory ?? ""}
-                        onValueChange={(value) => setEditingImportedRunForm({ ...editingImportedRunForm, subcategory: value || undefined })}
-                      >
-                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                          <SelectValue placeholder="Select a subcategory (optional)" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">None</SelectItem>
-                          {sortedSubcategories.map((subcategory) => (
-                            <SelectItem key={subcategory.id} value={subcategory.id}>
-                              {subcategory.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : null;
-                })()}
+                {editingImportedRun.leaderboardType === 'regular' && editingSubcategories.length > 0 && (
+                  <div>
+                    <Label className="text-sm font-semibold mb-2 block flex items-center gap-2">
+                      <Trophy className="h-3.5 w-3.5 text-[#cba6f7]" />
+                      Subcategory
+                    </Label>
+                    <Tabs 
+                      value={editingImportedRunForm.subcategory || "none"} 
+                      onValueChange={(value) => setEditingImportedRunForm({ ...editingImportedRunForm, subcategory: value === "none" ? "" : value })}
+                    >
+                      <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide rounded-none" style={{ minWidth: 'max-content' }}>
+                        <TabsTrigger 
+                          value="none" 
+                          className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#cba6f7]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap rounded-none"
+                        >
+                          None
+                        </TabsTrigger>
+                        {editingSubcategories.map((subcategory, index) => (
+                          <TabsTrigger 
+                            key={subcategory.id} 
+                            value={subcategory.id} 
+                            className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#cba6f7]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap rounded-none"
+                            style={{ animationDelay: `${index * 50}ms` }}
+                          >
+                            {subcategory.name}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </Tabs>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="edit-runType">Run Type <span className="text-red-500">*</span></Label>
