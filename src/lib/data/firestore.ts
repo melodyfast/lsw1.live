@@ -2994,3 +2994,64 @@ export const getAllRunsForDuplicateCheckFirestore = async (): Promise<Leaderboar
     return [];
   }
 };
+
+/**
+ * Delete all imported runs from speedrun.com
+ */
+export const deleteAllImportedSRCRunsFirestore = async (): Promise<{ deleted: number; errors: string[] }> => {
+  if (!db) return { deleted: 0, errors: ["Firestore not initialized"] };
+  
+  const result = { deleted: 0, errors: [] as string[] };
+  
+  try {
+    // Query for all imported runs
+    const q = query(
+      collection(db, "leaderboardEntries"),
+      where("importedFromSRC", "==", true),
+      firestoreLimit(500)
+    );
+    
+    let hasMore = true;
+    let batchCount = 0;
+    
+    while (hasMore) {
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        hasMore = false;
+        break;
+      }
+      
+      // Delete in batches
+      const batch = writeBatch(db);
+      let batchSize = 0;
+      
+      querySnapshot.docs.forEach((docSnapshot) => {
+        batch.delete(docSnapshot.ref);
+        batchSize++;
+      });
+      
+      try {
+        await batch.commit();
+        result.deleted += batchSize;
+      } catch (error) {
+        result.errors.push(`Failed to delete batch: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      
+      if (querySnapshot.docs.length < 500) {
+        hasMore = false;
+      }
+      
+      batchCount++;
+      if (batchCount > 100) {
+        result.errors.push("Stopped after 100 batches to prevent infinite loop");
+        break;
+      }
+    }
+    
+    return result;
+  } catch (error) {
+    result.errors.push(`Delete all imported runs error: ${error instanceof Error ? error.message : String(error)}`);
+    return result;
+  }
+};

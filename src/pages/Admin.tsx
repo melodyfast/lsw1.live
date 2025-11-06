@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, ShieldAlert, ExternalLink, Download, PlusCircle, Trash2, Wrench, Edit2, FolderTree, Play, ArrowUp, ArrowDown, Gamepad2, UserPlus, UserMinus, Trophy, Upload, Star, Gem, RefreshCw } from "lucide-react";
+import { CheckCircle, XCircle, ShieldAlert, ExternalLink, Download, PlusCircle, Trash2, Wrench, Edit2, FolderTree, Play, ArrowUp, ArrowDown, Gamepad2, UserPlus, UserMinus, Trophy, Upload, Star, Gem, RefreshCw, X } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Pagination } from "@/components/Pagination";
@@ -52,6 +52,8 @@ import {
   getImportedSRCRuns,
   checkSRCRunExists,
   getAllRunsForDuplicateCheck,
+  deleteAllImportedSRCRuns,
+  getCategories,
 } from "@/lib/db";
 import { 
   getLSWGameId, 
@@ -82,7 +84,14 @@ const Admin = () => {
   const [savingImportedRun, setSavingImportedRun] = useState(false);
   const [unverifiedPage, setUnverifiedPage] = useState(1);
   const [importedPage, setImportedPage] = useState(1);
+  const [clearingImportedRuns, setClearingImportedRuns] = useState(false);
   const itemsPerPage = 25;
+  // Filters for imported runs
+  const [importedRunsLeaderboardType, setImportedRunsLeaderboardType] = useState<'regular' | 'individual-level'>('regular');
+  const [importedRunsCategory, setImportedRunsCategory] = useState(""); // Empty = All Categories
+  const [importedRunsPlatform, setImportedRunsPlatform] = useState(""); // Empty = All Platforms
+  const [importedRunsLevel, setImportedRunsLevel] = useState(""); // Empty = All Levels
+  const [importedRunsCategories, setImportedRunsCategories] = useState<{ id: string; name: string }[]>([]);
   const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
   const [pageLoading, setLoading] = useState(true);
   const [newDownload, setNewDownload] = useState({
@@ -157,7 +166,45 @@ const Admin = () => {
     fetchCategories('regular'); // Load regular categories by default
     fetchLevels();
     fetchDownloadCategories();
+    // Load initial categories for imported runs filter
+    const initImportedRunsCategories = async () => {
+      try {
+        const categoriesData = await getCategories('regular');
+        setImportedRunsCategories(categoriesData);
+        // Start with "All Categories" selected (empty string)
+        setImportedRunsCategory("");
+      } catch (error) {
+        // Silent fail
+      }
+    };
+    initImportedRunsCategories();
   }, []);
+
+  // Fetch categories for imported runs filter when leaderboard type changes
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const categoriesData = await getCategories(importedRunsLeaderboardType);
+        setImportedRunsCategories(categoriesData);
+        // Reset to "All Categories" when switching types
+        setImportedRunsCategory("");
+        setImportedRunsLevel(""); // Reset level filter
+        setImportedPage(1); // Reset to first page
+      } catch (error) {
+        // Silent fail
+      }
+    };
+    fetchData();
+  }, [importedRunsLeaderboardType]);
+
+  const fetchImportedRunsCategories = async (leaderboardType: 'regular' | 'individual-level') => {
+    try {
+      const categoriesData = await getCategories(leaderboardType);
+      setImportedRunsCategories(categoriesData);
+    } catch (error) {
+      // Silent fail
+    }
+  };
 
   const fetchDownloadCategories = async () => {
     try {
@@ -473,6 +520,28 @@ const Admin = () => {
         }
       }
 
+      // Also create reverse mappings for embedded data (by name)
+      const categoryNameMapping = new Map<string, string>(); // SRC category name -> our category ID
+      const platformNameMapping = new Map<string, string>(); // SRC platform name -> our platform ID
+      
+      for (const srcCat of srcCategories) {
+        const ourCat = ourCategories.find(c => 
+          c.name.toLowerCase() === srcCat.name.toLowerCase()
+        );
+        if (ourCat) {
+          categoryNameMapping.set(srcCat.name.toLowerCase(), ourCat.id);
+        }
+      }
+      
+      for (const srcPlatform of srcPlatforms) {
+        const ourPlatform = ourPlatforms.find(p => 
+          p.name.toLowerCase() === srcPlatform.name.toLowerCase()
+        );
+        if (ourPlatform) {
+          platformNameMapping.set(srcPlatform.name.toLowerCase(), ourPlatform.id);
+        }
+      }
+
       let imported = 0;
       let skipped = 0;
 
@@ -486,22 +555,69 @@ const Admin = () => {
         }
 
         try {
-          // Map the run
+          // Extract category and platform from embedded data or IDs
+          let srcCategoryId = typeof srcRun.category === 'string' ? srcRun.category : srcRun.category?.data?.id || '';
+          let srcCategoryName = typeof srcRun.category === 'string' ? '' : (srcRun.category?.data?.name || '');
+          
+          let srcPlatformId = '';
+          let srcPlatformName = '';
+          if (srcRun.system?.platform) {
+            if (typeof srcRun.system.platform === 'string') {
+              srcPlatformId = srcRun.system.platform;
+            } else {
+              srcPlatformId = srcRun.system.platform.data?.id || '';
+              srcPlatformName = srcRun.system.platform.data?.name || '';
+            }
+          }
+          
+          // Try to find our category ID - first by SRC ID, then by name
+          let ourCategoryId = categoryMapping.get(srcCategoryId);
+          if (!ourCategoryId && srcCategoryName) {
+            ourCategoryId = categoryNameMapping.get(srcCategoryName.toLowerCase());
+          }
+          if (!ourCategoryId) {
+            ourCategoryId = srcCategoryId; // Fallback to SRC ID if no mapping found
+          }
+          
+          // Try to find our platform ID - first by SRC ID, then by name
+          let ourPlatformId = platformMapping.get(srcPlatformId);
+          if (!ourPlatformId && srcPlatformName) {
+            ourPlatformId = platformNameMapping.get(srcPlatformName.toLowerCase());
+          }
+          if (!ourPlatformId) {
+            ourPlatformId = srcPlatformId; // Fallback to SRC ID if no mapping found
+          }
+
+          // Map the run with corrected IDs and name mappings
           const mappedRun = mapSRCRunToLeaderboardEntry(
             srcRun,
-            undefined, // We'll handle embedded data differently
+            undefined,
             categoryMapping,
             platformMapping,
             levelMapping,
-            "imported"
+            "imported",
+            categoryNameMapping,
+            platformNameMapping
           );
 
+          // Override with correctly mapped category and platform (in case mapping function didn't use name mappings)
+          mappedRun.category = ourCategoryId;
+          mappedRun.platform = ourPlatformId;
+
           // Check if we have a valid category and platform
-          if (!mappedRun.category || !mappedRun.platform) {
+          if (!mappedRun.category || !mappedRun.platform || mappedRun.category === '' || mappedRun.platform === '') {
             console.log(`Skipping run ${srcRun.id}: missing category or platform. Category: ${mappedRun.category}, Platform: ${mappedRun.platform}`);
             skipped++;
             setImportProgress(prev => ({ ...prev, skipped: prev.skipped + 1 }));
             continue;
+          }
+          
+          // Ensure player names are strings
+          if (typeof mappedRun.playerName !== 'string') {
+            mappedRun.playerName = String(mappedRun.playerName || 'Unknown');
+          }
+          if (mappedRun.player2Name && typeof mappedRun.player2Name !== 'string') {
+            mappedRun.player2Name = String(mappedRun.player2Name);
           }
 
           // Check if a similar run already exists on the site
@@ -557,6 +673,48 @@ const Admin = () => {
       });
     } finally {
       setImportingRuns(false);
+    }
+  };
+
+  const handleClearImportedRuns = async () => {
+    if (!window.confirm("Are you sure you want to delete all imported runs from speedrun.com? This action cannot be undone.")) {
+      return;
+    }
+
+    setClearingImportedRuns(true);
+    try {
+      const result = await deleteAllImportedSRCRuns();
+      
+      if (result.deleted > 0) {
+        toast({
+          title: "Imported Runs Cleared",
+          description: `Successfully deleted ${result.deleted} imported runs.`,
+        });
+        
+        // Refresh the runs list
+        await fetchUnverifiedRuns();
+      } else {
+        toast({
+          title: "No Runs to Delete",
+          description: "No imported runs were found to delete.",
+        });
+      }
+      
+      if (result.errors.length > 0) {
+        toast({
+          title: "Some Errors Occurred",
+          description: `Some runs could not be deleted: ${result.errors.join(', ')}`,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to clear imported runs.",
+        variant: "destructive",
+      });
+    } finally {
+      setClearingImportedRuns(false);
     }
   };
 
@@ -2072,24 +2230,163 @@ const Admin = () => {
             {/* Imported Runs from Speedrun.com */}
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-                <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
-                  <Star className="h-5 w-5" />
-                  <span>Imported Runs from Speedrun.com</span>
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
+                    <Star className="h-5 w-5" />
+                    <span>Imported Runs from Speedrun.com</span>
+                  </CardTitle>
+                  {importedSRCRuns.filter(r => !r.verified).length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearImportedRuns}
+                      disabled={clearingImportedRuns}
+                      className="bg-red-900/20 border-red-700/50 text-red-400 hover:bg-red-900/30 hover:border-red-600 transition-all duration-300"
+                    >
+                      {clearingImportedRuns ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Clearing...
+                        </>
+                      ) : (
+                        <>
+                          <X className="h-4 w-4 mr-2" />
+                          Clear All Imported
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {(() => {
-                  const unverifiedImported = importedSRCRuns.filter(r => !r.verified);
+                  // Filter unverified imported runs
+                  let unverifiedImported = importedSRCRuns.filter(r => !r.verified);
+                  
+                  // Apply leaderboardType filter
+                  unverifiedImported = unverifiedImported.filter(run => {
+                    const runLeaderboardType = run.leaderboardType || 'regular';
+                    return runLeaderboardType === importedRunsLeaderboardType;
+                  });
+                  
+                  // Apply category filter
+                  if (importedRunsCategory) {
+                    unverifiedImported = unverifiedImported.filter(run => 
+                      String(run.category || '') === importedRunsCategory
+                    );
+                  }
+                  
+                  // Apply platform filter
+                  if (importedRunsPlatform) {
+                    unverifiedImported = unverifiedImported.filter(run => 
+                      String(run.platform || '') === importedRunsPlatform
+                    );
+                  }
+                  
+                  // Apply level filter for ILs
+                  if (importedRunsLeaderboardType === 'individual-level' && importedRunsLevel) {
+                    unverifiedImported = unverifiedImported.filter(run => 
+                      String(run.level || '') === importedRunsLevel
+                    );
+                  }
+                  
                   return unverifiedImported.length === 0 ? (
-                    <p className="text-[hsl(222,15%,60%)] text-center py-8">No imported runs awaiting verification.</p>
+                    <p className="text-[hsl(222,15%,60%)] text-center py-8">No imported runs awaiting verification for the selected filters.</p>
                   ) : (
                     <>
+                      {/* Tabs for Full Game vs Individual Level */}
+                      <Tabs value={importedRunsLeaderboardType} onValueChange={(value) => setImportedRunsLeaderboardType(value as 'regular' | 'individual-level')} className="mb-6">
+                        <TabsList className="grid w-full max-w-md grid-cols-2 mb-4 bg-[hsl(240,21%,15%)]">
+                          <TabsTrigger value="regular" className="data-[state=active]:bg-[hsl(240,21%,20%)]">
+                            Full Game
+                          </TabsTrigger>
+                          <TabsTrigger value="individual-level" className="data-[state=active]:bg-[hsl(240,21%,20%)]">
+                            Individual Levels
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+
+                      {/* Filters */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                        <div>
+                          <Label htmlFor="imported-category-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Category</Label>
+                          <Select
+                            value={importedRunsCategory}
+                            onValueChange={(value) => {
+                              setImportedRunsCategory(value);
+                              setImportedPage(1);
+                            }}
+                          >
+                            <SelectTrigger id="imported-category-filter" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                              <SelectValue placeholder="All Categories" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">All Categories</SelectItem>
+                              {importedRunsCategories.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                  {cat.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="imported-platform-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Platform</Label>
+                          <Select
+                            value={importedRunsPlatform}
+                            onValueChange={(value) => {
+                              setImportedRunsPlatform(value);
+                              setImportedPage(1);
+                            }}
+                          >
+                            <SelectTrigger id="imported-platform-filter" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                              <SelectValue placeholder="All Platforms" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">All Platforms</SelectItem>
+                              {firestorePlatforms.map((platform) => (
+                                <SelectItem key={platform.id} value={platform.id}>
+                                  {platform.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {importedRunsLeaderboardType === 'individual-level' && (
+                          <div>
+                            <Label htmlFor="imported-level-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Level</Label>
+                            <Select
+                              value={importedRunsLevel}
+                              onValueChange={(value) => {
+                                setImportedRunsLevel(value);
+                                setImportedPage(1);
+                              }}
+                            >
+                              <SelectTrigger id="imported-level-filter" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                                <SelectValue placeholder="All Levels" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">All Levels</SelectItem>
+                                {availableLevels.map((level) => (
+                                  <SelectItem key={level.id} value={level.id}>
+                                    {level.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
                               <TableHead className="py-3 px-4 text-left">Player(s)</TableHead>
                               <TableHead className="py-3 px-4 text-left">Category</TableHead>
+                              {importedRunsLeaderboardType === 'individual-level' && (
+                                <TableHead className="py-3 px-4 text-left">Level</TableHead>
+                              )}
                               <TableHead className="py-3 px-4 text-left">Time</TableHead>
                               <TableHead className="py-3 px-4 text-left">Platform</TableHead>
                               <TableHead className="py-3 px-4 text-left">Type</TableHead>
@@ -2110,8 +2407,16 @@ const Admin = () => {
                               )}
                             </TableCell>
                             <TableCell className="py-3 px-4">{
-                              firestoreCategories.find(c => c.id === String(run.category || ''))?.name || String(run.category || 'Unknown')
+                              importedRunsCategories.find(c => c.id === String(run.category || ''))?.name || 
+                              firestoreCategories.find(c => c.id === String(run.category || ''))?.name || 
+                              String(run.category || 'Unknown')
                             }</TableCell>
+                            {importedRunsLeaderboardType === 'individual-level' && (
+                              <TableCell className="py-3 px-4">{
+                                availableLevels.find(l => l.id === String(run.level || ''))?.name || 
+                                String(run.level || 'Unknown')
+                              }</TableCell>
+                            )}
                             <TableCell className="py-3 px-4 font-mono">{formatTime(run.time)}</TableCell>
                             <TableCell className="py-3 px-4">{
                               firestorePlatforms.find(p => p.id === String(run.platform || ''))?.name || String(run.platform || 'Unknown')

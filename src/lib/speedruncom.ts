@@ -289,6 +289,17 @@ function extractId(value: string | { data: { id: string } } | undefined): string
 }
 
 /**
+ * Extract name from embedded resource (for category, platform, etc.)
+ */
+function extractName(value: string | { data: { name?: string; names?: { international?: string } } } | undefined): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value.data?.name) return value.data.name;
+  if (value.data?.names?.international) return value.data.names.international;
+  return "";
+}
+
+/**
  * Map speedrun.com run to our LeaderboardEntry format
  */
 export function mapSRCRunToLeaderboardEntry(
@@ -302,30 +313,60 @@ export function mapSRCRunToLeaderboardEntry(
   categoryMapping: Map<string, string>, // SRC category ID -> our category ID
   platformMapping: Map<string, string>, // SRC platform ID -> our platform ID
   levelMapping: Map<string, string>, // SRC level ID -> our level ID
-  defaultPlayerId: string = "imported" // Default player ID for imported runs
+  defaultPlayerId: string = "imported", // Default player ID for imported runs
+  categoryNameMapping?: Map<string, string>, // SRC category name -> our category ID (for embedded data)
+  platformNameMapping?: Map<string, string> // SRC platform name -> our platform ID (for embedded data)
 ): Partial<import("@/types/database").LeaderboardEntry> & {
   srcRunId: string;
   importedFromSRC: boolean;
 } {
-  // Extract player names
+  // Extract player names - ensure they're strings
   const players = run.players || [];
-  const player1Name = players[0] ? getPlayerName(players[0]) : "Unknown";
-  const player2Name = players.length > 1 ? getPlayerName(players[1]) : undefined;
+  let player1Name = players[0] ? getPlayerName(players[0]) : "Unknown";
+  let player2Name = players.length > 1 ? getPlayerName(players[1]) : undefined;
+  
+  // Ensure player names are strings
+  if (typeof player1Name !== 'string') {
+    player1Name = String(player1Name || 'Unknown');
+  }
+  if (player2Name && typeof player2Name !== 'string') {
+    player2Name = String(player2Name);
+  }
   
   // Determine run type
   const runType: 'solo' | 'co-op' = players.length > 1 ? 'co-op' : 'solo';
   
   // Map category - handle both string ID and embedded object
   const srcCategoryId = extractId(run.category);
-  const ourCategoryId = categoryMapping.get(srcCategoryId) || srcCategoryId;
+  const srcCategoryName = extractName(run.category);
+  let ourCategoryId = categoryMapping.get(srcCategoryId);
+  // Try name mapping if ID mapping failed and we have name mapping available
+  if (!ourCategoryId && srcCategoryName && categoryNameMapping) {
+    ourCategoryId = categoryNameMapping.get(srcCategoryName.toLowerCase());
+  }
+  if (!ourCategoryId) {
+    ourCategoryId = srcCategoryId; // Fallback to SRC ID if no mapping
+  }
   
   // Map platform - handle both string ID and embedded object
   const srcPlatformId = extractId(run.system?.platform);
-  const ourPlatformId = platformMapping.get(srcPlatformId) || srcPlatformId;
+  const srcPlatformName = extractName(run.system?.platform);
+  let ourPlatformId = platformMapping.get(srcPlatformId);
+  // Try name mapping if ID mapping failed and we have name mapping available
+  if (!ourPlatformId && srcPlatformName && platformNameMapping) {
+    ourPlatformId = platformNameMapping.get(srcPlatformName.toLowerCase());
+  }
+  if (!ourPlatformId) {
+    ourPlatformId = srcPlatformId; // Fallback to SRC ID if no mapping
+  }
   
   // Map level - handle both string ID and embedded object
   const srcLevelId = extractId(run.level);
   const ourLevelId = srcLevelId ? (levelMapping.get(srcLevelId) || srcLevelId) : undefined;
+  
+  // Ensure category and platform are strings
+  ourCategoryId = String(ourCategoryId || '');
+  ourPlatformId = String(ourPlatformId || '');
   
   // Determine leaderboard type
   let leaderboardType: 'regular' | 'individual-level' | 'community-golds' = 'regular';

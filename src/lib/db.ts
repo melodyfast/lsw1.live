@@ -52,6 +52,7 @@ import {
   checkSRCRunExistsFirestore,
   getImportedSRCRunsFirestore,
   getAllRunsForDuplicateCheckFirestore,
+  deleteAllImportedSRCRunsFirestore,
 } from "./data/firestore";
 
 const defaultCategories = [
@@ -215,6 +216,7 @@ export const deleteDownloadCategory = deleteDownloadCategoryFirestore;
 export const checkSRCRunExists = checkSRCRunExistsFirestore;
 export const getImportedSRCRuns = getImportedSRCRunsFirestore;
 export const getAllRunsForDuplicateCheck = getAllRunsForDuplicateCheckFirestore;
+export const deleteAllImportedSRCRuns = deleteAllImportedSRCRunsFirestore;
 
 export const backfillPointsForAllRuns = async () => {
   const { backfillPointsForAllRunsFirestore } = await import("./data/firestore");
