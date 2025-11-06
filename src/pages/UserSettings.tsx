@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Settings, User, Mail, Lock, Palette, Trophy, CheckCircle, Upload, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
-import { updatePlayerProfile, getPlayerByUid, getUnclaimedRunsByUsername, getUnclaimedRunsBySRCUsername, claimRun, getCategories, getPlatforms } from "@/lib/db";
+import { updatePlayerProfile, getPlayerByUid, getUnclaimedRunsBySRCUsername, claimRun, getCategories, getPlatforms } from "@/lib/db";
 import { updateEmail, updatePassword, updateProfile } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useNavigate, Link } from "react-router-dom";
@@ -35,9 +35,7 @@ const UserSettings = () => {
   const [twitchUsername, setTwitchUsername] = useState("");
   const [srcUsername, setSrcUsername] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
-  const [unclaimedRuns, setUnclaimedRuns] = useState<LeaderboardEntry[]>([]);
   const [unclaimedSRCRuns, setUnclaimedSRCRuns] = useState<LeaderboardEntry[]>([]);
-  const [loadingUnclaimed, setLoadingUnclaimed] = useState(false);
   const [loadingSRCUnclaimed, setLoadingSRCUnclaimed] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [platforms, setPlatforms] = useState<{ id: string; name: string }[]>([]);
@@ -77,9 +75,6 @@ const UserSettings = () => {
             setTwitchUsername(player.twitchUsername || "");
             setSrcUsername(player.srcUsername || "");
             // Check for unclaimed runs after loading player data
-            if (player.displayName) {
-              fetchUnclaimedRuns(player.displayName);
-            }
             if (player.srcUsername) {
               fetchUnclaimedSRCRuns(player.srcUsername);
             }
@@ -91,10 +86,6 @@ const UserSettings = () => {
             setBio("");
             setPronouns("");
             setTwitchUsername("");
-            // Still check for unclaimed runs using displayName
-            if (currentUser.displayName) {
-              fetchUnclaimedRuns(currentUser.displayName);
-            }
           }
         } catch (error) {
           toast({
@@ -109,26 +100,6 @@ const UserSettings = () => {
       fetchPlayerData();
     }
   }, [currentUser, authLoading, navigate, toast]);
-
-  const fetchUnclaimedRuns = async (username: string) => {
-    if (!username || !currentUser) return;
-    setLoadingUnclaimed(true);
-    try {
-      // Pass currentUserId to filter out already claimed runs
-      // This now includes all runs (verified, unverified, manual, imported) that match the username
-      const runs = await getUnclaimedRunsByUsername(username, currentUser.uid);
-      // Additional client-side filter as backup (though it should already be filtered)
-      // Also filter out imported runs - those should only appear in the SRC username section
-      const trulyUnclaimed = runs.filter(run => 
-        run.playerId !== currentUser.uid && !run.importedFromSRC
-      );
-      setUnclaimedRuns(trulyUnclaimed);
-    } catch (error) {
-      // Silent fail
-    } finally {
-      setLoadingUnclaimed(false);
-    }
-  };
 
   const fetchUnclaimedSRCRuns = async (srcUsername: string) => {
     if (!srcUsername || !currentUser) return;
@@ -240,9 +211,6 @@ const UserSettings = () => {
         window.location.reload();
       }, 1000);
 
-      if (newDisplayName) {
-        fetchUnclaimedRuns(newDisplayName);
-      }
       if (srcUsername.trim()) {
         fetchUnclaimedSRCRuns(srcUsername.trim());
       }
@@ -372,10 +340,7 @@ const UserSettings = () => {
           title: "Run Claimed",
           description: "This run has been linked to your account.",
         });
-        // Refresh unclaimed runs lists
-        if (displayName) {
-          fetchUnclaimedRuns(displayName);
-        }
+        // Refresh unclaimed runs list
         if (srcUsername) {
           fetchUnclaimedSRCRuns(srcUsername);
         }
@@ -693,89 +658,8 @@ const UserSettings = () => {
           </CardHeader>
           <CardContent>
             <p className="text-[hsl(222,15%,60%)] mb-4">
-              If runs were added manually with your username before you created an account, or imported from Speedrun.com, you can claim them here to link them to your profile.
+              If runs were imported from Speedrun.com, you can claim them here to link them to your profile. Make sure your Speedrun.com username matches exactly (case-sensitive).
             </p>
-            
-            {/* Display Name Runs */}
-            {displayName && (
-              <>
-                <h3 className="text-sm font-semibold text-ctp-text mb-2 mt-4">Runs matching your display name ({displayName})</h3>
-                {loadingUnclaimed ? (
-                  <div className="text-center py-4">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#cba6f7] mx-auto"></div>
-                  </div>
-                ) : unclaimedRuns.length === 0 ? (
-                  <p className="text-[hsl(222,15%,60%)] text-center py-4">
-                    No unclaimed runs found for your display name.
-                  </p>
-                ) : (
-                  <div className="space-y-3 mb-6">
-                    {unclaimedRuns.map((run) => (
-                      <div
-                        key={run.id}
-                        className="flex items-center justify-between p-4 bg-[hsl(234,14%,29%)] rounded-lg border border-[hsl(235,13%,30%)]"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="text-base font-semibold text-[#cba6f7]">
-                              {formatTime(run.time)}
-                            </span>
-                            <Badge variant="outline" className="border-[hsl(235,13%,30%)]">
-                              {categories?.find(c => c.id === run.category)?.name || run.category || "Unknown"}
-                            </Badge>
-                            <Badge variant="outline" className="border-[hsl(235,13%,30%)]">
-                              {platforms?.find(p => p.id === run.platform)?.name || run.platform || "Unknown"}
-                            </Badge>
-                            {run.rank && (
-                              <Badge variant={run.rank <= 3 ? "default" : "secondary"}>
-                                #{run.rank}
-                              </Badge>
-                            )}
-                            {run.importedFromSRC && (
-                              <Badge variant="outline" className="border-[hsl(235,13%,30%)] text-xs">
-                                From SRC
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="text-sm text-[hsl(222,15%,60%)]">
-                            {formatDate(run.date)} • {run.runType === 'solo' ? 'Solo' : (() => {
-                              // For co-op runs, show the partner's name
-                              const currentDisplayName = displayName?.toLowerCase().trim() || "";
-                              const runPlayer1Name = (run.playerName || "").toLowerCase().trim();
-                              const runPlayer2Name = (run.player2Name || "").toLowerCase().trim();
-                              
-                              if (currentDisplayName === runPlayer1Name && runPlayer2Name) {
-                                return `Co-op with ${run.player2Name}`;
-                              } else if (currentDisplayName === runPlayer2Name && runPlayer1Name) {
-                                return `Co-op with ${run.playerName}`;
-                              } else {
-                                return run.player2Name ? `Co-op with ${run.player2Name}` : 'Co-op';
-                              }
-                            })()}
-                            {run.videoUrl && (
-                              <Link
-                                to={`/run/${run.id}`}
-                                className="ml-2 text-[#cba6f7] hover:underline"
-                              >
-                                View Run
-                              </Link>
-                            )}
-                          </div>
-                        </div>
-                        <Button
-                          onClick={() => handleClaimRun(run.id)}
-                          size="sm"
-                          className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold ml-4"
-                        >
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Claim
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
             
             {/* SRC Username Runs */}
             {srcUsername && (
@@ -856,9 +740,9 @@ const UserSettings = () => {
               </>
             )}
             
-            {!displayName && !srcUsername && (
+            {!srcUsername && (
               <p className="text-[hsl(222,15%,60%)] text-center py-4">
-                Set your display name or Speedrun.com username above to find unclaimed runs.
+                Set your Speedrun.com username above to find unclaimed runs imported from Speedrun.com.
               </p>
             )}
           </CardContent>
