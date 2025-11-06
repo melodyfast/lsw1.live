@@ -337,10 +337,17 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
       console.error("Validation failed for leaderboard entry:", validation.errors, {
         entry: normalized,
         importedFromSRC: normalized.importedFromSRC,
+        importedFromSRCType: typeof normalized.importedFromSRC,
+        importedFromSRCValue: normalized.importedFromSRC,
+        isImported: normalized.importedFromSRC === true || normalized.importedFromSRC === Boolean(true) || !!normalized.importedFromSRC,
         hasCategory: normalized.category && normalized.category.trim() !== "",
         hasPlatform: normalized.platform && normalized.platform.trim() !== "",
         hasSRCCategory: normalized.srcCategoryName && normalized.srcCategoryName.trim() !== "",
         hasSRCPlatform: normalized.srcPlatformName && normalized.srcPlatformName.trim() !== "",
+        category: normalized.category,
+        platform: normalized.platform,
+        srcCategoryName: normalized.srcCategoryName,
+        srcPlatformName: normalized.srcPlatformName,
       });
       throw new Error(`Invalid entry data: ${validation.errors.join(', ')}`);
     }

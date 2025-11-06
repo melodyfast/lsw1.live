@@ -194,23 +194,43 @@ export function validateLeaderboardEntry(entry: Partial<LeaderboardEntry>): {
 } {
   const errors: string[] = [];
   
+  // Check if this is an imported run - use multiple checks to be safe
+  const isImported = entry.importedFromSRC === true || entry.importedFromSRC === Boolean(true) || !!entry.importedFromSRC;
+  
   if (!entry.playerName || entry.playerName.trim() === "") {
     errors.push("Player name is required");
   }
   
   // Category validation: required unless this is an imported run with SRC category name
   const hasCategory = entry.category && entry.category.trim() !== "";
-  const isImported = entry.importedFromSRC === true;
-  const hasSRCCategoryName = isImported && entry.srcCategoryName && entry.srcCategoryName.trim() !== "";
-  if (!hasCategory && !hasSRCCategoryName) {
-    errors.push(`Category is required (hasCategory: ${hasCategory}, isImported: ${isImported}, hasSRCCategoryName: ${hasSRCCategoryName})`);
+  const hasSRCCategoryName = entry.srcCategoryName && entry.srcCategoryName.trim() !== "";
+  
+  // For imported runs, allow empty category if we have SRC name
+  if (isImported) {
+    if (!hasCategory && !hasSRCCategoryName) {
+      errors.push(`Category is required (imported run needs either category ID or SRC category name)`);
+    }
+  } else {
+    // For non-imported runs, category is required
+    if (!hasCategory) {
+      errors.push("Category is required");
+    }
   }
   
   // Platform validation: required unless this is an imported run with SRC platform name
   const hasPlatform = entry.platform && entry.platform.trim() !== "";
-  const hasSRCPlatformName = isImported && entry.srcPlatformName && entry.srcPlatformName.trim() !== "";
-  if (!hasPlatform && !hasSRCPlatformName) {
-    errors.push(`Platform is required (hasPlatform: ${hasPlatform}, isImported: ${isImported}, hasSRCPlatformName: ${hasSRCPlatformName})`);
+  const hasSRCPlatformName = entry.srcPlatformName && entry.srcPlatformName.trim() !== "";
+  
+  // For imported runs, allow empty platform if we have SRC name
+  if (isImported) {
+    if (!hasPlatform && !hasSRCPlatformName) {
+      errors.push(`Platform is required (imported run needs either platform ID or SRC platform name)`);
+    }
+  } else {
+    // For non-imported runs, platform is required
+    if (!hasPlatform) {
+      errors.push("Platform is required");
+    }
   }
   
   if (!entry.time || entry.time.trim() === "") {

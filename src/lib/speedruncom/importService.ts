@@ -206,10 +206,18 @@ export async function importSRCRuns(
           mappings.platformNameMapping
         );
 
-        // Set import flags
-        mappedRun.importedFromSRC = true;
+        // Set import flags - ensure importedFromSRC is explicitly true (boolean)
+        mappedRun.importedFromSRC = true as boolean;
         mappedRun.srcRunId = srcRun.id;
         mappedRun.verified = false;
+        
+        // Ensure all required fields for import are present
+        if (!mappedRun.srcCategoryName && !mappedRun.category) {
+          console.warn(`Run ${srcRun.id}: No category ID or SRC category name`);
+        }
+        if (!mappedRun.srcPlatformName && !mappedRun.platform) {
+          console.warn(`Run ${srcRun.id}: No platform ID or SRC platform name`);
+        }
 
         // Ensure required fields are present
         if (!mappedRun.playerName || mappedRun.playerName.trim() === '') {
