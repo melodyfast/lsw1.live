@@ -17,49 +17,55 @@ import Live from "./pages/Live";
 import Downloads from "./pages/Downloads";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "@/components/AuthProvider";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-// Configure QueryClient with sensible defaults
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 30, // 30 minutes (replaces cacheTime)
       retry: 1,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+    },
+    mutations: {
+      retry: 1,
     },
   },
 });
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <div className="flex flex-col min-h-screen">
-            <Header />
-            <main className="flex-grow">
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/leaderboards" element={<Leaderboards />} />
-                <Route path="/points" element={<PointsLeaderboard />} />
-                <Route path="/submit" element={<SubmitRun />} />
-                <Route path="/player/:playerId" element={<PlayerDetails />} />
-                <Route path="/run/:runId" element={<RunDetails />} />
-                <Route path="/settings" element={<UserSettings />} />
-                <Route path="/admin" element={<Admin />} />
-                <Route path="/live" element={<Live />} />
-                <Route path="/downloads" element={<Downloads />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </main>
-          </div>
-        </BrowserRouter>
-        <Analytics />
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <div className="flex flex-col min-h-screen">
+              <Header />
+              <main className="flex-grow">
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/leaderboards" element={<Leaderboards />} />
+                  <Route path="/points" element={<PointsLeaderboard />} />
+                  <Route path="/submit" element={<SubmitRun />} />
+                  <Route path="/player/:playerId" element={<PlayerDetails />} />
+                  <Route path="/run/:runId" element={<RunDetails />} />
+                  <Route path="/settings" element={<UserSettings />} />
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/live" element={<Live />} />
+                  <Route path="/downloads" element={<Downloads />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </main>
+            </div>
+          </BrowserRouter>
+          <Analytics />
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

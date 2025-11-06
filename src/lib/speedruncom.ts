@@ -691,8 +691,8 @@ export async function mapSRCRunToLeaderboardEntry(
   
   // === Extract Level ===
   const levelData = extractIdAndName(run.level);
-  let ourLevelId = levelData.id ? levelMapping.get(levelData.id) : undefined;
-  let levelName = levelData.name;
+  const ourLevelId = levelData.id ? levelMapping.get(levelData.id) : undefined;
+  const levelName = levelData.name;
   
   // Fallback to ID->name map
   if (!levelName && levelData.id && srcLevelIdToName) {

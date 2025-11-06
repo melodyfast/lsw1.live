@@ -1,8 +1,7 @@
 import { db } from "@/lib/firebase";
-import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, query, where, orderBy, limit as firestoreLimit, deleteField, writeBatch, getDocsFromCache, getDocsFromServer, type QueryConstraint } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, query, where, orderBy, limit as firestoreLimit, deleteField, writeBatch, getDocsFromCache, getDocsFromServer, QueryConstraint, UpdateData, DocumentData } from "firebase/firestore";
 import { Player, LeaderboardEntry, DownloadEntry, Category, Platform, Level } from "@/types/database";
 import { calculatePoints, parseTimeToSeconds } from "@/lib/utils";
-import { logError, isFirebaseAuthError } from "@/lib/errorUtils";
 import { 
   normalizeLeaderboardEntry, 
   validateLeaderboardEntry,
@@ -10,6 +9,7 @@ import {
   normalizePlatformId,
   normalizeLevelId,
 } from "@/lib/dataValidation";
+import { logger } from "@/lib/logger";
 
 /**
  * Helper function to calculate ranks for a group of runs
@@ -48,7 +48,7 @@ async function calculateRanksForGroup(
   const rankSnapshot = await getDocs(rankQuery);
   
   // Filter out obsolete runs for ranking (only non-obsolete runs count for top 3)
-  let nonObsoleteRuns = rankSnapshot.docs
+  const nonObsoleteRuns = rankSnapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
     .filter(run => !run.isObsolete);
   
@@ -101,11 +101,6 @@ export const getLeaderboardEntriesFirestore = async (
     const normalizedCategoryId = categoryId && categoryId !== "all" ? normalizeCategoryId(categoryId) : undefined;
     const normalizedPlatformId = platformId && platformId !== "all" ? normalizePlatformId(platformId) : undefined;
     const normalizedLevelId = levelId && levelId !== "all" ? normalizeLevelId(levelId) : undefined;
-    
-    // Fetch levels early to check for disabled categories
-    const levelsSnapshot = await getDocs(collection(db, "levels"));
-    const levels = levelsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Level));
-    const selectedLevelData = normalizedLevelId ? levels.find(l => l.id === normalizedLevelId) : undefined;
     
     // Build query constraints dynamically based on filters
     // IMPORTANT: Only fetch verified runs - imported runs must be verified before appearing on leaderboards
@@ -310,14 +305,19 @@ export const getLeaderboardEntriesFirestore = async (
       });
     }
 
-    // Fetch categories, platforms for SRC name fallback (levels already fetched above)
-    const [categoriesSnapshot, platformsSnapshot] = await Promise.all([
+    // Fetch categories, platforms, and levels for SRC name fallback and disabled category checking
+    const [categoriesSnapshot, platformsSnapshot, levelsSnapshot] = await Promise.all([
       getDocs(collection(db, "categories")),
       getDocs(collection(db, "platforms")),
+      getDocs(collection(db, "levels"))
     ]);
     
     const categories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
     const platforms = platformsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Platform));
+    const levels = levelsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Level));
+    
+    // Get the level data if we're filtering by level (for checking disabled categories)
+    const selectedLevelData = normalizedLevelId ? levels.find(l => l.id === normalizedLevelId) : undefined;
 
     // Enrich entries with player data and mark unclaimed runs
     const enrichedEntries = entries.map(entry => {
@@ -382,7 +382,7 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
   try {
     // Log entry before normalization for debugging imported runs
     if (entry.importedFromSRC) {
-      console.log("[addLeaderboardEntry] Before normalization:", {
+      logger.debug("[addLeaderboardEntry] Before normalization:", {
         category: entry.category,
         platform: entry.platform,
         srcCategoryName: entry.srcCategoryName,
@@ -399,7 +399,7 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
     
     // Log normalized entry for debugging
     if (entry.importedFromSRC) {
-      console.log("[addLeaderboardEntry] After normalization:", {
+      logger.debug("[addLeaderboardEntry] After normalization:", {
         category: normalized.category,
         platform: normalized.platform,
         srcCategoryName: normalized.srcCategoryName,
@@ -418,7 +418,7 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
     if (isImportedRun) {
       // For imported runs, only validate essential fields
       // Category and platform can be empty if SRC names exist, or even if they don't (admin can fix later)
-      console.log(`[addLeaderboardEntry] Imported run detected - using lenient validation`, {
+      logger.debug(`[addLeaderboardEntry] Imported run detected - using lenient validation`, {
         hasCategory: !!normalized.category && normalized.category.trim() !== "",
         hasPlatform: !!normalized.platform && normalized.platform.trim() !== "",
         hasSRCCategory: !!normalized.srcCategoryName,
@@ -451,7 +451,7 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
     }
     
     const newDocRef = doc(collection(db, "leaderboardEntries"));
-    const newEntry: Partial<LeaderboardEntry> & { id: string; verified: boolean; isObsolete: boolean } = { 
+    const newEntry: Partial<LeaderboardEntry> & DocumentData = { 
       id: newDocRef.id, 
       playerId: normalized.playerId || entry.playerId,
       playerName: normalized.playerName,
@@ -499,11 +499,10 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
     }
     
     await setDoc(newDocRef, newEntry);
-    console.log(`Saved entry with SRC names: category="${normalized.srcCategoryName}", platform="${normalized.srcPlatformName}", level="${normalized.srcLevelName}"`);
+    logger.debug(`Saved entry with SRC names: category="${normalized.srcCategoryName}", platform="${normalized.srcPlatformName}", level="${normalized.srcLevelName}"`);
     return newDocRef.id;
   } catch (error) {
     console.error("Error adding leaderboard entry:", error);
-    logError(error, "addLeaderboardEntryFirestore");
     // Re-throw the error so the caller can see what went wrong
     throw error;
   }
@@ -622,7 +621,7 @@ export const createPlayerFirestore = async (player: Omit<Player, 'id'>): Promise
     await setDoc(playerDocRef, player);
     return player.uid;
   } catch (error) {
-    logError(error, "createPlayerFirestore");
+    console.error("createPlayerFirestore error:", error);
     return null;
   }
 };
@@ -922,7 +921,7 @@ export const updatePlayerProfileFirestore = async (uid: string, data: Partial<Pl
     
     // Filter out undefined values and convert empty strings for bio/pronouns/twitchUsername to deleteField
     // profilePicture: empty string should delete the field, undefined should skip (no change)
-    const updateData: Record<string, unknown> = {};
+    const updateData: UpdateData<DocumentData> = {};
     for (const [key, value] of Object.entries(data)) {
       if (value === undefined) {
         // Skip undefined values (no change)
@@ -941,7 +940,7 @@ export const updatePlayerProfileFirestore = async (uid: string, data: Partial<Pl
       // Create a complete player document if it doesn't exist
       const today = new Date().toISOString().split('T')[0];
       // Build newPlayer object, only including bio/pronouns if they have values
-      const newPlayer: Omit<Player, 'id'> = {
+      const newPlayer: Partial<Player> & DocumentData = {
         uid: uid,
         displayName: data.displayName || "",
         email: data.email || "",
@@ -995,7 +994,7 @@ export const updatePlayerProfileFirestore = async (uid: string, data: Partial<Pl
       // Run auto-claiming asynchronously (don't block the profile update)
       autoClaimRunsBySRCUsernameFirestore(uid, newSRCUsername).then(result => {
         if (result.claimed > 0) {
-          console.log(`Auto-claimed ${result.claimed} runs for SRC username: ${newSRCUsername}`);
+          logger.debug(`Auto-claimed ${result.claimed} runs for SRC username: ${newSRCUsername}`);
         }
       }).catch(error => {
         console.error("Error auto-claiming runs after SRC username update:", error);
@@ -1004,7 +1003,7 @@ export const updatePlayerProfileFirestore = async (uid: string, data: Partial<Pl
       // If creating a new profile with SRC username, also auto-claim runs
       autoClaimRunsBySRCUsernameFirestore(uid, newSRCUsername).then(result => {
         if (result.claimed > 0) {
-          console.log(`Auto-claimed ${result.claimed} runs for new profile with SRC username: ${newSRCUsername}`);
+          logger.debug(`Auto-claimed ${result.claimed} runs for new profile with SRC username: ${newSRCUsername}`);
         }
       }).catch(error => {
         console.error("Error auto-claiming runs after profile creation:", error);
@@ -1013,7 +1012,7 @@ export const updatePlayerProfileFirestore = async (uid: string, data: Partial<Pl
     
     return true;
   } catch (error) {
-    logError(error, "updatePlayerProfileFirestore");
+    console.error("updatePlayerProfileFirestore error:", error?.code, error?.message);
     return false;
   }
 };
@@ -1285,7 +1284,7 @@ export const getPlayerPendingRunsFirestore = async (playerId: string): Promise<L
         return dateB.localeCompare(dateA);
       });
 
-    console.log(`getPlayerPendingRunsFirestore: Found ${entries.length} pending runs for player ${playerId}`);
+    logger.debug(`getPlayerPendingRunsFirestore: Found ${entries.length} pending runs for player ${playerId}`);
 
     // Enrich with player display name and color
     const player = await getPlayerByUidFirestore(playerId);
@@ -1361,7 +1360,7 @@ export const getLeaderboardEntryByIdFirestore = async (runId: string): Promise<L
           const q = query(collection(db, "leaderboardEntries"), ...constraints);
           const querySnapshot = await getDocs(q);
           
-          let entries: LeaderboardEntry[] = querySnapshot.docs
+          const entries: LeaderboardEntry[] = querySnapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
             .filter(e => !e.isObsolete && (e.leaderboardType || 'regular') === leaderboardType);
 
@@ -1430,7 +1429,7 @@ export const updateLeaderboardEntryFirestore = async (runId: string, data: Parti
     
     // If time, category, or platform changed, recalculate points if verified
     const runData = runDocSnap.data() as LeaderboardEntry;
-    const updateData: Record<string, unknown> = {};
+    const updateData: UpdateData<DocumentData> = {};
     
     // Filter out undefined values and convert null to deleteField for Firestore
     for (const [key, value] of Object.entries(data)) {
@@ -1529,7 +1528,7 @@ export const updateLeaderboardEntryFirestore = async (runId: string, data: Parti
     await updateDoc(runDocRef, updateData);
     return true;
   } catch (error) {
-    logError(error, "updateLeaderboardEntryFirestore");
+    console.error("Error updating leaderboard entry:", error);
     // Re-throw the error so the caller can see what went wrong
     throw error;
   }
@@ -2014,7 +2013,7 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
       try {
       await updateDoc(playerDocRef, { totalPoints, totalRuns: totalVerifiedRuns });
       } catch (error) {
-        logError(error, `recalculatePointsForPlayer.updateDoc(${playerId})`);
+        console.error(`Error updating player ${playerId} totalPoints and totalRuns:`, error?.code, error?.message);
         throw error; // Re-throw to be caught by outer catch
       }
     } else {
@@ -2028,8 +2027,8 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
     
     return true;
   } catch (error) {
-    logError(error, `recalculatePointsForPlayer(${playerId})`);
-    if (isFirebaseAuthError(error) && error.code === 'permission-denied') {
+    console.error(`Error recalculating points for player ${playerId}:`, error?.code, error?.message);
+    if (error?.code === 'permission-denied') {
       console.error(`Permission denied. Make sure you are logged in as an admin and your admin status is set correctly in Firestore.`);
     }
     return false;
@@ -2200,7 +2199,7 @@ export const deleteLeaderboardEntryFirestore = async (runId: string): Promise<bo
     }
     
     return true;
-  } catch (error: any) {
+  } catch (error) {
     // Provide more detailed error information
     const errorMessage = error?.message || String(error);
     const errorCode = error?.code || 'unknown';
@@ -2257,7 +2256,7 @@ export const deleteAllLeaderboardEntriesFirestore = async (): Promise<{ deleted:
             result.deleted += batchDeleteCount;
             batchDeleteCount = 0;
             batch = writeBatch(db); // Create new batch for remaining deletes
-          } catch (batchError: any) {
+          } catch (batchError) {
             const errorMsg = batchError instanceof Error ? batchError.message : String(batchError);
             result.errors.push(`Failed to delete batch: ${errorMsg}`);
             // Continue with next batch
@@ -2272,7 +2271,7 @@ export const deleteAllLeaderboardEntriesFirestore = async (): Promise<{ deleted:
         try {
           await batch.commit();
           result.deleted += batchDeleteCount;
-        } catch (batchError: any) {
+        } catch (batchError) {
           const errorMsg = batchError instanceof Error ? batchError.message : String(batchError);
           result.errors.push(`Failed to delete final batch: ${errorMsg}`);
         }
@@ -2432,7 +2431,7 @@ export const addDownloadEntryFirestore = async (entry: Omit<DownloadEntry, 'id' 
     };
     await setDoc(newDocRef, newEntry);
     return newDocRef.id;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error adding download entry:", error);
     throw error; // Re-throw so the caller can see what went wrong
   }
@@ -2517,7 +2516,7 @@ export const moveDownloadDownFirestore = async (downloadId: string): Promise<boo
 export const getCategoriesFirestore = async (leaderboardType?: 'regular' | 'individual-level' | 'community-golds'): Promise<Category[]> => {
   if (!db) return [];
   try {
-    let q = query(collection(db, "categories"));
+    const q = query(collection(db, "categories"));
     const querySnapshot = await getDocs(q);
     let categories = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
     
@@ -2719,7 +2718,7 @@ export const moveCategoryDownFirestore = async (categoryId: string): Promise<boo
 export const getPlatformsFirestore = async (): Promise<Platform[]> => {
   if (!db) return [];
   try {
-    let q = query(collection(db, "platforms"));
+    const q = query(collection(db, "platforms"));
     const querySnapshot = await getDocs(q);
     const platforms = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Platform));
     
@@ -2960,7 +2959,7 @@ export const getUnclaimedRunsBySRCUsernameFirestore = async (srcUsername: string
     
     // Try to find runs by matching SRC player ID
     // We need to fetch player ID from SRC username first
-    let srcPlayerId: string | null = null;
+    const srcPlayerId: string | null = null;
     try {
       // SRC API doesn't have a direct username lookup, so we'll search by name
       // For now, we'll match by display name and srcPlayerId
@@ -3343,10 +3342,10 @@ export const getAllPlayersFirestore = async (
     }
     
     const playersSnapshot = await getDocs(playersQuery);
-    let players = playersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player));
+    const players = playersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player));
     
     return players;
-  } catch (error: any) {
+  } catch (error) {
     // If index doesn't exist, fall back to fetching all and sorting in memory
     if (error?.code === 'failed-precondition' || error?.code === 9) {
       try {
@@ -3355,12 +3354,12 @@ export const getAllPlayersFirestore = async (
           limit ? firestoreLimit(limit || 1000) : undefined
         );
         const allPlayersSnapshot = await getDocs(allPlayersQuery);
-        let players = allPlayersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player));
+        const players = allPlayersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player));
         
         // Sort in memory
         players.sort((a, b) => {
-          let aVal: any = a[sortBy] || 0;
-          let bVal: any = b[sortBy] || 0;
+          let aVal: string | number = a[sortBy as keyof Player] as string | number || 0;
+          let bVal: string | number = b[sortBy as keyof Player] as string | number || 0;
           
           if (sortBy === 'displayName' || sortBy === 'joinDate') {
             aVal = String(aVal || '');
@@ -3469,7 +3468,7 @@ export const deletePlayerFirestore = async (
     await deleteDoc(playerDocRef);
     
     return { success: true, deletedRuns: deletedRunsCount };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error deleting player:", error);
     return { success: false, error: error.message || "Failed to delete player" };
   }
@@ -3563,7 +3562,7 @@ export const getPlayersByPointsFirestore = async (limit: number = 100): Promise<
         .slice(0, limit); // Apply limit after deduplication
       
       return uniquePlayers;
-    } catch (error: any) {
+    } catch (error) {
       // If index doesn't exist yet, return empty array and log warning
       // Admin should run recalculation to populate player totalPoints, then deploy index
       console.warn("Points index not available. Please deploy firestore.indexes.json and run recalculation:", error);
@@ -3892,7 +3891,7 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
 export const getLevelsFirestore = async (): Promise<Level[]> => {
   if (!db) return [];
   try {
-    let q = query(collection(db, "levels"));
+    const q = query(collection(db, "levels"));
     const querySnapshot = await getDocs(q);
     const levels = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Level));
     
@@ -4168,7 +4167,7 @@ export const updateDownloadCategoryFirestore = async (categoryId: string, name?:
   if (!db) return false;
   try {
     const categoryRef = doc(db, "downloadCategories", categoryId);
-    const updateData: any = {};
+    const updateData: UpdateData<DocumentData> = {};
     
     if (name !== undefined) updateData.name = name;
     if (order !== undefined) updateData.order = order;
@@ -4566,7 +4565,7 @@ export const deleteAllImportedSRCRunsFirestore = async (): Promise<{ deleted: nu
         try {
           await batch.commit();
           result.deleted += batchSize;
-        } catch (batchError: any) {
+        } catch (batchError) {
           const errorMsg = batchError instanceof Error ? batchError.message : String(batchError);
           result.errors.push(`Failed to delete batch: ${errorMsg}`);
         }

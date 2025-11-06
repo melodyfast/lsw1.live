@@ -72,7 +72,7 @@ export function RecentRuns({ runs, loading, showRankBadge = true, maxRuns }: Rec
 
       // Get available height from the container
       const containerRect = container.getBoundingClientRect();
-      let availableHeight = containerRect.height;
+      const availableHeight = containerRect.height;
       
       // If container has no height yet, start with a conservative estimate
       if (availableHeight <= 0) {
