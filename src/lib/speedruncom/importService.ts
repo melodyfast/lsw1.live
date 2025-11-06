@@ -243,16 +243,27 @@ export async function importSRCRuns(
           // For imported runs with SRC names, empty category ID is OK - validation allows it
           mappedRun.category = '';
         }
+        // Handle platform - be more lenient
         if (!mappedRun.platform || mappedRun.platform.trim() === '') {
-          // Use placeholder if no SRC name either
           if (!mappedRun.srcPlatformName) {
-            result.skipped++;
-            result.errors.push(`Run ${srcRun.id}: missing platform`);
-            onProgress?.({ total: srcRuns.length, imported: result.imported, skipped: result.skipped });
-            continue;
+            // Log the raw platform data for debugging
+            if (result.imported + result.skipped < 5) {
+              console.log(`[Import] Run ${srcRun.id} has no platform data:`, {
+                system: srcRun.system,
+                platform: srcRun.system?.platform,
+                platformType: typeof srcRun.system?.platform,
+                platformData: srcRun.system?.platform,
+              });
+            }
+            // For imported runs, allow empty platform - admins can fix it later
+            // Use a placeholder platform ID so it passes validation
+            mappedRun.platform = '';
+            mappedRun.srcPlatformName = 'Unknown Platform (from SRC)';
+            result.errors.push(`Run ${srcRun.id}: missing platform (using placeholder)`);
+          } else {
+            // For imported runs with SRC names, empty platform ID is OK - validation allows it
+            mappedRun.platform = '';
           }
-          // For imported runs with SRC names, empty platform ID is OK - validation allows it
-          mappedRun.platform = '';
         }
 
         // Normalize player names

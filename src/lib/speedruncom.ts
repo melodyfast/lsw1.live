@@ -177,9 +177,23 @@ export async function fetchRunsNotOnLeaderboards(
   const max = 200; // SRC API max per request
   
   while (allRuns.length < limit) {
+    // Embed platform in system field - SRC API embeds platform when requested
     const data = await fetchSRCAPI<SRCRunData>(
       `/runs?game=${gameId}&status=verified&orderby=submitted&direction=desc&max=${max}&offset=${offset}&embed=players,category,level,platform`
     );
+    
+    // Log first run's platform structure for debugging
+    if (allRuns.length === 0 && data.data && data.data.length > 0) {
+      const firstRun = data.data[0];
+      console.log('[SRC API] First run platform structure:', {
+        hasSystem: !!firstRun.system,
+        hasPlatform: !!firstRun.system?.platform,
+        platformType: typeof firstRun.system?.platform,
+        platformValue: firstRun.system?.platform,
+        platformIsObject: typeof firstRun.system?.platform === 'object',
+        platformData: firstRun.system?.platform,
+      });
+    }
     
     if (!data.data || data.data.length === 0) {
       break;
@@ -289,13 +303,23 @@ export function extractIdAndName(
     const id = data.id ? String(data.id).trim() : "";
     let name = "";
     
-    // Try name first (direct field)
+    // Try name first (direct field) - platforms and categories use this
     if (data.name && typeof data.name === 'string') {
       name = String(data.name).trim();
     } 
-    // Fall back to names.international (for platforms/categories)
+    // Fall back to names.international (for some API structures)
     else if (data.names?.international && typeof data.names.international === 'string') {
       name = String(data.names.international).trim();
+    }
+    // Also check for names object with different structure
+    else if (data.names && typeof data.names === 'object') {
+      // Try to find any name-like property
+      const nameKeys = Object.keys(data.names).filter(k => 
+        typeof (data.names as any)[k] === 'string' && (data.names as any)[k]
+      );
+      if (nameKeys.length > 0) {
+        name = String((data.names as any)[nameKeys[0]]).trim();
+      }
     }
     
     return { id, name };
