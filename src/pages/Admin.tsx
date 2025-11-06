@@ -2058,6 +2058,25 @@ const Admin = () => {
     }
   }, [activeTab, playersSortBy, playersSortOrder]);
 
+  // Auto-run duplicate checking when tools tab is opened
+  useEffect(() => {
+    if (activeTab === "tools" && !loadingDuplicates && duplicateRuns.length === 0) {
+      const checkDuplicates = async () => {
+        setLoadingDuplicates(true);
+        try {
+          const duplicates = await findDuplicateRuns();
+          setDuplicateRuns(duplicates);
+        } catch (error: any) {
+          console.error("Error auto-checking duplicates:", error);
+          // Don't show toast on auto-check, only on manual check
+        } finally {
+          setLoadingDuplicates(false);
+        }
+      };
+      checkDuplicates();
+    }
+  }, [activeTab]);
+
   const handleEditPlayer = (player: Player) => {
     setEditingPlayer(player);
     setEditingPlayerForm({
@@ -2361,6 +2380,12 @@ const Admin = () => {
               Users
             </TabsTrigger>
             <TabsTrigger 
+              value="src" 
+              className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-xs sm:text-sm py-1.5 sm:py-2 px-2 sm:px-3 whitespace-nowrap"
+            >
+              SRC Tools
+            </TabsTrigger>
+            <TabsTrigger 
               value="tools" 
               className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-xs sm:text-sm py-1.5 sm:py-2 px-2 sm:px-3 whitespace-nowrap"
             >
@@ -2459,13 +2484,111 @@ const Admin = () => {
                 </p>
                 
                 {duplicateRuns.length > 0 && (
-                  <div className="mb-4 p-4 bg-[hsl(240,21%,12%)] rounded-lg border border-[hsl(235,13%,30%)]">
-                    <p className="text-sm font-semibold text-ctp-text mb-2">
-                      Found {duplicateRuns.length} duplicate group(s) with {duplicateRuns.reduce((sum, group) => sum + group.runs.length, 0)} total runs
-                    </p>
-                    <p className="text-xs text-ctp-subtext1">
-                      {duplicateRuns.reduce((sum, group) => sum + group.runs.length - 1, 0)} run(s) will be removed (keeping the best one from each group).
-                    </p>
+                  <div className="mb-4 space-y-4">
+                    <div className="p-4 bg-[hsl(240,21%,12%)] rounded-lg border border-[hsl(235,13%,30%)]">
+                      <p className="text-sm font-semibold text-ctp-text mb-2">
+                        Found {duplicateRuns.length} duplicate group(s) with {duplicateRuns.reduce((sum, group) => sum + group.runs.length, 0)} total runs
+                      </p>
+                      <p className="text-xs text-ctp-subtext1">
+                        {duplicateRuns.reduce((sum, group) => sum + group.runs.length - 1, 0)} run(s) will be removed (keeping the best one from each group).
+                      </p>
+                    </div>
+                    
+                    {/* Duplicate Runs Table */}
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
+                            <TableHead className="py-3 px-4 text-left">Group</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Player(s)</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Category</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Platform</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Time</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Date</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Verified</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {duplicateRuns.map((group, groupIdx) => {
+                            // Sort runs to show which will be kept first
+                            const sortedRuns = [...group.runs].sort((a, b) => {
+                              if (a.verified && !b.verified) return -1;
+                              if (!a.verified && b.verified) return 1;
+                              if (a.date && b.date) {
+                                const dateCompare = a.date.localeCompare(b.date);
+                                if (dateCompare !== 0) return dateCompare;
+                              }
+                              return a.id.localeCompare(b.id);
+                            });
+                            
+                            return sortedRuns.map((run, runIdx) => {
+                              const willBeKept = runIdx === 0;
+                              const categoryName = getCategoryName(run.category, firestoreCategories, run.srcCategoryName);
+                              const platformName = getPlatformName(run.platform, firestorePlatforms, run.srcPlatformName);
+                              
+                              return (
+                                <TableRow 
+                                  key={run.id} 
+                                  className={`border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] ${willBeKept ? 'bg-green-900/10' : 'bg-red-900/10'}`}
+                                >
+                                  <TableCell className="py-3 px-4">
+                                    <Badge variant={willBeKept ? "default" : "destructive"} className="text-xs">
+                                      {groupIdx + 1}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4">
+                                    <div className="flex flex-col gap-1">
+                                      <span style={{ color: run.nameColor || 'inherit' }}>{run.playerName || "Unknown"}</span>
+                                      {run.player2Name && (
+                                        <span className="text-muted-foreground text-sm">
+                                          & <span style={{ color: run.player2Color || 'inherit' }}>{run.player2Name}</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4">{categoryName || "—"}</TableCell>
+                                  <TableCell className="py-3 px-4">{platformName || "—"}</TableCell>
+                                  <TableCell className="py-3 px-4 font-mono">{formatTime(run.time || '00:00:00')}</TableCell>
+                                  <TableCell className="py-3 px-4">{run.date || "—"}</TableCell>
+                                  <TableCell className="py-3 px-4">
+                                    {run.verified ? (
+                                      <Badge variant="default" className="bg-green-600/20 text-green-400 border-green-600/50">
+                                        Verified
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="secondary">Unverified</Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4">
+                                    <div className="flex items-center gap-2">
+                                      {willBeKept && (
+                                        <Badge variant="outline" className="border-green-600/50 bg-green-600/10 text-green-400 text-xs">
+                                          Will Keep
+                                        </Badge>
+                                      )}
+                                      {!willBeKept && (
+                                        <Badge variant="outline" className="border-red-600/50 bg-red-600/10 text-red-400 text-xs">
+                                          Will Remove
+                                        </Badge>
+                                      )}
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => navigate(`/run/${run.id}`)}
+                                        className="text-blue-500 hover:bg-blue-900/20"
+                                      >
+                                        <ExternalLink className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            });
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 )}
                 
@@ -3043,6 +3166,410 @@ const Admin = () => {
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+        {/* SRC Tools Section */}
+          <TabsContent value="src" className="space-y-4 animate-fade-in">
+            {/* Import Runs from SRC */}
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
+              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
+                    <Upload className="h-5 w-5" />
+                    <span>Import Runs from Speedrun.com</span>
+                  </CardTitle>
+                  {importedSRCRuns.filter(r => !r.verified).length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearImportedRuns}
+                      disabled={clearingImportedRuns}
+                      className="bg-red-900/20 border-red-700/50 text-red-400 hover:bg-red-900/30 hover:border-red-600 transition-all duration-300"
+                    >
+                      {clearingImportedRuns ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Clearing...
+                        </>
+                      ) : (
+                        <>
+                          <X className="h-4 w-4 mr-2" />
+                          Clear All Imported
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Import Section */}
+                <div className="space-y-4 pb-6 pt-2 border-b border-[hsl(235,13%,30%)]">
+                  <p className="text-[hsl(222,15%,60%)]">
+                    Import runs from speedrun.com that aren't on the leaderboards. 
+                    Runs will be added as unverified and can be edited or rejected.
+                  </p>
+                  <div className="flex gap-3 flex-wrap">
+                    <Button
+                      onClick={handleImportFromSRC}
+                      disabled={importingRuns}
+                      className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                    >
+                      {importingRuns ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Importing...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Import Runs
+                        </>
+                      )}
+                    </Button>
+                    {importedSRCRuns.filter(r => r.verified !== true).length > 0 && (
+                      <>
+                        <Button
+                          onClick={handleBatchVerify}
+                          disabled={batchVerifying || batchVerifyingAll || importingRuns}
+                          className="bg-gradient-to-r from-[#94e2d5] to-[#74c7b0] hover:from-[#74c7b0] hover:to-[#94e2d5] text-[hsl(240,21%,15%)] font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                        >
+                          {batchVerifying ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              Verifying...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Batch Verify 10 Most Recent
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          onClick={handleBatchVerifyAll}
+                          disabled={batchVerifying || batchVerifyingAll || importingRuns}
+                          className="bg-gradient-to-r from-[#a6e3a1] to-[#86c77a] hover:from-[#86c77a] hover:to-[#a6e3a1] text-[hsl(240,21%,15%)] font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                        >
+                          {batchVerifyingAll ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              Verifying All...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Batch Verify All in Tab
+                            </>
+                          )}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {importingRuns && importProgress.total > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm text-[hsl(222,15%,60%)]">
+                        <span>Progress: {importProgress.imported + importProgress.skipped} / {importProgress.total}</span>
+                        <span>Imported: {importProgress.imported} | Skipped: {importProgress.skipped}</span>
+                      </div>
+                      <div className="w-full bg-[hsl(235,19%,13%)] rounded-full h-2">
+                        <div
+                          className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] h-2 rounded-full transition-all duration-300"
+                          style={{
+                            width: `${((importProgress.imported + importProgress.skipped) / importProgress.total) * 100}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Imported Runs List - Same content as before */}
+                {(() => {
+                  // Filter unverified imported runs
+                  let unverifiedImported = importedSRCRuns.filter(r => r.verified !== true);
+                  
+                  // Apply leaderboardType filter
+                  unverifiedImported = unverifiedImported.filter(run => {
+                    const runLeaderboardType = run.leaderboardType || 'regular';
+                    return runLeaderboardType === importedRunsLeaderboardType;
+                  });
+                  
+                  // Apply category filter (only if a category is selected)
+                  if (importedRunsCategory && importedRunsCategory !== '__all__') {
+                    unverifiedImported = unverifiedImported.filter(run => {
+                      const runCategory = normalizeCategoryId(run.category);
+                      return runCategory === importedRunsCategory;
+                    });
+                  }
+                  
+                  // Apply platform filter (only if a platform is selected)
+                  if (importedRunsPlatform && importedRunsPlatform !== '__all__') {
+                    unverifiedImported = unverifiedImported.filter(run => {
+                      const runPlatform = normalizePlatformId(run.platform);
+                      return runPlatform === importedRunsPlatform;
+                    });
+                  }
+                  
+                  // Apply level filter for ILs (only if a level is selected)
+                  if (importedRunsLeaderboardType === 'individual-level' && importedRunsLevel && importedRunsLevel !== '__all__') {
+                    unverifiedImported = unverifiedImported.filter(run => {
+                      const runLevel = normalizeLevelId(run.level);
+                      return runLevel === importedRunsLevel;
+                    });
+                  }
+                  
+                  // Apply run type filter (solo/co-op)
+                  if (importedRunsRunType && importedRunsRunType !== '__all__') {
+                    unverifiedImported = unverifiedImported.filter(run => {
+                      const runRunType = run.runType || 'solo';
+                      return runRunType === importedRunsRunType;
+                    });
+                  }
+                  
+                  // Sort by date (most recent first) - ensure sorting is maintained after filtering
+                  unverifiedImported.sort((a, b) => {
+                    // Handle missing dates
+                    if (!a.date && !b.date) return 0;
+                    if (!a.date) return 1; // Missing date goes to end
+                    if (!b.date) return -1; // Missing date goes to end
+                    
+                    // Compare dates (YYYY-MM-DD format)
+                    // Most recent first = descending order
+                    return b.date.localeCompare(a.date);
+                  });
+                  
+                  // Calculate counts for tabs (before category/platform/level filters)
+                  const baseUnverified = importedSRCRuns.filter(r => r.verified !== true);
+                  const fullGameCount = baseUnverified.filter(r => (r.leaderboardType || 'regular') === 'regular').length;
+                  const ilCount = baseUnverified.filter(r => r.leaderboardType === 'individual-level').length;
+                  
+                  return (
+                    <>
+                      {/* Tabs for Full Game vs Individual Level - Always show tabs */}
+                      <Tabs 
+                        value={importedRunsLeaderboardType} 
+                        onValueChange={(value) => {
+                          setImportedRunsLeaderboardType(value as 'regular' | 'individual-level');
+                        }} 
+                        className="mb-6"
+                      >
+                        <TabsList className="grid w-full max-w-md grid-cols-2 mb-4 bg-[hsl(240,21%,15%)]">
+                          <TabsTrigger value="regular" className="data-[state=active]:bg-[hsl(240,21%,20%)]">
+                            Full Game ({fullGameCount})
+                          </TabsTrigger>
+                          <TabsTrigger value="individual-level" className="data-[state=active]:bg-[hsl(240,21%,20%)]">
+                            Individual Levels ({ilCount})
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                      
+                      {/* Filters - Always show so users can adjust when results are empty */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div>
+                          <Label htmlFor="imported-category-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Category</Label>
+                          <Select
+                            value={importedRunsCategory}
+                            onValueChange={(value) => {
+                              setImportedRunsCategory(value);
+                              setImportedPage(1);
+                            }}
+                          >
+                            <SelectTrigger id="imported-category-filter" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                              <SelectValue placeholder="All Categories" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__all__">All Categories</SelectItem>
+                              {importedRunsCategories.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                  {cat.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="imported-platform-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Platform</Label>
+                          <Select
+                            value={importedRunsPlatform}
+                            onValueChange={(value) => {
+                              setImportedRunsPlatform(value);
+                              setImportedPage(1);
+                            }}
+                          >
+                            <SelectTrigger id="imported-platform-filter" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                              <SelectValue placeholder="All Platforms" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__all__">All Platforms</SelectItem>
+                              {firestorePlatforms.map((platform) => (
+                                <SelectItem key={platform.id} value={platform.id}>
+                                  {platform.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {importedRunsLeaderboardType === 'individual-level' && (
+                          <div>
+                            <Label htmlFor="imported-level-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Level</Label>
+                            <Select
+                              value={importedRunsLevel}
+                              onValueChange={(value) => {
+                                setImportedRunsLevel(value);
+                                setImportedPage(1);
+                              }}
+                            >
+                              <SelectTrigger id="imported-level-filter" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                                <SelectValue placeholder="All Levels" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__all__">All Levels</SelectItem>
+                                {availableLevels.map((level) => (
+                                  <SelectItem key={level.id} value={level.id}>
+                                    {level.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        <div>
+                          <Label htmlFor="imported-runtype-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Run Type</Label>
+                          <Select
+                            value={importedRunsRunType}
+                            onValueChange={(value) => {
+                              setImportedRunsRunType(value as "__all__" | "solo" | "co-op");
+                              setImportedPage(1);
+                            }}
+                          >
+                            <SelectTrigger id="imported-runtype-filter" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                              <SelectValue placeholder="All Run Types" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__all__">All Run Types</SelectItem>
+                              <SelectItem value="solo">Solo</SelectItem>
+                              <SelectItem value="co-op">Co-op</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      
+                      {/* Imported Runs Table */}
+                      {unverifiedImported.length === 0 ? (
+                        <p className="text-[hsl(222,15%,60%)] text-center py-8">No unverified imported runs found for the selected filters.</p>
+                      ) : (
+                        <>
+                          <div className="overflow-x-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
+                                  <TableHead className="py-3 px-4 text-left">Player(s)</TableHead>
+                                  <TableHead className="py-3 px-4 text-left">Category</TableHead>
+                                  <TableHead className="py-3 px-4 text-left">Platform</TableHead>
+                                  <TableHead className="py-3 px-4 text-left">Level</TableHead>
+                                  <TableHead className="py-3 px-4 text-left">Time</TableHead>
+                                  <TableHead className="py-3 px-4 text-left">Date</TableHead>
+                                  <TableHead className="py-3 px-4 text-left">Type</TableHead>
+                                  <TableHead className="py-3 px-4 text-left">Issues</TableHead>
+                                  <TableHead className="py-3 px-4 text-center">Actions</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {unverifiedImported.slice((importedPage - 1) * itemsPerPage, importedPage * itemsPerPage).map((run) => {
+                                  const categoryExists = firestoreCategories.some(c => c.id === run.category);
+                                  const platformExists = firestorePlatforms.some(p => p.id === run.platform);
+                                  const levelExists = run.level ? availableLevels.some(l => l.id === run.level) : true;
+                                  const issues: string[] = [];
+                                  if (!run.category || !categoryExists) issues.push("Invalid/Missing Category");
+                                  if (!run.platform || !platformExists) issues.push("Invalid/Missing Platform");
+                                  if ((run.leaderboardType === 'individual-level' || run.leaderboardType === 'community-golds') && (!run.level || !levelExists)) {
+                                    issues.push("Invalid/Missing Level");
+                                  }
+                                  
+                                  return (
+                                    <TableRow key={run.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-md">
+                                      <TableCell className="py-3 px-4 font-medium">
+                                        <span style={{ color: run.nameColor || 'inherit' }}>{run.playerName}</span>
+                                        {run.player2Name && (
+                                          <>
+                                            <span className="text-muted-foreground"> & </span>
+                                            <span style={{ color: run.player2Color || 'inherit' }}>{run.player2Name}</span>
+                                          </>
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="py-3 px-4">{
+                                        getCategoryName(run.category, firestoreCategories, run.srcCategoryName)
+                                      }</TableCell>
+                                      <TableCell className="py-3 px-4">{
+                                        getPlatformName(run.platform, firestorePlatforms, run.srcPlatformName)
+                                      }</TableCell>
+                                      <TableCell className="py-3 px-4">{
+                                        run.level ? getLevelName(run.level, availableLevels, run.srcLevelName) : "—"
+                                      }</TableCell>
+                                      <TableCell className="py-3 px-4 font-mono">{formatTime(run.time || '00:00:00')}</TableCell>
+                                      <TableCell className="py-3 px-4">{run.date}</TableCell>
+                                      <TableCell className="py-3 px-4">{run.runType.charAt(0).toUpperCase() + run.runType.slice(1)}</TableCell>
+                                      <TableCell className="py-3 px-4">
+                                        {issues.length > 0 ? (
+                                          <div className="flex flex-wrap gap-1">
+                                            {issues.map((issue, idx) => (
+                                              <Badge 
+                                                key={idx} 
+                                                variant="destructive" 
+                                                className="text-xs bg-yellow-600/20 text-yellow-400 border-yellow-600/50 hover:bg-yellow-600/30"
+                                              >
+                                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                                {issue}
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <span className="text-muted-foreground text-xs">—</span>
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="py-3 px-4 text-center space-x-2">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm" 
+                                          onClick={() => {
+                                            setEditingImportedRun(run);
+                                            // Form will be initialized by useEffect
+                                          }}
+                                          className="text-blue-500 hover:bg-blue-900/20 transition-all duration-300 hover:scale-110 hover:shadow-md"
+                                        >
+                                          <Edit2 className="h-4 w-4" />
+                                        </Button>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm" 
+                                          onClick={() => handleReject(run.id)}
+                                          className="text-red-500 hover:bg-red-900/20 transition-all duration-300 hover:scale-110 hover:shadow-md"
+                                        >
+                                          <XCircle className="h-4 w-4" />
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
+                          {unverifiedImported.length > itemsPerPage && (
+                            <Pagination
+                              currentPage={importedPage}
+                              totalPages={Math.ceil(unverifiedImported.length / itemsPerPage)}
+                              onPageChange={setImportedPage}
+                              itemsPerPage={itemsPerPage}
+                              totalItems={unverifiedImported.length}
+                            />
+                          )}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>

@@ -4407,6 +4407,9 @@ export const findDuplicateRunsFirestore = async (): Promise<Array<{ runs: Leader
   if (!db) return [];
   
   try {
+    // Import normalizeSRCUsername for consistent normalization
+    const { normalizeSRCUsername } = await import("@/lib/speedruncom");
+    
     // Get all runs
     const queries = [
       query(collection(db, "leaderboardEntries"), where("verified", "==", true), firestoreLimit(2000)),
@@ -4423,23 +4426,93 @@ export const findDuplicateRunsFirestore = async (): Promise<Array<{ runs: Leader
       ...unverifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
     ];
     
-    const normalizeName = (name: string) => (name || "").trim().toLowerCase();
+    // Pre-fetch all unique player IDs to batch lookups
+    const uniquePlayerIds = new Set<string>();
+    for (const run of allRuns) {
+      if (run.playerId && run.playerId.trim()) {
+        uniquePlayerIds.add(run.playerId);
+      }
+      if (run.player2Id && run.player2Id.trim()) {
+        uniquePlayerIds.add(run.player2Id);
+      }
+    }
+    
+    // Batch fetch all players
+    const playerMap = new Map<string, Player>();
+    if (uniquePlayerIds.size > 0) {
+      const playerPromises = Array.from(uniquePlayerIds).map(id => getPlayerByUidFirestore(id));
+      const players = await Promise.all(playerPromises);
+      players.forEach(player => {
+        if (player) {
+          playerMap.set(player.uid, player);
+        }
+      });
+    }
     
     // Group runs by their duplicate key
+    // Use normalized player identifiers (display name first, then SRC username)
     const runGroups = new Map<string, LeaderboardEntry[]>();
     
     for (const run of allRuns) {
-      const player1Name = normalizeName(run.playerName);
-      const player2Name = normalizeName(run.player2Name || "");
+      // Get normalized player identifiers (display name first, then SRC username)
+      // Use cached player data if available
+      let player1Id: string;
+      let player2Id: string = "";
+      
+      // Player 1 identifier
+      const player1 = run.playerId ? playerMap.get(run.playerId) : null;
+      if (player1) {
+        // Use display name first, then SRC username
+        if (player1.displayName && player1.displayName.trim()) {
+          player1Id = player1.displayName.trim().toLowerCase();
+        } else if (player1.srcUsername) {
+          player1Id = normalizeSRCUsername(player1.srcUsername);
+        } else {
+          player1Id = (run.playerName || "").trim().toLowerCase();
+        }
+      } else {
+        // Fallback: use display name from run, then SRC username
+        if (run.playerName && run.playerName.trim()) {
+          player1Id = run.playerName.trim().toLowerCase();
+        } else if (run.srcPlayerName) {
+          player1Id = normalizeSRCUsername(run.srcPlayerName);
+        } else {
+          player1Id = "";
+        }
+      }
+      
+      // Player 2 identifier (for co-op runs)
+      if (run.runType === 'co-op') {
+        const player2 = run.player2Id ? playerMap.get(run.player2Id) : null;
+        if (player2) {
+          // Use display name first, then SRC username
+          if (player2.displayName && player2.displayName.trim()) {
+            player2Id = player2.displayName.trim().toLowerCase();
+          } else if (player2.srcUsername) {
+            player2Id = normalizeSRCUsername(player2.srcUsername);
+          } else {
+            player2Id = (run.player2Name || "").trim().toLowerCase();
+          }
+        } else {
+          // Fallback: use display name from run, then SRC username
+          if (run.player2Name && run.player2Name.trim()) {
+            player2Id = run.player2Name.trim().toLowerCase();
+          } else if (run.srcPlayer2Name) {
+            player2Id = normalizeSRCUsername(run.srcPlayer2Name);
+          } else {
+            player2Id = "";
+          }
+        }
+      }
       
       // Create run key: player1|player2|category|platform|runType|time|leaderboardType|level
-      // For co-op runs, normalize order (alphabetically sort player names)
+      // For co-op runs, normalize order (alphabetically sort player identifiers)
       let key: string;
-      if (run.runType === 'co-op' && player2Name) {
-        const [p1, p2] = [player1Name, player2Name].sort();
+      if (run.runType === 'co-op' && player2Id) {
+        const [p1, p2] = [player1Id, player2Id].sort();
         key = `${p1}|${p2}|${run.category || ''}|${run.platform || ''}|${run.runType || 'solo'}|${run.time || ''}|${run.leaderboardType || 'regular'}|${run.level || ''}`;
       } else {
-        key = `${player1Name}|${player2Name}|${run.category || ''}|${run.platform || ''}|${run.runType || 'solo'}|${run.time || ''}|${run.leaderboardType || 'regular'}|${run.level || ''}`;
+        key = `${player1Id}|${player2Id}|${run.category || ''}|${run.platform || ''}|${run.runType || 'solo'}|${run.time || ''}|${run.leaderboardType || 'regular'}|${run.level || ''}`;
       }
       
       if (!runGroups.has(key)) {
