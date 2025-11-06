@@ -357,10 +357,11 @@ export function extractIdAndName(
     // Try name first (direct field) - categories use this
     if (data.name && typeof data.name === 'string' && data.name.trim()) {
       name = String(data.name).trim();
-    } 
+    }
     // Fall back to names.international (for platforms and some API structures)
     // Platforms often use names.international instead of name
-    else if (data.names?.international && typeof data.names.international === 'string' && data.names.international.trim()) {
+    // CRITICAL: Always check names.international for platforms, even if name exists
+    if (!name && data.names?.international && typeof data.names.international === 'string' && data.names.international.trim()) {
       name = String(data.names.international).trim();
     }
     // Also check for names object with different structure
@@ -539,10 +540,26 @@ export function mapSRCRunToLeaderboardEntry(
       }
     }
     
-    // Method 3: Fallback to ID->name mapping if embedded data not available (platform is just a string ID)
+    // Method 3: ALWAYS try ID->name mapping as fallback (CRITICAL for when platform is just a string ID)
+    // This ensures we get the platform name even when it's not embedded
     if (!finalPlatformName && srcPlatformIdToName && platformData.id) {
       finalPlatformName = srcPlatformIdToName.get(platformData.id);
+
+      if (run.id && run.id.length < 20) {
+        console.log(`[SRC Import] Run ${run.id} platform name from ID mapping:`, {
+          platformId: platformData.id,
+          finalPlatformName,
+          hasMapping: srcPlatformIdToName.has(platformData.id),
+          mapSize: srcPlatformIdToName.size,
+        });
+      }
     }
+  }
+  
+  // If we still don't have a platform name, try to get it from the ID mapping one more time
+  // This handles edge cases where extractIdAndName might have missed the name
+  if (!finalPlatformName && platformData.id && srcPlatformIdToName) {
+    finalPlatformName = srcPlatformIdToName.get(platformData.id);
   }
   
   // Try name-based mapping if ID mapping failed
@@ -551,6 +568,7 @@ export function mapSRCRunToLeaderboardEntry(
   }
   
   // Store the final platform name (or undefined if we couldn't get it)
+  // CRITICAL: Always store the platform name from SRC if we have it, even if ID mapping failed
   finalPlatformName = finalPlatformName || undefined;
   
   // Extract and map level - use unified extraction
