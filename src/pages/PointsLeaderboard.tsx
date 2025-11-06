@@ -4,12 +4,15 @@ import { Link } from "react-router-dom";
 import { TrendingUp, Sparkles, Plus } from "lucide-react";
 import { Player } from "@/types/database";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { Pagination } from "@/components/Pagination";
 import { getPlayersByPoints } from "@/lib/db";
 import LegoStudIcon from "@/components/icons/LegoStudIcon";
 
 const PointsLeaderboard = () => {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
 
   useEffect(() => {
     const fetchPlayers = async () => {
@@ -119,9 +122,10 @@ const PointsLeaderboard = () => {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {players.map((player, index) => {
-                  const rank = index + 1;
+              <>
+                <div className="space-y-4">
+                  {players.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((player, index) => {
+                  const rank = (currentPage - 1) * itemsPerPage + index + 1;
                   const points = player.totalPoints || 0;
                   const displayName = player.displayName || player.email?.split('@')[0] || "Unknown Player";
                   
@@ -209,8 +213,18 @@ const PointsLeaderboard = () => {
                       </div>
                     </Link>
                   );
-                })}
-              </div>
+                  })}
+                </div>
+                {players.length > itemsPerPage && (
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={Math.ceil(players.length / itemsPerPage)}
+                    onPageChange={setCurrentPage}
+                    itemsPerPage={itemsPerPage}
+                    totalItems={players.length}
+                  />
+                )}
+              </>
             )}
           </CardContent>
         </Card>

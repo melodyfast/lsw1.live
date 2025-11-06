@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle, XCircle, ShieldAlert, ExternalLink, Download, PlusCircle, Trash2, Wrench, Edit2, FolderTree, Play, ArrowUp, ArrowDown, Gamepad2, UserPlus, UserMinus, Trophy, Upload, Star, Gem, RefreshCw } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Pagination } from "@/components/Pagination";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -79,6 +80,9 @@ const Admin = () => {
   const [editingImportedRun, setEditingImportedRun] = useState<LeaderboardEntry | null>(null);
   const [editingImportedRunForm, setEditingImportedRunForm] = useState<Partial<LeaderboardEntry>>({});
   const [savingImportedRun, setSavingImportedRun] = useState(false);
+  const [unverifiedPage, setUnverifiedPage] = useState(1);
+  const [importedPage, setImportedPage] = useState(1);
+  const itemsPerPage = 25;
   const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
   const [pageLoading, setLoading] = useState(true);
   const [newDownload, setNewDownload] = useState({
@@ -273,8 +277,10 @@ const Admin = () => {
     try {
       const data = await getUnverifiedLeaderboardEntries();
       setUnverifiedRuns(data.filter(run => !run.importedFromSRC));
+      setUnverifiedPage(1); // Reset to first page when data changes
       const importedData = await getImportedSRCRuns();
       setImportedSRCRuns(importedData);
+      setImportedPage(1); // Reset to first page when data changes
     } catch (error) {
       toast({
         title: "Error",
@@ -1985,21 +1991,22 @@ const Admin = () => {
             {unverifiedRuns.length === 0 ? (
               <p className="text-[hsl(222,15%,60%)] text-center py-8">No runs awaiting verification.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
-                      <TableHead className="py-3 px-4 text-left">Player(s)</TableHead>
-                      <TableHead className="py-3 px-4 text-left">Category</TableHead>
-                      <TableHead className="py-3 px-4 text-left">Time</TableHead>
-                      <TableHead className="py-3 px-4 text-left">Platform</TableHead>
-                      <TableHead className="py-3 px-4 text-left">Type</TableHead>
-                      <TableHead className="py-3 px-4 text-left">Video</TableHead>
-                      <TableHead className="py-3 px-4 text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {unverifiedRuns.map((run) => (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
+                        <TableHead className="py-3 px-4 text-left">Player(s)</TableHead>
+                        <TableHead className="py-3 px-4 text-left">Category</TableHead>
+                        <TableHead className="py-3 px-4 text-left">Time</TableHead>
+                        <TableHead className="py-3 px-4 text-left">Platform</TableHead>
+                        <TableHead className="py-3 px-4 text-left">Type</TableHead>
+                        <TableHead className="py-3 px-4 text-left">Video</TableHead>
+                        <TableHead className="py-3 px-4 text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {unverifiedRuns.slice((unverifiedPage - 1) * itemsPerPage, unverifiedPage * itemsPerPage).map((run) => (
                       <TableRow key={run.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-md">
                         <TableCell className="py-3 px-4 font-medium">
                           <span style={{ color: run.nameColor || 'inherit' }}>{run.playerName}</span>
@@ -2010,9 +2017,13 @@ const Admin = () => {
                             </>
                           )}
                         </TableCell>
-                        <TableCell className="py-3 px-4">{firestoreCategories.find(c => c.id === run.category)?.name || run.category}</TableCell>
+                        <TableCell className="py-3 px-4">{
+                          firestoreCategories.find(c => c.id === String(run.category || ''))?.name || String(run.category || 'Unknown')
+                        }</TableCell>
                         <TableCell className="py-3 px-4 font-mono">{formatTime(run.time)}</TableCell>
-                        <TableCell className="py-3 px-4">{firestorePlatforms.find(p => p.id === run.platform)?.name || run.platform}</TableCell>
+                        <TableCell className="py-3 px-4">{
+                          firestorePlatforms.find(p => p.id === String(run.platform || ''))?.name || String(run.platform || 'Unknown')
+                        }</TableCell>
                         <TableCell className="py-3 px-4">{run.runType.charAt(0).toUpperCase() + run.runType.slice(1)}</TableCell>
                         <TableCell className="py-3 px-4">
                           {run.videoUrl && (
@@ -2043,7 +2054,17 @@ const Admin = () => {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+                </div>
+                {unverifiedRuns.length > itemsPerPage && (
+                  <Pagination
+                    currentPage={unverifiedPage}
+                    totalPages={Math.ceil(unverifiedRuns.length / itemsPerPage)}
+                    onPageChange={setUnverifiedPage}
+                    itemsPerPage={itemsPerPage}
+                    totalItems={unverifiedRuns.length}
+                  />
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -2057,24 +2078,27 @@ const Admin = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {importedSRCRuns.filter(r => !r.verified).length === 0 ? (
-                  <p className="text-[hsl(222,15%,60%)] text-center py-8">No imported runs awaiting verification.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
-                          <TableHead className="py-3 px-4 text-left">Player(s)</TableHead>
-                          <TableHead className="py-3 px-4 text-left">Category</TableHead>
-                          <TableHead className="py-3 px-4 text-left">Time</TableHead>
-                          <TableHead className="py-3 px-4 text-left">Platform</TableHead>
-                          <TableHead className="py-3 px-4 text-left">Type</TableHead>
-                          <TableHead className="py-3 px-4 text-left">Video</TableHead>
-                          <TableHead className="py-3 px-4 text-center">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {importedSRCRuns.filter(r => !r.verified).map((run) => (
+                {(() => {
+                  const unverifiedImported = importedSRCRuns.filter(r => !r.verified);
+                  return unverifiedImported.length === 0 ? (
+                    <p className="text-[hsl(222,15%,60%)] text-center py-8">No imported runs awaiting verification.</p>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
+                              <TableHead className="py-3 px-4 text-left">Player(s)</TableHead>
+                              <TableHead className="py-3 px-4 text-left">Category</TableHead>
+                              <TableHead className="py-3 px-4 text-left">Time</TableHead>
+                              <TableHead className="py-3 px-4 text-left">Platform</TableHead>
+                              <TableHead className="py-3 px-4 text-left">Type</TableHead>
+                              <TableHead className="py-3 px-4 text-left">Video</TableHead>
+                              <TableHead className="py-3 px-4 text-center">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {unverifiedImported.slice((importedPage - 1) * itemsPerPage, importedPage * itemsPerPage).map((run) => (
                           <TableRow key={run.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-md">
                             <TableCell className="py-3 px-4 font-medium">
                               <span style={{ color: run.nameColor || 'inherit' }}>{run.playerName}</span>
@@ -2085,9 +2109,13 @@ const Admin = () => {
                                 </>
                               )}
                             </TableCell>
-                            <TableCell className="py-3 px-4">{firestoreCategories.find(c => c.id === run.category)?.name || run.category}</TableCell>
+                            <TableCell className="py-3 px-4">{
+                              firestoreCategories.find(c => c.id === String(run.category || ''))?.name || String(run.category || 'Unknown')
+                            }</TableCell>
                             <TableCell className="py-3 px-4 font-mono">{formatTime(run.time)}</TableCell>
-                            <TableCell className="py-3 px-4">{firestorePlatforms.find(p => p.id === run.platform)?.name || run.platform}</TableCell>
+                            <TableCell className="py-3 px-4">{
+                              firestorePlatforms.find(p => p.id === String(run.platform || ''))?.name || String(run.platform || 'Unknown')
+                            }</TableCell>
                             <TableCell className="py-3 px-4">{run.runType.charAt(0).toUpperCase() + run.runType.slice(1)}</TableCell>
                             <TableCell className="py-3 px-4">
                               {run.videoUrl && (
@@ -2132,12 +2160,23 @@ const Admin = () => {
                                 <XCircle className="h-4 w-4" />
                               </Button>
                             </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
+                            </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      {unverifiedImported.length > itemsPerPage && (
+                        <Pagination
+                          currentPage={importedPage}
+                          totalPages={Math.ceil(unverifiedImported.length / itemsPerPage)}
+                          onPageChange={setImportedPage}
+                          itemsPerPage={itemsPerPage}
+                          totalItems={unverifiedImported.length}
+                        />
+                      )}
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
 

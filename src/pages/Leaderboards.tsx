@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Filter, User, Users, Trophy, Sparkles, TrendingUp, Star, Gem, Gamepad2 } from "lucide-react";
 import { LeaderboardTable } from "@/components/LeaderboardTable";
+import { Pagination } from "@/components/Pagination";
 import { getLeaderboardEntries, getCategories, getPlatforms, runTypes, getLevels } from "@/lib/db";
 import { LeaderboardEntry } from "@/types/database";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
@@ -25,6 +26,8 @@ const Leaderboards = () => {
   const [loading, setLoading] = useState(true);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [levelsLoading, setLevelsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
   const requestCounterRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -102,6 +105,7 @@ const Leaderboards = () => {
         // Only update state if this is still the latest request
         if (currentRequest === requestCounterRef.current && !abortController.signal.aborted) {
         setLeaderboardData(data);
+        setCurrentPage(1); // Reset to first page when data changes
         }
       } catch (error) {
         // Only handle error if this is still the latest request and not aborted
@@ -337,7 +341,20 @@ const Leaderboards = () => {
               </div>
             ) : (
               <div className="animate-fade-in">
-              <LeaderboardTable data={leaderboardData} platforms={availablePlatforms} categories={availableCategories} />
+                <LeaderboardTable 
+                  data={leaderboardData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)} 
+                  platforms={availablePlatforms} 
+                  categories={availableCategories} 
+                />
+                {leaderboardData.length > itemsPerPage && (
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={Math.ceil(leaderboardData.length / itemsPerPage)}
+                    onPageChange={setCurrentPage}
+                    itemsPerPage={itemsPerPage}
+                    totalItems={leaderboardData.length}
+                  />
+                )}
               </div>
             )}
           </CardContent>

@@ -51,13 +51,14 @@ export interface SRCPlatform {
 export interface SRCRun {
   id: string;
   weblink: string;
-  game: string;
-  category: string;
-  level?: string;
+  game: string | { data: SRCGame };
+  category: string | { data: SRCCategory };
+  level?: string | { data: SRCLevel };
   players: Array<{
     rel: string;
     id?: string;
     name?: string;
+    data?: SRCPlayer;
   }>;
   date?: string;
   submitted?: string;
@@ -75,7 +76,7 @@ export interface SRCRun {
     }>;
   };
   system: {
-    platform?: string;
+    platform?: string | { data: SRCPlatform };
     emulated?: boolean;
     region?: string;
   };
@@ -265,14 +266,26 @@ export async function fetchPlatforms(): Promise<SRCPlatform[]> {
 /**
  * Get player name from embedded player data
  */
-function getPlayerName(player: SRCRun['players'][0], embeddedPlayers?: any[]): string {
-  if (player.id && embeddedPlayers) {
-    const embeddedPlayer = embeddedPlayers.find((p: any) => p.id === player.id);
-    if (embeddedPlayer) {
-      return embeddedPlayer.names?.international || player.name || "Unknown";
-    }
+function getPlayerName(player: SRCRun['players'][0]): string {
+  // Check if player has embedded data
+  if (player.data?.names?.international) {
+    return player.data.names.international;
   }
-  return player.name || "Unknown";
+  // Fall back to name field
+  if (player.name) {
+    return player.name;
+  }
+  return "Unknown";
+}
+
+/**
+ * Extract ID from embedded resource or string
+ */
+function extractId(value: string | { data: { id: string } } | undefined): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value.data?.id) return value.data.id;
+  return "";
 }
 
 /**
@@ -296,22 +309,22 @@ export function mapSRCRunToLeaderboardEntry(
 } {
   // Extract player names
   const players = run.players || [];
-  const player1Name = players[0] ? getPlayerName(players[0], embeddedData?.players) : "Unknown";
-  const player2Name = players.length > 1 ? getPlayerName(players[1], embeddedData?.players) : undefined;
+  const player1Name = players[0] ? getPlayerName(players[0]) : "Unknown";
+  const player2Name = players.length > 1 ? getPlayerName(players[1]) : undefined;
   
   // Determine run type
   const runType: 'solo' | 'co-op' = players.length > 1 ? 'co-op' : 'solo';
   
-  // Map category
-  const srcCategoryId = run.category;
+  // Map category - handle both string ID and embedded object
+  const srcCategoryId = extractId(run.category);
   const ourCategoryId = categoryMapping.get(srcCategoryId) || srcCategoryId;
   
-  // Map platform
-  const srcPlatformId = run.system?.platform || "";
+  // Map platform - handle both string ID and embedded object
+  const srcPlatformId = extractId(run.system?.platform);
   const ourPlatformId = platformMapping.get(srcPlatformId) || srcPlatformId;
   
-  // Map level (if present)
-  const srcLevelId = run.level;
+  // Map level - handle both string ID and embedded object
+  const srcLevelId = extractId(run.level);
   const ourLevelId = srcLevelId ? (levelMapping.get(srcLevelId) || srcLevelId) : undefined;
   
   // Determine leaderboard type
