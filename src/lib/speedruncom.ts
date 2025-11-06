@@ -55,13 +55,21 @@ export interface SRCCategory {
 
 export interface SRCLevel {
   id: string;
-  name: string;
+  name?: string;
+  names?: {
+    international?: string;
+    [key: string]: string | undefined;
+  };
   weblink: string;
 }
 
 export interface SRCPlatform {
   id: string;
-  name: string;
+  name?: string;
+  names?: {
+    international?: string;
+    [key: string]: string | undefined;
+  };
 }
 
 export interface SRCRun {
@@ -274,13 +282,20 @@ export function getPlayerName(player: SRCRun['players'][0]): string {
   if (!player) return "Unknown";
   
   // Check for direct name field first (guest runs - these are anonymous/unregistered players)
-  if (player.name) {
+  if (player.name && typeof player.name === 'string' && player.name.trim()) {
     return String(player.name).trim();
   }
   
   // Check embedded data (registered users)
-  if (player.data?.names?.international) {
-    return String(player.data.names.international).trim();
+  // The embedded player data structure is: player.data.names.international
+  if (player.data?.names?.international && typeof player.data.names.international === 'string') {
+    const name = String(player.data.names.international).trim();
+    if (name) return name;
+  }
+  
+  // Also check if player.data has a direct name field (unlikely but possible)
+  if (player.data?.name && typeof player.data.name === 'string' && player.data.name.trim()) {
+    return String(player.data.name).trim();
   }
   
   // Check if player has an ID but no name (registered user without embedded data)
@@ -318,21 +333,25 @@ export function extractIdAndName(
     const id = data.id ? String(data.id).trim() : "";
     let name = "";
     
-    // Try name first (direct field) - platforms and categories use this
-    if (data.name && typeof data.name === 'string') {
+    // Try name first (direct field) - categories use this
+    if (data.name && typeof data.name === 'string' && data.name.trim()) {
       name = String(data.name).trim();
     } 
-    // Fall back to names.international (for some API structures)
-    else if (data.names?.international && typeof data.names.international === 'string') {
+    // Fall back to names.international (for platforms and some API structures)
+    // Platforms often use names.international instead of name
+    else if (data.names?.international && typeof data.names.international === 'string' && data.names.international.trim()) {
       name = String(data.names.international).trim();
     }
     // Also check for names object with different structure
     else if (data.names && typeof data.names === 'object') {
-      // Try to find any name-like property
-      const nameKeys = Object.keys(data.names).filter(k => 
-        typeof (data.names as any)[k] === 'string' && (data.names as any)[k]
+      // Try to find any name-like property (check international first, then others)
+      const nameKeys = ['international', ...Object.keys(data.names)].filter(k => 
+        k !== 'international' && typeof (data.names as any)[k] === 'string' && (data.names as any)[k] && (data.names as any)[k].trim()
       );
-      if (nameKeys.length > 0) {
+      // Prefer international if available
+      if (data.names.international && typeof data.names.international === 'string') {
+        name = String(data.names.international).trim();
+      } else if (nameKeys.length > 0) {
         name = String((data.names as any)[nameKeys[0]]).trim();
       }
     }
@@ -346,10 +365,22 @@ export function extractIdAndName(
     const id = first.id ? String(first.id).trim() : "";
     let name = "";
     
-    if (first.name && typeof first.name === 'string') {
+    // Try name first (direct field)
+    if (first.name && typeof first.name === 'string' && first.name.trim()) {
       name = String(first.name).trim();
-    } else if (first.names?.international && typeof first.names.international === 'string') {
+    } 
+    // Fall back to names.international (for platforms)
+    else if (first.names?.international && typeof first.names.international === 'string' && first.names.international.trim()) {
       name = String(first.names.international).trim();
+    }
+    // Check other name properties
+    else if (first.names && typeof first.names === 'object') {
+      const nameKeys = Object.keys(first.names).filter(k => 
+        typeof (first.names as any)[k] === 'string' && (first.names as any)[k] && (first.names as any)[k].trim()
+      );
+      if (nameKeys.length > 0) {
+        name = String((first.names as any)[nameKeys[0]]).trim();
+      }
     }
     
     return { id, name };
@@ -388,7 +419,10 @@ export function mapSRCRunToLeaderboardEntry(
   levelMapping: Map<string, string>, // SRC level ID -> our level ID
   defaultPlayerId: string = "imported", // Default player ID for imported runs
   categoryNameMapping?: Map<string, string>, // SRC category name -> our category ID (for embedded data)
-  platformNameMapping?: Map<string, string> // SRC platform name -> our platform ID (for embedded data)
+  platformNameMapping?: Map<string, string>, // SRC platform name -> our platform ID (for embedded data)
+  srcPlatformIdToName?: Map<string, string>, // SRC platform ID -> SRC platform name (fallback)
+  srcCategoryIdToName?: Map<string, string>, // SRC category ID -> SRC category name (fallback)
+  srcLevelIdToName?: Map<string, string> // SRC level ID -> SRC level name (fallback)
 ): Partial<import("@/types/database").LeaderboardEntry> & {
   srcRunId: string;
   importedFromSRC: boolean;
@@ -418,23 +452,73 @@ export function mapSRCRunToLeaderboardEntry(
   // Extract and map category - use unified extraction
   const categoryData = extractIdAndName(run.category);
   let ourCategoryId = categoryMapping.get(categoryData.id);
-  if (!ourCategoryId && categoryData.name && categoryNameMapping) {
-    ourCategoryId = categoryNameMapping.get(categoryData.name.toLowerCase().trim());
+  
+  // Get category name - try embedded data first, then fallback to ID mapping
+  let finalCategoryName = categoryData.name;
+  if (!finalCategoryName && categoryData.id) {
+    // Try embedded data
+    if (typeof run.category === 'object' && run.category?.data) {
+      const categoryObj = run.category.data as SRCCategory;
+      finalCategoryName = categoryObj.name;
+    }
+    // Fallback to ID->name mapping if embedded data not available
+    if (!finalCategoryName && srcCategoryIdToName) {
+      finalCategoryName = srcCategoryIdToName.get(categoryData.id);
+    }
   }
-  const finalCategoryName = categoryData.name || undefined;
+  
+  // Try name-based mapping if ID mapping failed
+  if (!ourCategoryId && finalCategoryName && categoryNameMapping) {
+    ourCategoryId = categoryNameMapping.get(finalCategoryName.toLowerCase().trim());
+  }
+  
+  finalCategoryName = finalCategoryName || undefined;
   
   // Extract and map platform - use unified extraction
   const platformData = extractIdAndName(run.system?.platform);
   let ourPlatformId = platformMapping.get(platformData.id);
-  if (!ourPlatformId && platformData.name && platformNameMapping) {
-    ourPlatformId = platformNameMapping.get(platformData.name.toLowerCase().trim());
+  
+  // Get platform name - try embedded data first, then fallback to ID mapping
+  let finalPlatformName = platformData.name;
+  if (!finalPlatformName && platformData.id) {
+    // Try to extract from embedded platform data if it exists
+    if (typeof run.system?.platform === 'object' && run.system.platform?.data) {
+      const platformObj = run.system.platform.data as SRCPlatform;
+      finalPlatformName = platformObj.name || platformObj.names?.international;
+    }
+    // Fallback to ID->name mapping if embedded data not available (platform is just a string ID)
+    if (!finalPlatformName && srcPlatformIdToName) {
+      finalPlatformName = srcPlatformIdToName.get(platformData.id);
+    }
   }
-  const finalPlatformName = platformData.name || undefined;
+  
+  // Try name-based mapping if ID mapping failed
+  if (!ourPlatformId && finalPlatformName && platformNameMapping) {
+    ourPlatformId = platformNameMapping.get(finalPlatformName.toLowerCase().trim());
+  }
+  
+  // Store the final platform name (or undefined if we couldn't get it)
+  finalPlatformName = finalPlatformName || undefined;
   
   // Extract and map level - use unified extraction
   const levelData = extractIdAndName(run.level);
   let ourLevelId = levelData.id ? levelMapping.get(levelData.id) : undefined;
-  const finalLevelName = levelData.name || undefined;
+  
+  // Get level name - try embedded data first, then fallback to ID mapping
+  let finalLevelName = levelData.name;
+  if (!finalLevelName && levelData.id) {
+    // Try to extract from embedded level data if it exists
+    if (typeof run.level === 'object' && run.level?.data) {
+      const levelObj = run.level.data as SRCLevel;
+      finalLevelName = levelObj.name || levelObj.names?.international;
+    }
+    // Fallback to ID->name mapping if embedded data not available
+    if (!finalLevelName && srcLevelIdToName) {
+      finalLevelName = srcLevelIdToName.get(levelData.id);
+    }
+  }
+  
+  finalLevelName = finalLevelName || undefined;
   
   // Normalize IDs (use empty string if mapping failed - SRC names will be used for display)
   ourCategoryId = ourCategoryId ? String(ourCategoryId).trim() : '';

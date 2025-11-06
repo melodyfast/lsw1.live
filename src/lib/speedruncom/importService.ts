@@ -60,9 +60,19 @@ export async function createSRCMappings() {
   const levelMapping = new Map<string, string>();
   const categoryNameMapping = new Map<string, string>();
   const platformNameMapping = new Map<string, string>();
+  
+  // Create reverse mappings from SRC ID to SRC name (for when embedded data is missing)
+  const srcPlatformIdToName = new Map<string, string>();
+  const srcCategoryIdToName = new Map<string, string>();
+  const srcLevelIdToName = new Map<string, string>();
 
   // Map categories
   for (const srcCat of srcCategories) {
+    // Store SRC category ID -> name mapping
+    if (srcCat.name) {
+      srcCategoryIdToName.set(srcCat.id, srcCat.name);
+    }
+    
     const ourCat = ourCategories.find(c => 
       c.name.toLowerCase().trim() === srcCat.name.toLowerCase().trim()
     );
@@ -74,19 +84,33 @@ export async function createSRCMappings() {
 
   // Map platforms
   for (const srcPlatform of srcPlatforms) {
+    // Platforms use names.international, not name
+    const platformName = srcPlatform.names?.international || srcPlatform.name || '';
+    if (!platformName) continue;
+    
+    // Store SRC platform ID -> name mapping
+    srcPlatformIdToName.set(srcPlatform.id, platformName);
+    
     const ourPlatform = ourPlatforms.find(p => 
-      p.name.toLowerCase().trim() === srcPlatform.name.toLowerCase().trim()
+      p.name.toLowerCase().trim() === platformName.toLowerCase().trim()
     );
     if (ourPlatform) {
       platformMapping.set(srcPlatform.id, ourPlatform.id);
-      platformNameMapping.set(srcPlatform.name.toLowerCase().trim(), ourPlatform.id);
+      platformNameMapping.set(platformName.toLowerCase().trim(), ourPlatform.id);
     }
   }
 
   // Map levels
   for (const srcLevel of srcLevels) {
+    // Levels use name field
+    const levelName = srcLevel.name || srcLevel.names?.international || '';
+    if (!levelName) continue;
+    
+    // Store SRC level ID -> name mapping
+    srcLevelIdToName.set(srcLevel.id, levelName);
+    
     const ourLevel = ourLevels.find(l => 
-      l.name.toLowerCase().trim() === srcLevel.name.toLowerCase().trim()
+      l.name.toLowerCase().trim() === levelName.toLowerCase().trim()
     );
     if (ourLevel) {
       levelMapping.set(srcLevel.id, ourLevel.id);
@@ -99,6 +123,9 @@ export async function createSRCMappings() {
     levelMapping,
     categoryNameMapping,
     platformNameMapping,
+    srcPlatformIdToName,
+    srcCategoryIdToName,
+    srcLevelIdToName,
     ourCategories,
     ourPlatforms,
     ourLevels,
@@ -194,17 +221,20 @@ export async function importSRCRuns(
           continue;
         }
 
-        // Map the run
-        const mappedRun = mapSRCRunToLeaderboardEntry(
-          srcRun,
-          undefined,
-          mappings.categoryMapping,
-          mappings.platformMapping,
-          mappings.levelMapping,
-          "imported",
-          mappings.categoryNameMapping,
-          mappings.platformNameMapping
-        );
+              // Map the run
+              const mappedRun = mapSRCRunToLeaderboardEntry(
+                srcRun,
+                undefined,
+                mappings.categoryMapping,
+                mappings.platformMapping,
+                mappings.levelMapping,
+                "imported",
+                mappings.categoryNameMapping,
+                mappings.platformNameMapping,
+                mappings.srcPlatformIdToName,
+                mappings.srcCategoryIdToName,
+                mappings.srcLevelIdToName
+              );
 
         // Set import flags - ensure importedFromSRC is explicitly true (boolean)
         mappedRun.importedFromSRC = true as boolean;
@@ -294,12 +324,21 @@ export async function importSRCRuns(
             platform: mappedRun.platform,
             srcCategoryName: mappedRun.srcCategoryName,
             srcPlatformName: mappedRun.srcPlatformName,
+            srcLevelName: mappedRun.srcLevelName,
             importedFromSRC: mappedRun.importedFromSRC,
             playerName: mappedRun.playerName,
+            player2Name: mappedRun.player2Name,
             time: mappedRun.time,
             date: mappedRun.date,
             leaderboardType: mappedRun.leaderboardType,
             runType: mappedRun.runType,
+            level: mappedRun.level,
+            // Raw SRC data for debugging
+            rawPlatform: srcRun.system?.platform,
+            rawPlatformType: typeof srcRun.system?.platform,
+            rawPlayers: srcRun.players,
+            rawCategory: srcRun.category,
+            rawLevel: srcRun.level,
           });
         }
 

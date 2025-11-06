@@ -37,9 +37,9 @@ const Leaderboards = () => {
       setLevelsLoading(true);
       try {
         // For Individual Level: fetch Story/Free Play categories
-        // For Community Golds: fetch full game categories
+        // For Community Golds: fetch community-golds categories (now configurable)
         // For Regular: fetch regular categories
-        const categoryType = leaderboardType === 'community-golds' ? 'regular' : leaderboardType;
+        const categoryType = leaderboardType;
         
         const [fetchedCategories, fetchedLevels, fetchedPlatforms] = await Promise.all([
           getCategories(categoryType),

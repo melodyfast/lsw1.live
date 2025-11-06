@@ -109,7 +109,7 @@ const Admin = () => {
   const { startUpload, isUploading } = useUploadThing("downloadFile");
   
   const [firestoreCategories, setFirestoreCategories] = useState<{ id: string; name: string }[]>([]);
-  const [categoryLeaderboardType, setCategoryLeaderboardType] = useState<'regular' | 'individual-level'>('regular');
+  const [categoryLeaderboardType, setCategoryLeaderboardType] = useState<'regular' | 'individual-level' | 'community-golds'>('regular');
   const [levelLeaderboardType, setLevelLeaderboardType] = useState<'individual-level' | 'community-golds'>('individual-level');
   const [newCategoryName, setNewCategoryName] = useState("");
   const [editingCategory, setEditingCategory] = useState<{ id: string; name: string } | null>(null);
@@ -178,6 +178,16 @@ const Admin = () => {
       }
     };
     initImportedRunsCategories();
+    // Load initial categories for level management (should match levelLeaderboardType initial state)
+    const initLevelCategories = async () => {
+      try {
+        const categoriesData = await getCategories('individual-level');
+        setFirestoreCategories(categoriesData);
+      } catch (error) {
+        // Silent fail
+      }
+    };
+    initLevelCategories();
   }, []);
 
   // Fetch categories for imported runs filter when leaderboard type changes
@@ -201,10 +211,9 @@ const Admin = () => {
   useEffect(() => {
     const fetchLevelCategories = async () => {
       try {
-        // For community-golds, use regular categories (community golds use regular categories)
+        // For community-golds, use community-golds categories (now configurable)
         // For individual-level, use individual-level categories
-        const categoryType = levelLeaderboardType === 'community-golds' ? 'regular' : levelLeaderboardType;
-        const categoriesData = await getCategories(categoryType);
+        const categoriesData = await getCategories(levelLeaderboardType);
         setFirestoreCategories(categoriesData);
       } catch (error) {
         // Silent fail
@@ -252,6 +261,19 @@ const Admin = () => {
     }
   };
 
+  const fetchCategories = async (leaderboardType: 'regular' | 'individual-level' | 'community-golds' = 'regular') => {
+    try {
+      const categoriesData = await getCategoriesFromFirestore(leaderboardType);
+      setFirestoreCategories(categoriesData);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load categories.",
+        variant: "destructive",
+      });
+    }
+  };
+
   useEffect(() => {
     if (firestorePlatforms.length > 0 && !manualRun.platform) {
       setManualRun(prev => ({ ...prev, platform: firestorePlatforms[0].id }));
@@ -278,16 +300,11 @@ const Admin = () => {
 
   useEffect(() => {
     // Fetch categories when leaderboard type changes for manual run
-    const categoryType = manualRunLeaderboardType === 'community-golds' ? 'regular' : manualRunLeaderboardType;
+    // For community-golds, use community-golds categories (now configurable)
+    const categoryType = manualRunLeaderboardType;
     fetchCategories(categoryType);
     setManualRun(prev => ({ ...prev, category: "", level: "" })); // Reset category and level when type changes
   }, [manualRunLeaderboardType]);
-
-  // Fetch categories when level leaderboard type changes
-  useEffect(() => {
-    const categoryType = levelLeaderboardType === 'community-golds' ? 'regular' : levelLeaderboardType;
-    fetchCategories(categoryType);
-  }, [levelLeaderboardType]);
 
   const fetchAllData = async () => {
     if (hasFetchedData) return;
@@ -634,37 +651,137 @@ const Admin = () => {
   const handleSaveImportedRun = async () => {
     if (!editingImportedRun) return;
     
+    // Validate required fields (matching SubmitRun validation)
+    const finalForm = {
+      playerName: editingImportedRunForm.playerName ?? editingImportedRun.playerName,
+      player2Name: editingImportedRunForm.player2Name ?? editingImportedRun.player2Name,
+      category: editingImportedRunForm.category ?? editingImportedRun.category,
+      platform: editingImportedRunForm.platform ?? editingImportedRun.platform,
+      runType: editingImportedRunForm.runType ?? editingImportedRun.runType,
+      leaderboardType: editingImportedRunForm.leaderboardType ?? editingImportedRun.leaderboardType,
+      level: editingImportedRunForm.level ?? editingImportedRun.level,
+      time: editingImportedRunForm.time ?? editingImportedRun.time,
+      date: editingImportedRunForm.date ?? editingImportedRun.date,
+      videoUrl: editingImportedRunForm.videoUrl ?? editingImportedRun.videoUrl,
+      comment: editingImportedRunForm.comment ?? editingImportedRun.comment,
+    };
+    
+    // Validate required fields
+    if (!finalForm.playerName || !finalForm.playerName.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter a player name.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!finalForm.category || !finalForm.category.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a category.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!finalForm.platform || !finalForm.platform.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a platform.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!finalForm.runType) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a run type.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!finalForm.time || !finalForm.time.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter a time.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!finalForm.date || !finalForm.date.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a date.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // For ILs and Community Golds, level is required
+    if ((finalForm.leaderboardType === 'individual-level' || finalForm.leaderboardType === 'community-golds') && (!finalForm.level || !finalForm.level.trim())) {
+      toast({
+        title: "Missing Information",
+        description: "Please select a level for Individual Level or Community Gold runs.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // For co-op runs, player2Name is required
+    if (finalForm.runType === 'co-op' && (!finalForm.player2Name || !finalForm.player2Name.trim())) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter the second player's name for co-op runs.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setSavingImportedRun(true);
     try {
       const updateData: Partial<LeaderboardEntry> = {
-        playerName: editingImportedRunForm.playerName,
-        player2Name: editingImportedRunForm.player2Name,
-        category: editingImportedRunForm.category,
-        platform: editingImportedRunForm.platform,
-        runType: editingImportedRunForm.runType,
-        leaderboardType: editingImportedRunForm.leaderboardType,
-        level: editingImportedRunForm.level,
-        time: editingImportedRunForm.time,
-        date: editingImportedRunForm.date,
-        videoUrl: editingImportedRunForm.videoUrl,
-        comment: editingImportedRunForm.comment,
+        playerName: finalForm.playerName.trim(),
+        category: finalForm.category.trim(),
+        platform: finalForm.platform.trim(),
+        runType: finalForm.runType,
+        leaderboardType: finalForm.leaderboardType,
+        time: finalForm.time.trim(),
+        date: finalForm.date.trim(),
       };
 
-      // Remove undefined values
-      Object.keys(updateData).forEach(key => {
-        if (updateData[key as keyof LeaderboardEntry] === undefined) {
-          delete updateData[key as keyof LeaderboardEntry];
-        }
-      });
+      // Add optional fields only if they have values
+      if (finalForm.player2Name && finalForm.player2Name.trim()) {
+        updateData.player2Name = finalForm.player2Name.trim();
+      } else if (finalForm.runType === 'co-op') {
+        // For co-op, ensure player2Name is set (shouldn't reach here due to validation)
+        updateData.player2Name = finalForm.player2Name?.trim() || '';
+      }
+      
+      if (finalForm.level && finalForm.level.trim()) {
+        updateData.level = finalForm.level.trim();
+      }
+      
+      if (finalForm.videoUrl && finalForm.videoUrl.trim()) {
+        updateData.videoUrl = finalForm.videoUrl.trim();
+      }
+      
+      if (finalForm.comment && finalForm.comment.trim()) {
+        updateData.comment = finalForm.comment.trim();
+      }
 
       const success = await updateLeaderboardEntry(editingImportedRun.id, updateData);
       if (success) {
         toast({
           title: "Run Updated",
-          description: "The run has been updated successfully.",
+          description: "The run has been updated successfully. You can now verify it from the Unverified Runs tab.",
         });
         setEditingImportedRun(null);
         setEditingImportedRunForm({});
+        setSrcRunData(null);
         // Refresh all run lists
         await refreshAllRunData();
       } else {
@@ -926,7 +1043,7 @@ const Admin = () => {
           title: "Category Deleted",
           description: "Category has been removed.",
         });
-        await fetchCategories();
+        await fetchCategories(categoryLeaderboardType);
       } else {
         throw new Error("Failed to delete category. It may not exist or you may not have permission.");
       }
@@ -944,7 +1061,7 @@ const Admin = () => {
     try {
       const success = await moveCategoryUp(categoryId);
       if (success) {
-        await fetchCategories();
+        await fetchCategories(categoryLeaderboardType);
       } else {
         toast({
           title: "Cannot Move",
@@ -968,7 +1085,7 @@ const Admin = () => {
     try {
       const success = await moveCategoryDown(categoryId);
       if (success) {
-        await fetchCategories();
+        await fetchCategories(categoryLeaderboardType);
       } else {
         toast({
           title: "Cannot Move",
@@ -2000,57 +2117,6 @@ const Admin = () => {
 
         {/* Unverified Runs Section */}
           <TabsContent value="runs" className="space-y-4 animate-fade-in">
-            {/* Import from Speedrun.com Card */}
-            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
-              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-                <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
-                  <Upload className="h-5 w-5" />
-                  <span>Import from Speedrun.com</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="space-y-4">
-                  <p className="text-[hsl(222,15%,60%)]">
-                    Import runs from speedrun.com that aren't on the leaderboards. 
-                    Runs will be added as unverified and can be edited, verified, or rejected.
-                  </p>
-                  <Button
-                    onClick={handleImportFromSRC}
-                    disabled={importingRuns}
-                    className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
-                  >
-                    {importingRuns ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        Importing...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Import Runs
-                      </>
-                    )}
-                  </Button>
-                  {importingRuns && importProgress.total > 0 && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm text-[hsl(222,15%,60%)]">
-                        <span>Progress: {importProgress.imported + importProgress.skipped} / {importProgress.total}</span>
-                        <span>Imported: {importProgress.imported} | Skipped: {importProgress.skipped}</span>
-                      </div>
-                      <div className="w-full bg-[hsl(235,19%,13%)] rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] h-2 rounded-full transition-all duration-300"
-                          style={{
-                            width: `${((importProgress.imported + importProgress.skipped) / importProgress.total) * 100}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Regular Unverified Runs */}
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
@@ -2142,13 +2208,13 @@ const Admin = () => {
           </CardContent>
         </Card>
 
-            {/* Imported Runs from Speedrun.com */}
+            {/* Import Runs from SRC */}
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
-                    <Star className="h-5 w-5" />
-                    <span>Imported Runs from Speedrun.com</span>
+                    <Upload className="h-5 w-5" />
+                    <span>Import Runs from Speedrun.com</span>
                   </CardTitle>
                   {importedSRCRuns.filter(r => !r.verified).length > 0 && (
                     <Button
@@ -2173,7 +2239,49 @@ const Admin = () => {
                   )}
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-6">
+                {/* Import Section */}
+                <div className="space-y-4 pb-6 border-b border-[hsl(235,13%,30%)]">
+                  <p className="text-[hsl(222,15%,60%)]">
+                    Import runs from speedrun.com that aren't on the leaderboards. 
+                    Runs will be added as unverified and can be edited or rejected.
+                  </p>
+                  <Button
+                    onClick={handleImportFromSRC}
+                    disabled={importingRuns}
+                    className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                  >
+                    {importingRuns ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Import Runs
+                      </>
+                    )}
+                  </Button>
+                  {importingRuns && importProgress.total > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm text-[hsl(222,15%,60%)]">
+                        <span>Progress: {importProgress.imported + importProgress.skipped} / {importProgress.total}</span>
+                        <span>Imported: {importProgress.imported} | Skipped: {importProgress.skipped}</span>
+                      </div>
+                      <div className="w-full bg-[hsl(235,19%,13%)] rounded-full h-2">
+                        <div
+                          className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] h-2 rounded-full transition-all duration-300"
+                          style={{
+                            width: `${((importProgress.imported + importProgress.skipped) / importProgress.total) * 100}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Imported Runs List */}
                 {(() => {
                   // Filter unverified imported runs
                   let unverifiedImported = importedSRCRuns.filter(r => r.verified !== true);
@@ -2411,18 +2519,26 @@ const Admin = () => {
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
-                                onClick={() => setEditingImportedRun(run)}
+                                onClick={() => {
+                                  setEditingImportedRun(run);
+                                  setEditingImportedRunForm({
+                                    playerName: run.playerName,
+                                    player2Name: run.player2Name,
+                                    category: run.category,
+                                    platform: run.platform,
+                                    level: run.level,
+                                    runType: run.runType,
+                                    leaderboardType: run.leaderboardType,
+                                    time: run.time,
+                                    date: run.date,
+                                    videoUrl: run.videoUrl,
+                                    comment: run.comment,
+                                  });
+                                  setSrcRunData(null); // Reset SRC data when opening edit
+                                }}
                                 className="text-blue-500 hover:bg-blue-900/20 transition-all duration-300 hover:scale-110 hover:shadow-md"
                               >
                                 <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => handleVerify(run.id)}
-                                className="text-green-500 hover:bg-green-900/20 transition-all duration-300 hover:scale-110 hover:shadow-md"
-                              >
-                                <CheckCircle className="h-4 w-4" />
                               </Button>
                               <Button 
                                 variant="ghost" 
@@ -3036,51 +3152,75 @@ const Admin = () => {
                 )}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="edit-playerName">Player Name</Label>
+                    <Label htmlFor="edit-playerName">Player Name <span className="text-red-500">*</span></Label>
                     <Input
                       id="edit-playerName"
-                      value={editingImportedRunForm.playerName ?? editingImportedRun.playerName}
+                      value={editingImportedRunForm.playerName ?? editingImportedRun.playerName ?? ""}
                       onChange={(e) => setEditingImportedRunForm({ ...editingImportedRunForm, playerName: e.target.value })}
                       className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                      placeholder="Enter player name"
                     />
+                    {(!editingImportedRunForm.playerName && !editingImportedRun.playerName) && (
+                      <p className="text-xs text-red-400 mt-1">Player name is required</p>
+                    )}
                   </div>
                   <div>
-                    <Label htmlFor="edit-player2Name">Player 2 Name (Co-op)</Label>
+                    <Label htmlFor="edit-player2Name">
+                      Player 2 Name (Co-op) 
+                      {(editingImportedRunForm.runType ?? editingImportedRun.runType) === 'co-op' && (
+                        <span className="text-red-500"> *</span>
+                      )}
+                    </Label>
                     <Input
                       id="edit-player2Name"
                       value={editingImportedRunForm.player2Name ?? editingImportedRun.player2Name ?? ""}
                       onChange={(e) => setEditingImportedRunForm({ ...editingImportedRunForm, player2Name: e.target.value || undefined })}
                       className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                      placeholder="Enter second player name"
+                      disabled={(editingImportedRunForm.runType ?? editingImportedRun.runType) !== 'co-op'}
                     />
+                    {(editingImportedRunForm.runType ?? editingImportedRun.runType) === 'co-op' && (!editingImportedRunForm.player2Name && !editingImportedRun.player2Name) && (
+                      <p className="text-xs text-red-400 mt-1">Player 2 name is required for co-op runs</p>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="edit-category">Category</Label>
+                    <Label htmlFor="edit-category">Category <span className="text-red-500">*</span></Label>
                     <Select
-                      value={editingImportedRunForm.category ?? editingImportedRun.category}
+                      value={editingImportedRunForm.category ?? editingImportedRun.category ?? ""}
                       onValueChange={(value) => setEditingImportedRunForm({ ...editingImportedRunForm, category: value })}
                     >
                       <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                        <SelectValue />
+                        <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
                       <SelectContent>
-                        {firestoreCategories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
+                        {firestoreCategories
+                          .filter(cat => {
+                            // Filter categories by leaderboard type
+                            const runLeaderboardType = editingImportedRunForm.leaderboardType ?? editingImportedRun.leaderboardType ?? 'regular';
+                            const catType = cat.leaderboardType || 'regular';
+                            return catType === runLeaderboardType;
+                          })
+                          .map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
+                    {(!editingImportedRunForm.category && !editingImportedRun.category) && (
+                      <p className="text-xs text-red-400 mt-1">Category is required</p>
+                    )}
                   </div>
                   <div>
-                    <Label htmlFor="edit-platform">Platform</Label>
+                    <Label htmlFor="edit-platform">Platform <span className="text-red-500">*</span></Label>
                     <Select
-                      value={editingImportedRunForm.platform ?? editingImportedRun.platform}
+                      value={editingImportedRunForm.platform ?? editingImportedRun.platform ?? ""}
                       onValueChange={(value) => setEditingImportedRunForm({ ...editingImportedRunForm, platform: value })}
                     >
                       <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                        <SelectValue />
+                        <SelectValue placeholder="Select a platform" />
                       </SelectTrigger>
                       <SelectContent>
                         {firestorePlatforms.map((platform) => (
@@ -3090,44 +3230,61 @@ const Admin = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    {(!editingImportedRunForm.platform && !editingImportedRun.platform) && (
+                      <p className="text-xs text-red-400 mt-1">Platform is required</p>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="edit-runType">Run Type</Label>
+                    <Label htmlFor="edit-runType">Run Type <span className="text-red-500">*</span></Label>
                     <Select
-                      value={editingImportedRunForm.runType ?? editingImportedRun.runType}
-                      onValueChange={(value) => setEditingImportedRunForm({ ...editingImportedRunForm, runType: value as 'solo' | 'co-op' })}
+                      value={editingImportedRunForm.runType ?? editingImportedRun.runType ?? ""}
+                      onValueChange={(value) => {
+                        const newRunType = value as 'solo' | 'co-op';
+                        setEditingImportedRunForm({ 
+                          ...editingImportedRunForm, 
+                          runType: newRunType,
+                          // Clear player2Name if switching to solo
+                          player2Name: newRunType === 'solo' ? undefined : editingImportedRunForm.player2Name
+                        });
+                      }}
                     >
                       <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                        <SelectValue />
+                        <SelectValue placeholder="Select run type" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="solo">Solo</SelectItem>
                         <SelectItem value="co-op">Co-op</SelectItem>
                       </SelectContent>
                     </Select>
+                    {(!editingImportedRunForm.runType && !editingImportedRun.runType) && (
+                      <p className="text-xs text-red-400 mt-1">Run type is required</p>
+                    )}
                   </div>
                   <div>
-                    <Label htmlFor="edit-time">Time (HH:MM:SS)</Label>
+                    <Label htmlFor="edit-time">Time (HH:MM:SS) <span className="text-red-500">*</span></Label>
                     <Input
                       id="edit-time"
-                      value={editingImportedRunForm.time ?? editingImportedRun.time}
+                      value={editingImportedRunForm.time ?? editingImportedRun.time ?? ""}
                       onChange={(e) => setEditingImportedRunForm({ ...editingImportedRunForm, time: e.target.value })}
                       className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                       placeholder="00:00:00"
                     />
+                    {(!editingImportedRunForm.time && !editingImportedRun.time) && (
+                      <p className="text-xs text-red-400 mt-1">Time is required</p>
+                    )}
                   </div>
                 </div>
                 {(editingImportedRun.leaderboardType === 'individual-level' || editingImportedRun.leaderboardType === 'community-golds') && (
                   <div>
-                    <Label htmlFor="edit-level">Level</Label>
+                    <Label htmlFor="edit-level">Level <span className="text-red-500">*</span></Label>
                     <Select
                       value={editingImportedRunForm.level ?? editingImportedRun.level ?? ""}
                       onValueChange={(value) => setEditingImportedRunForm({ ...editingImportedRunForm, level: value })}
                     >
                       <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                        <SelectValue />
+                        <SelectValue placeholder="Select a level" />
                       </SelectTrigger>
                       <SelectContent>
                         {availableLevels.map((level) => (
@@ -3137,17 +3294,23 @@ const Admin = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    {(!editingImportedRunForm.level && !editingImportedRun.level) && (
+                      <p className="text-xs text-red-400 mt-1">Level is required for {editingImportedRun.leaderboardType === 'individual-level' ? 'Individual Level' : 'Community Gold'} runs</p>
+                    )}
                   </div>
                 )}
                 <div>
-                  <Label htmlFor="edit-date">Date</Label>
+                  <Label htmlFor="edit-date">Date <span className="text-red-500">*</span></Label>
                   <Input
                     id="edit-date"
                     type="date"
-                    value={editingImportedRunForm.date ?? editingImportedRun.date}
+                    value={editingImportedRunForm.date ?? editingImportedRun.date ?? ""}
                     onChange={(e) => setEditingImportedRunForm({ ...editingImportedRunForm, date: e.target.value })}
                     className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                   />
+                  {(!editingImportedRunForm.date && !editingImportedRun.date) && (
+                    <p className="text-xs text-red-400 mt-1">Date is required</p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="edit-videoUrl">Video URL</Label>
@@ -3205,10 +3368,10 @@ const Admin = () => {
           </CardHeader>
           <CardContent className="p-4">
             <Tabs value={categoryLeaderboardType} onValueChange={(value) => {
-              setCategoryLeaderboardType(value as 'regular' | 'individual-level');
-              fetchCategories(value as 'regular' | 'individual-level');
+              setCategoryLeaderboardType(value as 'regular' | 'individual-level' | 'community-golds');
+              fetchCategories(value as 'regular' | 'individual-level' | 'community-golds');
             }}>
-              <TabsList className="grid w-full grid-cols-2 rounded-lg p-0.5 gap-1 mb-4">
+              <TabsList className="grid w-full grid-cols-3 rounded-lg p-0.5 gap-1 mb-4">
                 <TabsTrigger 
                   value="regular" 
                   className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-2 px-3 text-sm"
@@ -3222,6 +3385,13 @@ const Admin = () => {
                 >
                   <Star className="h-4 w-4 mr-2" />
                   Individual Level
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="community-golds" 
+                  className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-2 px-3 text-sm"
+                >
+                  <Gem className="h-4 w-4 mr-2" />
+                  Community Golds
                 </TabsTrigger>
               </TabsList>
 
