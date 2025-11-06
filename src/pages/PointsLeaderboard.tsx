@@ -96,7 +96,7 @@ const PointsLeaderboard = () => {
             </h1>
           </div>
           <p className="text-base text-ctp-subtext1 max-w-3xl mx-auto animate-fade-in-delay">
-            Top players ranked by their total points. Points are awarded for all verified runs (Full Game, Individual Levels, and Community Golds) across all platforms and categories. Each verified run earns 10 base points, with bonus points for top 3 rankings: 60 points for 1st place, 40 points for 2nd place, and 30 points for 3rd place.
+            Top players ranked by their total points. Points are awarded for all verified runs (Full Game, Individual Levels, and Community Golds) across all platforms and categories. Solo runs: 10 base points + top 3 bonus (60 for 1st, 40 for 2nd, 30 for 3rd). Co-op runs: Points are split equally between both players (5 base + top 3 bonus: 30 for 1st, 20 for 2nd, 15 for 3rd per player).
           </p>
         </div>
 

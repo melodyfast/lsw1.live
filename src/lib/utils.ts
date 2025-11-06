@@ -97,11 +97,18 @@ export function formatTime(timeString: string): string {
  * - Base points: 10 points for all verified runs
  * - Top 3 bonus: additional bonus points for runs ranked 1st, 2nd, or 3rd
  * 
- * Formula:
+ * Solo runs:
  * - Rank 1: 10 + 50 = 60 points
  * - Rank 2: 10 + 30 = 40 points
  * - Rank 3: 10 + 20 = 30 points
  * - All others: 10 points
+ * 
+ * Co-op runs:
+ * - Points are split equally between both players
+ * - Rank 1: (10 + 50) / 2 = 30 points per player
+ * - Rank 2: (10 + 30) / 2 = 20 points per player
+ * - Rank 3: (10 + 20) / 2 = 15 points per player
+ * - All others: 10 / 2 = 5 points per player
  * 
  * @param timeString - Time string in HH:MM:SS format (not used but kept for compatibility)
  * @param categoryName - Name of the category (not used but kept for compatibility)
@@ -109,7 +116,8 @@ export function formatTime(timeString: string): string {
  * @param categoryId - Optional category ID (not used but kept for compatibility)
  * @param platformId - Optional platform ID (not used but kept for compatibility)
  * @param rank - Optional rank of the run in its category (1-3 for bonus points)
- * @returns Points awarded for the run
+ * @param runType - Optional run type ('solo' or 'co-op'). If 'co-op', points are split in half
+ * @returns Points awarded for the run (already split for co-op runs)
  */
 export function calculatePoints(
   timeString: string, 
@@ -117,7 +125,8 @@ export function calculatePoints(
   platformName?: string,
   categoryId?: string,
   platformId?: string,
-  rank?: number
+  rank?: number,
+  runType?: 'solo' | 'co-op'
 ): number {
   // Base points for all verified runs
   const basePoints = 10;
@@ -149,6 +158,11 @@ export function calculatePoints(
     } else if (numericRank === 3) {
       points += 20; // 3rd place bonus
     }
+  }
+
+  // For co-op runs, split points equally between both players
+  if (runType === 'co-op') {
+    points = points / 2;
   }
 
   return Math.round(points);

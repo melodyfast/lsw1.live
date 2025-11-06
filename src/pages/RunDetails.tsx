@@ -357,7 +357,7 @@ const RunDetails = () => {
       
       // Obsolete runs get base points (10) but no rank bonus
 
-      // Calculate points using stored rank
+      // Calculate points using stored rank (split for co-op runs)
       const category = categories.find((c) => c.id === run.category);
       const platform = platforms.find((p) => p.id === run.platform);
       
@@ -367,13 +367,14 @@ const RunDetails = () => {
         platform?.name || "Unknown",
         run.category,
         run.platform,
-        run.rank
+        run.rank,
+        run.runType as 'solo' | 'co-op' | undefined
       );
       setDisplayPoints(calculated);
     };
     
     calculateDisplayPoints();
-  }, [run?.points, run?.verified, run?.isObsolete, run?.rank, run?.time, run?.category, run?.platform, categories, platforms]);
+  }, [run?.points, run?.verified, run?.isObsolete, run?.rank, run?.time, run?.category, run?.platform, run?.runType, categories, platforms]);
 
   if (loading) {
     return (
@@ -773,6 +774,9 @@ const RunDetails = () => {
                         +{finalDisplayPoints.toLocaleString()}
                       </span>
                       <span className="text-muted-foreground text-sm">points</span>
+                      {run.runType === 'co-op' && (
+                        <span className="text-muted-foreground text-xs">(split between both players)</span>
+                      )}
                     </div>
                   </div>
                 )}

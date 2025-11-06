@@ -952,6 +952,31 @@ export const updateLeaderboardEntryFirestore = async (runId: string, data: Parti
   }
 };
 
+// Helper function to create player document for player2
+async function createPlayerDocumentForPlayer2(name: string, uid: string, joinDate: string): Promise<void> {
+  if (!db) return;
+  const newPlayerData: Omit<Player, 'id'> = {
+    uid: uid,
+    displayName: name,
+    email: "",
+    joinDate: joinDate,
+    totalRuns: 0,
+    bestRank: null,
+    favoriteCategory: null,
+    favoritePlatform: null,
+    nameColor: "#cba6f7",
+    isAdmin: false,
+    totalPoints: 0,
+  };
+  
+  try {
+    await createPlayerFirestore(newPlayerData);
+  } catch (createError) {
+    console.error("Error creating player2 document:", createError);
+    throw createError; // Re-throw so caller can handle
+  }
+}
+
 export const updateRunVerificationStatusFirestore = async (runId: string, verified: boolean, verifiedBy?: string): Promise<boolean> => {
   if (!db) return false;
   try {
@@ -1019,14 +1044,15 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
         }
       }
       
-      // Calculate points with rank
+      // Calculate points with rank (split for co-op runs)
       const points = calculatePoints(
         runData.time, 
         categoryName, 
         platformName,
         runData.category,
         runData.platform,
-        rank
+        rank,
+        runData.runType as 'solo' | 'co-op' | undefined
       );
       
       // Update the document with calculated points and rank
@@ -1049,8 +1075,62 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
         if (runData.runType === 'co-op' && runData.player2Name) {
           try {
             const player2NameTrimmed = runData.player2Name.trim();
-            const player2 = await getPlayerByDisplayNameFirestore(player2NameTrimmed);
-            if (player2) {
+            let player2 = await getPlayerByDisplayNameFirestore(player2NameTrimmed);
+            
+            // If player2 doesn't have a player document, check if they have player1 runs to get their UID
+            if (!player2) {
+              const player1Query = query(
+                collection(db, "leaderboardEntries"),
+                where("playerName", "==", player2NameTrimmed),
+                where("verified", "==", true),
+                firestoreLimit(1)
+              );
+              const player1Snapshot = await getDocs(player1Query);
+              if (!player1Snapshot.empty) {
+                const firstRun = player1Snapshot.docs[0].data() as LeaderboardEntry;
+                if (firstRun.playerId && !firstRun.playerId.startsWith("unlinked_")) {
+                  // Player2 has player1 runs - recalculate their points using that UID
+                  await recalculatePlayerPointsFirestore(firstRun.playerId);
+                } else {
+                  // Player2 has player1 runs but with unlinked UID - create proper player document
+                  const nameHash = player2NameTrimmed.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                  const generatedUid = `player_${nameHash}`;
+                  await createPlayerDocumentForPlayer2(player2NameTrimmed, generatedUid, firstRun.date);
+                  await recalculatePlayerPointsFirestore(generatedUid);
+                }
+              } else {
+                // Player2 has no player document and no player1 runs - create one
+                // Generate a consistent UID based on their name
+                const nameHash = player2NameTrimmed.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                const generatedUid = `player_${nameHash}`;
+                
+                // Find their earliest co-op run date for joinDate
+                const coOpQuery = query(
+                  collection(db, "leaderboardEntries"),
+                  where("verified", "==", true),
+                  where("runType", "==", "co-op"),
+                  where("player2Name", "==", player2NameTrimmed),
+                  orderBy("date", "asc"),
+                  firestoreLimit(1)
+                );
+                let joinDate = new Date().toISOString().split('T')[0];
+                try {
+                  const coOpSnapshot = await getDocs(coOpQuery);
+                  if (!coOpSnapshot.empty) {
+                    const firstCoOpRun = coOpSnapshot.docs[0].data() as LeaderboardEntry;
+                    if (firstCoOpRun.date) {
+                      joinDate = firstCoOpRun.date;
+                    }
+                  }
+                } catch (error) {
+                  // If orderBy fails, use current date
+                }
+                
+                await createPlayerDocumentForPlayer2(player2NameTrimmed, generatedUid, joinDate);
+                await recalculatePlayerPointsFirestore(generatedUid);
+              }
+            } else {
+              // Player2 has a document - recalculate their points
               await recalculatePlayerPointsFirestore(player2.uid);
             }
           } catch (error) {
@@ -1149,8 +1229,60 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
     
     // Also check for co-op runs where this player is player2 (all leaderboard types)
     let player2Runs: LeaderboardEntry[] = [];
+    let playerDisplayName: string | null = null;
+    
+    // Try to get player document to find displayName
     const player = await getPlayerByUidFirestore(playerId);
     if (player?.displayName) {
+      playerDisplayName = player.displayName;
+    } else {
+      // If player doesn't exist yet, try to find their displayName from player1 runs
+      if (querySnapshot.docs.length > 0) {
+        const firstRun = querySnapshot.docs[0].data() as LeaderboardEntry;
+        if (firstRun.playerName) {
+          playerDisplayName = firstRun.playerName;
+        }
+      }
+      
+      // If still no displayName, try to find it from player2 runs
+      // This handles cases where a player only has co-op runs as player2
+      if (!playerDisplayName) {
+        // Search all co-op runs and find ones where this playerId might be player2
+        // We'll need to check player2Name matches - but we don't know the name yet
+        // So we'll search broadly and filter later
+        const coOpQuery = query(
+          collection(db, "leaderboardEntries"),
+          where("verified", "==", true),
+          where("runType", "==", "co-op"),
+          firestoreLimit(500)
+        );
+        const coOpSnapshot = await getDocs(coOpQuery);
+        const allCoOpRuns = coOpSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
+        
+        // Try to find a pattern - if playerId starts with "player_", extract the name
+        // Otherwise, we'll need to search by trying to match playerId with player2Name
+        // For now, let's try to get displayName from any co-op run where player2Name might match
+        // Actually, this is tricky - we need the name to search, but we're trying to find the name
+        
+        // Alternative: if playerId format suggests it's a generated UID, extract name from it
+        if (playerId.startsWith("player_")) {
+          const nameFromUid = playerId.replace("player_", "").replace(/_/g, " ");
+          // Try to find a co-op run with a player2Name that matches this pattern
+          for (const run of allCoOpRuns) {
+            if (run.player2Name) {
+              const normalizedRunName = run.player2Name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+              if (normalizedRunName === nameFromUid.replace(/ /g, '_')) {
+                playerDisplayName = run.player2Name;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // If we have a displayName, search for co-op runs where this player is player2
+    if (playerDisplayName) {
       const coOpQuery = query(
         collection(db, "leaderboardEntries"),
         where("verified", "==", true),
@@ -1161,8 +1293,20 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
       player2Runs = coOpSnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
         .filter(entry => 
-          entry.player2Name?.trim().toLowerCase() === player.displayName.trim().toLowerCase()
+          entry.player2Name?.trim().toLowerCase() === playerDisplayName!.trim().toLowerCase()
         );
+    } else {
+      // Last resort: search all co-op runs and try to find any where player2Name might match
+      // This is a fallback for edge cases
+      const coOpQuery = query(
+        collection(db, "leaderboardEntries"),
+        where("verified", "==", true),
+        where("runType", "==", "co-op"),
+        firestoreLimit(500)
+      );
+      const coOpSnapshot = await getDocs(coOpQuery);
+      // For now, we'll skip player2 runs if we can't determine the displayName
+      // The backfill function will handle creating player documents for player2s
     }
     
     // Get all categories and platforms for lookup
@@ -1304,18 +1448,22 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
         }
       }
       
+      // Calculate points (already split for co-op runs)
       const points = calculatePoints(
         runData.time, 
         categoryName, 
         platformName,
         runData.category,
         runData.platform,
-        numericRank
+        numericRank,
+        runData.runType as 'solo' | 'co-op' | undefined
       );
       
       // Always update the run with recalculated points and rank
       runsToUpdate.push({ id: runData.id, points, rank: numericRank });
       
+      // For co-op runs, points are already split, so each player gets the calculated points
+      // For solo runs, player gets full points
       totalPoints += points;
     }
     
@@ -1365,13 +1513,33 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
       }
     } else {
       // Create player document if it doesn't exist
-      // Get player info from first run if available
+      // Get player info from first run if available (try player1 runs first, then player2 runs)
       const firstRun = querySnapshot.docs[0]?.data() as LeaderboardEntry | undefined;
+      const firstPlayer2Run = player2Runs[0];
+      
+      // Determine displayName - use playerName from player1 runs, or player2Name from player2 runs
+      let displayName = "Unknown Player";
+      if (firstRun?.playerName) {
+        displayName = firstRun.playerName;
+      } else if (firstPlayer2Run?.player2Name) {
+        displayName = firstPlayer2Run.player2Name;
+      } else if (player?.displayName) {
+        displayName = player.displayName;
+      }
+      
+      // Determine joinDate - use date from first available run
+      let joinDate = new Date().toISOString().split('T')[0];
+      if (firstRun?.date) {
+        joinDate = firstRun.date;
+      } else if (firstPlayer2Run?.date) {
+        joinDate = firstPlayer2Run.date;
+      }
+      
       const playerData: Omit<Player, 'id'> = {
         uid: playerId,
-        displayName: firstRun?.playerName || "Unknown Player",
+        displayName: displayName,
         email: "",
-        joinDate: firstRun?.date || new Date().toISOString().split('T')[0],
+        joinDate: joinDate,
         totalRuns: totalVerifiedRuns,
         bestRank: null,
         favoriteCategory: null,
@@ -2222,7 +2390,70 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
 
       // Track player IDs for later recalculation (both solo and co-op runs)
       playerIdsSet.add(runData.playerId);
-      // For co-op runs, we'll batch lookup player2s later
+      
+      // For co-op runs, also track player2 if they have a name
+      // We'll need to look up their UID by displayName later
+      if (runData.runType === 'co-op' && runData.player2Name) {
+        // Store player2Name for batch lookup later
+        // We'll add their UID to playerIdsSet after looking them up
+      }
+    }
+    
+    // Batch lookup player2 UIDs for co-op runs
+    // Collect all unique player2 names from co-op runs
+    const player2Names = new Set<string>();
+    for (const runData of allRuns) {
+      if (runData.runType === 'co-op' && runData.player2Name) {
+        player2Names.add(runData.player2Name.trim());
+      }
+    }
+    
+    // Look up UIDs for all player2 names
+    // Also create player documents for player2s who don't have one yet
+    const player2NameToUidMap = new Map<string, string>();
+    
+    for (const player2Name of player2Names) {
+      try {
+        const player2 = await getPlayerByDisplayNameFirestore(player2Name);
+        if (player2?.uid) {
+          playerIdsSet.add(player2.uid);
+          player2NameToUidMap.set(player2Name, player2.uid);
+        } else {
+          // Player2 doesn't have a player document yet
+          // Check if they have any runs as player1 to get their UID
+          const player1Query = query(
+            collection(db, "leaderboardEntries"),
+            where("playerName", "==", player2Name),
+            where("verified", "==", true),
+            firestoreLimit(1)
+          );
+          const player1Snapshot = await getDocs(player1Query);
+          if (!player1Snapshot.empty) {
+            const firstRun = player1Snapshot.docs[0].data() as LeaderboardEntry;
+            if (firstRun.playerId && !firstRun.playerId.startsWith("unlinked_")) {
+              playerIdsSet.add(firstRun.playerId);
+              player2NameToUidMap.set(player2Name, firstRun.playerId);
+            } else {
+              // They have player1 runs but with unlinked UID - create a proper player document
+              // Generate a consistent UID based on their name (for unlinked players)
+              const nameHash = player2Name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+              const generatedUid = `player_${nameHash}`;
+              playerIdsSet.add(generatedUid);
+              player2NameToUidMap.set(player2Name, generatedUid);
+            }
+          } else {
+            // Player2 has no player1 runs - they only exist as player2 in co-op runs
+            // Generate a consistent UID based on their name so we can create their player document
+            const nameHash = player2Name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            const generatedUid = `player_${nameHash}`;
+            playerIdsSet.add(generatedUid);
+            player2NameToUidMap.set(player2Name, generatedUid);
+          }
+        }
+      } catch (error) {
+        // If lookup fails, continue - we'll try to create player document during recalculation
+        result.errors.push(`Error looking up player2 "${player2Name}": ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
 
     // Calculate ranks for each group and assign points
@@ -2301,13 +2532,15 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
             const categoryName = categoryMap.get(runData.category) || "Unknown";
             const platformName = platformMap.get(runData.platform) || "Unknown";
             
+            // Calculate points (already split for co-op runs)
             const points = calculatePoints(
               runData.time, 
               categoryName, 
               platformName,
               runData.category,
               runData.platform,
-              rank
+              rank,
+              runData.runType as 'solo' | 'co-op' | undefined
             );
             
             runsToUpdate.push({
