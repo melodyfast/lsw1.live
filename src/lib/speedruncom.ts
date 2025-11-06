@@ -265,37 +265,77 @@ export async function fetchPlatforms(): Promise<SRCPlatform[]> {
 
 /**
  * Get player name from embedded player data
+ * Handles various SRC API response structures
  */
 function getPlayerName(player: SRCRun['players'][0]): string {
-  // Check if player has embedded data
+  if (!player) return "Unknown";
+  
+  // First check embedded data (most reliable)
   if (player.data?.names?.international) {
-    return player.data.names.international;
+    return player.data.names.international.trim();
   }
-  // Fall back to name field
+  
+  // Check for direct name field (guest runs)
   if (player.name) {
-    return player.name;
+    return String(player.name).trim();
   }
+  
+  // Last resort
   return "Unknown";
 }
 
 /**
  * Extract ID from embedded resource or string
+ * Handles various SRC API response structures
  */
-function extractId(value: string | { data: { id: string } } | undefined): string {
+function extractId(value: string | { data: { id: string } } | { data: Array<{ id: string }> } | undefined): string {
   if (!value) return "";
-  if (typeof value === "string") return value;
-  if (value.data?.id) return value.data.id;
+  if (typeof value === "string") return value.trim();
+  
+  // Handle single embedded object
+  if (value.data && !Array.isArray(value.data) && value.data.id) {
+    return String(value.data.id).trim();
+  }
+  
+  // Handle array of embedded objects (unlikely but possible)
+  if (Array.isArray(value.data) && value.data.length > 0 && value.data[0]?.id) {
+    return String(value.data[0].id).trim();
+  }
+  
   return "";
 }
 
 /**
- * Extract name from embedded resource (for category, platform, etc.)
+ * Extract name from embedded resource (for category, platform, level, etc.)
+ * Handles various SRC API response structures
  */
-function extractName(value: string | { data: { name?: string; names?: { international?: string } } } | undefined): string {
+function extractName(value: string | { data: { name?: string; names?: { international?: string } } } | { data: Array<{ name?: string; names?: { international?: string } }> } | undefined): string {
   if (!value) return "";
-  if (typeof value === "string") return value;
-  if (value.data?.name) return value.data.name;
-  if (value.data?.names?.international) return value.data.names.international;
+  if (typeof value === "string") return value.trim();
+  
+  // Handle single embedded object
+  if (value.data && !Array.isArray(value.data)) {
+    // Try name field first
+    if (value.data.name) {
+      return String(value.data.name).trim();
+    }
+    // Try names.international
+    if (value.data.names?.international) {
+      return String(value.data.names.international).trim();
+    }
+  }
+  
+  // Handle array of embedded objects
+  if (Array.isArray(value.data) && value.data.length > 0) {
+    const first = value.data[0];
+    if (first.name) {
+      return String(first.name).trim();
+    }
+    if (first.names?.international) {
+      return String(first.names.international).trim();
+    }
+  }
+  
   return "";
 }
 
@@ -344,9 +384,8 @@ export function mapSRCRunToLeaderboardEntry(
   if (!ourCategoryId && srcCategoryName && categoryNameMapping) {
     ourCategoryId = categoryNameMapping.get(srcCategoryName.toLowerCase());
   }
-  if (!ourCategoryId) {
-    ourCategoryId = srcCategoryId; // Fallback to SRC ID if no mapping
-  }
+  // Store SRC category name as fallback if mapping fails
+  const finalCategoryName = srcCategoryName || (ourCategoryId ? undefined : srcCategoryId);
   
   // Map platform - handle both string ID and embedded object
   const srcPlatformId = extractId(run.system?.platform);
@@ -356,13 +395,26 @@ export function mapSRCRunToLeaderboardEntry(
   if (!ourPlatformId && srcPlatformName && platformNameMapping) {
     ourPlatformId = platformNameMapping.get(srcPlatformName.toLowerCase());
   }
-  if (!ourPlatformId) {
-    ourPlatformId = srcPlatformId; // Fallback to SRC ID if no mapping
-  }
+  // Store SRC platform name as fallback if mapping fails
+  const finalPlatformName = srcPlatformName || (ourPlatformId ? undefined : srcPlatformId);
   
   // Map level - handle both string ID and embedded object
   const srcLevelId = extractId(run.level);
-  const ourLevelId = srcLevelId ? (levelMapping.get(srcLevelId) || srcLevelId) : undefined;
+  const srcLevelName = extractName(run.level);
+  let ourLevelId = srcLevelId ? levelMapping.get(srcLevelId) : undefined;
+  // Store SRC level name as fallback if mapping fails
+  const finalLevelName = srcLevelName || (ourLevelId ? undefined : srcLevelId);
+  
+  // Use mapped IDs or fallback to SRC IDs
+  if (!ourCategoryId) {
+    ourCategoryId = srcCategoryId; // Fallback to SRC ID if no mapping
+  }
+  if (!ourPlatformId) {
+    ourPlatformId = srcPlatformId; // Fallback to SRC ID if no mapping
+  }
+  if (srcLevelId && !ourLevelId) {
+    ourLevelId = srcLevelId; // Fallback to SRC ID if no mapping
+  }
   
   // Ensure category and platform are strings (normalize to empty string if null/undefined)
   ourCategoryId = ourCategoryId ? String(ourCategoryId).trim() : '';
@@ -402,7 +454,6 @@ export function mapSRCRunToLeaderboardEntry(
     leaderboardType = 'regular';
   }
   
-  console.log(`Run ${run.id}: categoryType=${categoryType}, hasLevel=${hasLevel}, leaderboardType=${leaderboardType}`);
   
   // Convert time
   const time = run.times.primary ? isoDurationToTime(run.times.primary) : 
@@ -430,6 +481,10 @@ export function mapSRCRunToLeaderboardEntry(
     verified: false, // Imported runs start as unverified
     importedFromSRC: true,
     srcRunId: run.id,
+    // Store SRC names as fallback for display when ID mapping fails
+    srcCategoryName: finalCategoryName || undefined,
+    srcPlatformName: finalPlatformName || undefined,
+    srcLevelName: finalLevelName || undefined,
   };
 }
 

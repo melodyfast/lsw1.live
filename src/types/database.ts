@@ -21,6 +21,10 @@ export interface LeaderboardEntry {
   points?: number; // Points awarded for this run
   importedFromSRC?: boolean; // Whether this run was imported from speedrun.com
   srcRunId?: string; // Speedrun.com run ID for reference
+  // Fallback data from SRC for display when ID mapping fails
+  srcCategoryName?: string; // Original category name from SRC
+  srcPlatformName?: string; // Original platform name from SRC
+  srcLevelName?: string; // Original level name from SRC
 }
 
 export interface Player {

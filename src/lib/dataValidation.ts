@@ -115,41 +115,68 @@ export function normalizeLeaderboardEntry(entry: Partial<LeaderboardEntry>): Par
 
 /**
  * Get category name from ID, with fallback
+ * For imported runs, uses srcCategoryName if ID lookup fails
  */
 export function getCategoryName(
   categoryId: string | undefined | null,
-  categories: Array<{ id: string; name: string }>
+  categories: Array<{ id: string; name: string }>,
+  srcCategoryName?: string | null
 ): string {
   const normalizedId = normalizeCategoryId(categoryId);
-  if (!normalizedId) return "Unknown Category";
+  if (!normalizedId) {
+    // If we have a SRC category name, use it
+    if (srcCategoryName) return String(srcCategoryName);
+    return "Unknown Category";
+  }
   const category = categories.find(c => c.id === normalizedId);
-  return category?.name || normalizedId;
+  if (category) return category.name;
+  // If ID lookup failed but we have SRC name, use it
+  if (srcCategoryName) return String(srcCategoryName);
+  return normalizedId;
 }
 
 /**
  * Get platform name from ID, with fallback
+ * For imported runs, uses srcPlatformName if ID lookup fails
  */
 export function getPlatformName(
   platformId: string | undefined | null,
-  platforms: Array<{ id: string; name: string }>
+  platforms: Array<{ id: string; name: string }>,
+  srcPlatformName?: string | null
 ): string {
   const normalizedId = normalizePlatformId(platformId);
-  if (!normalizedId) return "Unknown Platform";
+  if (!normalizedId) {
+    // If we have a SRC platform name, use it
+    if (srcPlatformName) return String(srcPlatformName);
+    return "Unknown Platform";
+  }
   const platform = platforms.find(p => p.id === normalizedId);
-  return platform?.name || normalizedId;
+  if (platform) return platform.name;
+  // If ID lookup failed but we have SRC name, use it
+  if (srcPlatformName) return String(srcPlatformName);
+  return normalizedId;
 }
 
 /**
  * Get level name from ID, with fallback
+ * For imported runs, uses srcLevelName if ID lookup fails
  */
 export function getLevelName(
   levelId: string | undefined | null,
-  levels: Array<{ id: string; name: string }>
+  levels: Array<{ id: string; name: string }>,
+  srcLevelName?: string | null
 ): string {
   const normalizedId = normalizeLevelId(levelId);
-  if (!normalizedId) return "Unknown Level";
+  if (!normalizedId) {
+    // If we have a SRC level name, use it
+    if (srcLevelName) return String(srcLevelName);
+    return "Unknown Level";
+  }
   const level = levels.find(l => l.id === normalizedId);
-  return level?.name || normalizedId;
+  if (level) return level.name;
+  // If ID lookup failed but we have SRC name, use it
+  if (srcLevelName) return String(srcLevelName);
+  return normalizedId || "Unknown Level";
 }
 
 /**

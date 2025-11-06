@@ -279,7 +279,6 @@ const Admin = () => {
         getDownloadEntries(),
         getCategoriesFromFirestore('regular')
       ]);
-      console.log(`fetchAllData: Loaded ${importedData.length} imported runs`);
       setUnverifiedRuns(unverifiedData.filter(run => !run.importedFromSRC));
       setImportedSRCRuns(importedData);
       setDownloadEntries(downloadData);
@@ -2420,72 +2419,38 @@ const Admin = () => {
               </CardHeader>
               <CardContent>
                 {(() => {
-                  console.log(`Rendering imported runs card. Total in state: ${importedSRCRuns.length}`);
-                  
                   // Filter unverified imported runs
                   let unverifiedImported = importedSRCRuns.filter(r => r.verified !== true);
-                  console.log(`Unverified imported runs: ${unverifiedImported.length}`);
                   
                   // Apply leaderboardType filter
                   unverifiedImported = unverifiedImported.filter(run => {
                     const runLeaderboardType = run.leaderboardType || 'regular';
-                    const matches = runLeaderboardType === importedRunsLeaderboardType;
-                    if (!matches) {
-                      console.log(`Run ${run.id} filtered out by leaderboardType: ${runLeaderboardType} !== ${importedRunsLeaderboardType}`);
-                    }
-                    return matches;
+                    return runLeaderboardType === importedRunsLeaderboardType;
                   });
-                  console.log(`After leaderboardType filter: ${unverifiedImported.length}`);
                   
                   // Apply category filter (only if a category is selected)
                   if (importedRunsCategory && importedRunsCategory !== '__all__') {
                     unverifiedImported = unverifiedImported.filter(run => {
                       const runCategory = normalizeCategoryId(run.category);
-                      const matches = runCategory === importedRunsCategory;
-                      if (!matches) {
-                        console.log(`Run ${run.id} filtered out by category: ${runCategory} !== ${importedRunsCategory}`);
-                      }
-                      return matches;
+                      return runCategory === importedRunsCategory;
                     });
-                    console.log(`After category filter: ${unverifiedImported.length}`);
                   }
                   
                   // Apply platform filter (only if a platform is selected)
                   if (importedRunsPlatform && importedRunsPlatform !== '__all__') {
                     unverifiedImported = unverifiedImported.filter(run => {
                       const runPlatform = normalizePlatformId(run.platform);
-                      const matches = runPlatform === importedRunsPlatform;
-                      if (!matches) {
-                        console.log(`Run ${run.id} filtered out by platform: ${runPlatform} !== ${importedRunsPlatform}`);
-                      }
-                      return matches;
+                      return runPlatform === importedRunsPlatform;
                     });
-                    console.log(`After platform filter: ${unverifiedImported.length}`);
                   }
                   
                   // Apply level filter for ILs (only if a level is selected)
                   if (importedRunsLeaderboardType === 'individual-level' && importedRunsLevel && importedRunsLevel !== '__all__') {
                     unverifiedImported = unverifiedImported.filter(run => {
                       const runLevel = normalizeLevelId(run.level);
-                      const matches = runLevel === importedRunsLevel;
-                      if (!matches) {
-                        console.log(`Run ${run.id} filtered out by level: ${runLevel} !== ${importedRunsLevel}`);
-                      }
-                      return matches;
+                      return runLevel === importedRunsLevel;
                     });
-                    console.log(`After level filter: ${unverifiedImported.length}`);
                   }
-                  
-                  console.log(`Final filtered count: ${unverifiedImported.length}`);
-                  console.log(`Sample runs:`, unverifiedImported.slice(0, 3).map(r => ({
-                    id: r.id,
-                    playerName: r.playerName,
-                    category: r.category,
-                    platform: r.platform,
-                    leaderboardType: r.leaderboardType,
-                    verified: r.verified,
-                    importedFromSRC: r.importedFromSRC
-                  })));
                   
                   // Calculate counts for tabs (before category/platform/level filters)
                   const baseUnverified = importedSRCRuns.filter(r => r.verified !== true);
@@ -2498,7 +2463,6 @@ const Admin = () => {
                       <Tabs 
                         value={importedRunsLeaderboardType} 
                         onValueChange={(value) => {
-                          console.log(`Tab changed to: ${value}`);
                           setImportedRunsLeaderboardType(value as 'regular' | 'individual-level');
                         }} 
                         className="mb-6"
@@ -2656,16 +2620,16 @@ const Admin = () => {
                               </div>
                             </TableCell>
                             <TableCell className="py-3 px-4">{
-                              getCategoryName(run.category, [...importedRunsCategories, ...firestoreCategories])
+                              getCategoryName(run.category, [...importedRunsCategories, ...firestoreCategories], run.srcCategoryName)
                             }</TableCell>
                             {importedRunsLeaderboardType === 'individual-level' && (
                               <TableCell className="py-3 px-4">{
-                                getLevelName(run.level, availableLevels)
+                                getLevelName(run.level, availableLevels, run.srcLevelName)
                               }</TableCell>
                             )}
                             <TableCell className="py-3 px-4 font-mono">{formatTime(run.time || '00:00:00')}</TableCell>
                             <TableCell className="py-3 px-4">{
-                              getPlatformName(run.platform, firestorePlatforms)
+                              getPlatformName(run.platform, firestorePlatforms, run.srcPlatformName)
                             }</TableCell>
                             <TableCell className="py-3 px-4">{run.runType.charAt(0).toUpperCase() + run.runType.slice(1)}</TableCell>
                             <TableCell className="py-3 px-4">

@@ -40,7 +40,10 @@ export function LeaderboardTable({ data, platforms = [], categories = [] }: Lead
           {data.map((entry, index) => {
             // Normalize platform ID to string for lookup
             const platformId = String(entry.platform || '');
-            const platformName = platforms.find(p => String(p.id) === platformId)?.name || platformId;
+            // Use mapped platform name, or SRC fallback name, or platform ID
+            const platformName = platforms.find(p => String(p.id) === platformId)?.name 
+              || entry.srcPlatformName 
+              || platformId;
             
             return (
             <TableRow 
