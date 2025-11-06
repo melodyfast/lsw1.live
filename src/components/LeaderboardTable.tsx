@@ -77,11 +77,8 @@ export function LeaderboardTable({ data, platforms = [], categories = [] }: Lead
               <TableCell className="py-2 sm:py-3 px-2 sm:px-4 min-w-[200px] sm:min-w-[280px]">
                 <div className="flex flex-wrap items-center gap-x-1 sm:gap-x-2 gap-y-1">
                 {(() => {
-                  // Check if run is unclaimed
-                  const isUnclaimed = !entry.playerId || 
-                                     entry.playerId === "imported" || 
-                                     entry.playerId.startsWith("unlinked_") ||
-                                     entry.playerId.startsWith("unclaimed_");
+                  // Check if run is unclaimed - simply check if playerId is empty/null
+                  const isUnclaimed = !entry.playerId || entry.playerId.trim() === "";
                   
                   if (isUnclaimed) {
                     // For unclaimed runs, show name without link and add "Unclaimed" badge

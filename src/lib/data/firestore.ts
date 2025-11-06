@@ -320,11 +320,8 @@ export const getLeaderboardEntriesFirestore = async (
 
     // Enrich entries with player data and mark unclaimed runs
     const enrichedEntries = entries.map(entry => {
-      // Check if run is unclaimed (consistent check throughout codebase)
-      const isUnclaimed = !entry.playerId || 
-                         entry.playerId === "imported" || 
-                         entry.playerId.startsWith("unlinked_") ||
-                         entry.playerId.startsWith("unclaimed_");
+      // Check if run is unclaimed - simply check if playerId is empty/null
+      const isUnclaimed = !entry.playerId || entry.playerId.trim() === "";
       
       // Only enrich player data for claimed runs
       if (!isUnclaimed) {
@@ -513,69 +510,7 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
 export const getPlayerByUidFirestore = async (uid: string): Promise<Player | null> => {
   if (!db) return null;
   try {
-    // Check if this is a temporary profile for an unclaimed player
-    if (uid.startsWith("unclaimed_")) {
-      // Extract the normalized player name from the temporary UID
-      const nameHash = uid.replace("unclaimed_", "");
-      
-      // Try to find runs for this player by querying unclaimed runs
-      const unclaimedRunsQuery = query(
-        collection(db, "leaderboardEntries"),
-        where("verified", "==", true),
-        where("playerId", "==", "imported"),
-        firestoreLimit(500)
-      );
-      
-      const unclaimedSnapshot = await getDocs(unclaimedRunsQuery);
-      const matchingRuns = unclaimedSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
-        .filter(run => {
-          const runNameHash = (run.playerName || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
-          return runNameHash === nameHash;
-        });
-      
-      if (matchingRuns.length === 0) return null;
-      
-      // Create temporary profile from matching runs
-      const categories = await getCategoriesFirestore();
-      const platforms = await getPlatformsFirestore();
-      let totalPoints = 0;
-      let earliestDate = matchingRuns[0].date || new Date().toISOString().split('T')[0];
-      
-      for (const run of matchingRuns) {
-        const category = categories.find(c => c.id === run.category);
-        const platform = platforms.find(p => p.id === run.platform);
-        totalPoints += calculatePoints(
-          run.time,
-          category?.name || run.category || "",
-          platform?.name || run.platform || "",
-          run.category,
-          run.platform,
-          run.rank,
-          run.runType
-        );
-        if (run.date && run.date < earliestDate) {
-          earliestDate = run.date;
-        }
-      }
-      
-      return {
-        id: uid,
-        uid: uid,
-        displayName: matchingRuns[0].playerName || "Unknown Player",
-        email: "",
-        joinDate: earliestDate,
-        totalRuns: matchingRuns.length,
-        bestRank: null,
-        favoriteCategory: null,
-        favoritePlatform: null,
-        nameColor: "#cba6f7",
-        isAdmin: false,
-        totalPoints: totalPoints,
-      };
-    }
-    
-    // Regular player lookup
+    // No temporary profiles - only return real player documents
     const playerDocRef = doc(db, "players", uid);
     const playerDocSnap = await getDoc(playerDocRef);
     if (playerDocSnap.exists()) {
@@ -737,11 +672,8 @@ export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUse
       // Skip if already claimed by this user
       if (currentPlayerId === userId) return false;
       
-      // Only claim if unclaimed (imported, unlinked_*, unclaimed_*, or empty)
-      return !currentPlayerId || 
-             currentPlayerId === "imported" || 
-             currentPlayerId.startsWith("unlinked_") ||
-             currentPlayerId.startsWith("unclaimed_");
+      // Only claim if unclaimed (empty/null playerId)
+      return !currentPlayerId || currentPlayerId.trim() === "";
     });
     
     if (runsToClaim.length === 0) {
@@ -845,19 +777,18 @@ export const autoLinkRunsByDisplayNameFirestore = async (userId: string, display
                      (runPlayer2Name && runPlayer2Name === normalizedDisplayName);
       
       // Only link if the run isn't already linked to this user or another user
-      // Allow linking even if it's currently "imported" or starts with "unlinked_"
       if (!matches) return false;
       
       const currentPlayerId = run.playerId || "";
       // Skip if already linked to this user
       if (currentPlayerId === userId) return false;
       
-      // Allow linking if unclaimed (imported, unlinked_*, or empty)
-      if (!currentPlayerId || currentPlayerId === "imported" || currentPlayerId.startsWith("unlinked_")) {
+      // Allow linking if unclaimed (empty/null playerId)
+      if (!currentPlayerId || currentPlayerId.trim() === "") {
         return true;
       }
       
-      // Don't link if already linked to another real user (unless it's a temporary profile)
+      // Don't link if already linked to another real user
       return false;
     });
     
@@ -1113,86 +1044,65 @@ export const getPlayerRunsFirestore = async (playerId: string): Promise<Leaderbo
     let entries: LeaderboardEntry[] = [];
     let playerDisplayName: string | null = null;
     
-    // Check if this is a temporary profile for an unclaimed player
-    if (playerId.startsWith("unclaimed_")) {
-      // Extract the normalized player name from the temporary UID
-      const nameHash = playerId.replace("unclaimed_", "");
+    // Get player document to find display name
+    const player = await getPlayerByUidFirestore(playerId);
+    if (!player) {
+      // No player found - return empty (no temporary profiles)
+      return [];
+    }
+    
+    if (player.displayName) {
+      playerDisplayName = player.displayName.trim();
+    }
+    
+    // Fetch runs by playerId
+    const q = query(
+      collection(db, "leaderboardEntries"),
+      where("playerId", "==", playerId),
+      where("verified", "==", true),
+      firestoreLimit(200)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    entries = querySnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
+      .filter(entry => !entry.isObsolete);
+    
+    // Also find runs by display name matching (case-insensitive)
+    // This handles cases where runs haven't been auto-linked yet
+    if (playerDisplayName) {
+      const normalizedDisplayName = playerDisplayName.toLowerCase();
       
-      // Query for unclaimed runs (playerId = "imported") and filter by player name
-      const unclaimedRunsQuery = query(
+      // Get all verified runs and filter by display name match
+      const allVerifiedQuery = query(
         collection(db, "leaderboardEntries"),
         where("verified", "==", true),
-        where("playerId", "==", "imported"),
-        firestoreLimit(500)
+        firestoreLimit(1000)
       );
+      const allVerifiedSnapshot = await getDocs(allVerifiedQuery);
       
-      const unclaimedSnapshot = await getDocs(unclaimedRunsQuery);
-      entries = unclaimedSnapshot.docs
+      const runsByDisplayName = allVerifiedSnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
         .filter(run => {
-          const runNameHash = (run.playerName || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
-          return runNameHash === nameHash && !run.isObsolete;
+          if (run.isObsolete) return false;
+          
+          const runPlayerName = (run.playerName || "").trim().toLowerCase();
+          const runPlayer2Name = (run.player2Name || "").trim().toLowerCase();
+          
+          // Match if playerName matches (case-insensitive)
+          const nameMatches = runPlayerName === normalizedDisplayName ||
+                             (runPlayer2Name && runPlayer2Name === normalizedDisplayName);
+          if (!nameMatches) return false;
+          
+          // Include if unclaimed (empty/null playerId) or already linked to this player
+          const currentPlayerId = run.playerId || "";
+          return !currentPlayerId || currentPlayerId === playerId;
         });
-    } else {
-      // Regular player - get player document to find display name
-      const player = await getPlayerByUidFirestore(playerId);
-      if (player?.displayName) {
-        playerDisplayName = player.displayName.trim();
-      }
       
-      // Fetch runs by playerId
-      const q = query(
-        collection(db, "leaderboardEntries"),
-        where("playerId", "==", playerId),
-        where("verified", "==", true),
-        firestoreLimit(200)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      entries = querySnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
-        .filter(entry => !entry.isObsolete);
-      
-      // Also find runs by display name matching (case-insensitive)
-      // This handles cases where runs haven't been auto-linked yet
-      if (playerDisplayName) {
-        const normalizedDisplayName = playerDisplayName.toLowerCase();
-        
-        // Get all verified runs and filter by display name match
-        const allVerifiedQuery = query(
-          collection(db, "leaderboardEntries"),
-          where("verified", "==", true),
-          firestoreLimit(1000)
-        );
-        const allVerifiedSnapshot = await getDocs(allVerifiedQuery);
-        
-        const runsByDisplayName = allVerifiedSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
-          .filter(run => {
-            if (run.isObsolete) return false;
-            
-            const runPlayerName = (run.playerName || "").trim().toLowerCase();
-            const runPlayer2Name = (run.player2Name || "").trim().toLowerCase();
-            
-            // Match if playerName matches (case-insensitive)
-            const nameMatches = runPlayerName === normalizedDisplayName ||
-                               (runPlayer2Name && runPlayer2Name === normalizedDisplayName);
-            if (!nameMatches) return false;
-            
-            // Include if unclaimed or already linked to this player
-            const currentPlayerId = run.playerId || "";
-            return !currentPlayerId || 
-                   currentPlayerId === playerId || 
-                   currentPlayerId === "imported" || 
-                   currentPlayerId.startsWith("unlinked_") ||
-                   currentPlayerId.startsWith("unclaimed_");
-          });
-        
-        // Add runs by display name (avoid duplicates)
-        const entryIds = new Set(entries.map(e => e.id));
-        const additionalRuns = runsByDisplayName.filter(r => !entryIds.has(r.id));
-        entries = [...entries, ...additionalRuns];
-      }
+      // Add runs by display name (avoid duplicates)
+      const entryIds = new Set(entries.map(e => e.id));
+      const additionalRuns = runsByDisplayName.filter(r => !entryIds.has(r.id));
+      entries = [...entries, ...additionalRuns];
     }
 
     if (entries.length === 0) {
@@ -1266,14 +1176,14 @@ export const getPlayerRunsFirestore = async (playerId: string): Promise<Leaderbo
     }
 
     // Enrich with player display name and color
-    const player = await getPlayerByUidFirestore(playerId);
+    const playerData = await getPlayerByUidFirestore(playerId);
     return entries.map(entry => {
-      if (player) {
-        if (player.displayName) {
-          entry.playerName = player.displayName;
+      if (playerData) {
+        if (playerData.displayName) {
+          entry.playerName = playerData.displayName;
         }
-        if (player.nameColor) {
-          entry.nameColor = player.nameColor;
+        if (playerData.nameColor) {
+          entry.nameColor = playerData.nameColor;
         }
       }
       
@@ -2077,7 +1987,8 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
  * Updates playerName, nameColor, player2Name, and player2Color from player documents
  */
 async function enrichEntryWithPlayerData(entry: LeaderboardEntry, playerMap?: Map<string, Player>): Promise<LeaderboardEntry> {
-  const isUnclaimed = entry.playerId === "imported" || entry.importedFromSRC === true;
+  // Check if run is unclaimed - simply check if playerId is empty/null
+  const isUnclaimed = !entry.playerId || entry.playerId.trim() === "";
   
   // Only enrich player data for claimed runs
   if (!isUnclaimed && entry.playerId) {
@@ -2255,6 +2166,7 @@ export const deleteAllLeaderboardEntriesFirestore = async (): Promise<{ deleted:
     let hasMore = true;
     let batchCount = 0;
     const batchSize = 500;
+    const MAX_BATCH_SIZE = 500; // Firestore batch limit
     
     while (hasMore) {
       const q = query(collection(db, "leaderboardEntries"), firestoreLimit(batchSize));
@@ -2265,18 +2177,43 @@ export const deleteAllLeaderboardEntriesFirestore = async (): Promise<{ deleted:
         break;
       }
       
-      const deletePromises = querySnapshot.docs.map(async (docSnapshot) => {
-        try {
-          await deleteDoc(docSnapshot.ref);
-          return true;
-        } catch (error) {
-          result.errors.push(`Failed to delete ${docSnapshot.id}: ${error instanceof Error ? error.message : String(error)}`);
-          return false;
-        }
-      });
+      // Use batch deletes for efficiency and to avoid permission issues
+      let batch = writeBatch(db);
+      let batchDeleteCount = 0;
       
-      const deleteResults = await Promise.all(deletePromises);
-      result.deleted += deleteResults.filter(r => r).length;
+      for (const docSnapshot of querySnapshot.docs) {
+        if (batchDeleteCount < MAX_BATCH_SIZE) {
+          batch.delete(docSnapshot.ref);
+          batchDeleteCount++;
+        }
+        
+        // Commit batch if it reaches the limit
+        if (batchDeleteCount >= MAX_BATCH_SIZE) {
+          try {
+            await batch.commit();
+            result.deleted += batchDeleteCount;
+            batchDeleteCount = 0;
+            batch = writeBatch(db); // Create new batch for remaining deletes
+          } catch (batchError: any) {
+            const errorMsg = batchError instanceof Error ? batchError.message : String(batchError);
+            result.errors.push(`Failed to delete batch: ${errorMsg}`);
+            // Continue with next batch
+            batchDeleteCount = 0;
+            batch = writeBatch(db);
+          }
+        }
+      }
+      
+      // Commit remaining deletes in the batch
+      if (batchDeleteCount > 0) {
+        try {
+          await batch.commit();
+          result.deleted += batchDeleteCount;
+        } catch (batchError: any) {
+          const errorMsg = batchError instanceof Error ? batchError.message : String(batchError);
+          result.errors.push(`Failed to delete final batch: ${errorMsg}`);
+        }
+      }
       
       if (querySnapshot.docs.length < batchSize) {
         hasMore = false;
@@ -2925,13 +2862,9 @@ export const getUnassignedRunsFirestore = async (limit: number = 500): Promise<L
     
     // Filter for unassigned runs (only verified runs)
     const unassignedRuns = verifiedRuns.filter(run => {
-      // Check if unassigned
+      // Check if unassigned - simply check if playerId is empty/null
       const playerId = run.playerId || "";
-      // Unassigned if: empty, "imported", starts with "unlinked_", or starts with "unclaimed_"
-      return !playerId || 
-             playerId === "imported" || 
-             playerId.startsWith("unlinked_") ||
-             playerId.startsWith("unclaimed_");
+      return !playerId || playerId.trim() === "";
     });
     
     return unassignedRuns;
@@ -2991,11 +2924,8 @@ export const getUnclaimedRunsBySRCUsernameFirestore = async (srcUsername: string
           const playerId = run.playerId || "";
           if (currentUserId && playerId === currentUserId) return false;
           
-          // Only return unassigned runs
-          return !playerId || 
-                 playerId === "imported" || 
-                 playerId.startsWith("unlinked_") ||
-                 playerId.startsWith("unclaimed_");
+          // Only return unassigned runs (empty/null playerId)
+          return !playerId || playerId.trim() === "";
         }
         
         return false;
@@ -3046,10 +2976,7 @@ export const getUnclaimedRunsByUsernameFirestore = async (username: string, curr
         
         // Check if run is truly unclaimed (not already assigned to any user)
         const playerId = entry.playerId || "";
-        const isUnclaimed = !playerId || 
-                           playerId === "imported" || 
-                           playerId.startsWith("unlinked_") ||
-                           playerId.startsWith("unclaimed_");
+        const isUnclaimed = !playerId || playerId.trim() === "";
         
         // Only return unclaimed runs (exclude runs already claimed by any user, including current user)
         return isUnclaimed;
@@ -3093,11 +3020,8 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
     const normalizedRunSRCPlayerName = (runData.srcPlayerName || "").trim().toLowerCase();
     const normalizedRunSRCPlayer2Name = (runData.srcPlayer2Name || "").trim().toLowerCase();
     
-    // Check if run is unclaimed (consistent check)
-    const isUnclaimed = !runData.playerId || 
-                       runData.playerId === "imported" || 
-                       runData.playerId.startsWith("unlinked_") ||
-                       runData.playerId.startsWith("unclaimed_");
+    // Check if run is unclaimed - simply check if playerId is empty/null
+    const isUnclaimed = !runData.playerId || runData.playerId.trim() === "";
     
     // Must be unclaimed to claim
     if (!isUnclaimed) {
@@ -3192,26 +3116,20 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
     const playerIds: string[] = [];
     
     // Always add the claiming user (run is now verified and assigned)
-    if (userId && userId !== "imported" && !userId.startsWith("unlinked_") && !userId.startsWith("unclaimed_")) {
+    if (userId && userId.trim() !== "") {
       playerIds.push(userId);
     }
     
     // For co-op runs, also add player2 if they're different
-    if (isCoOp && updateData.player2Id && updateData.player2Id !== userId && 
-        updateData.player2Id !== "imported" && 
-        !updateData.player2Id.startsWith("unlinked_") && 
-        !updateData.player2Id.startsWith("unclaimed_")) {
+    if (isCoOp && updateData.player2Id && updateData.player2Id !== userId && updateData.player2Id.trim() !== "") {
       playerIds.push(updateData.player2Id);
     }
     
     // Add old player(s) if they had accounts (for points recalculation)
-    if (oldPlayerId && oldPlayerId !== userId && oldPlayerId !== "imported" && !oldPlayerId.startsWith("unlinked_") && !oldPlayerId.startsWith("unclaimed_")) {
+    if (oldPlayerId && oldPlayerId !== userId && oldPlayerId.trim() !== "") {
       playerIds.push(oldPlayerId);
     }
-    if (oldPlayer2Id && oldPlayer2Id !== userId && oldPlayer2Id !== updateData.player2Id && 
-        oldPlayer2Id !== "imported" && 
-        !oldPlayer2Id.startsWith("unlinked_") && 
-        !oldPlayer2Id.startsWith("unclaimed_")) {
+    if (oldPlayer2Id && oldPlayer2Id !== userId && oldPlayer2Id !== updateData.player2Id && oldPlayer2Id.trim() !== "") {
       playerIds.push(oldPlayer2Id);
     }
     
@@ -3265,12 +3183,9 @@ export const getPlayersByPointsFirestore = async (limit: number = 100): Promise<
       for (const player of combinedPlayers) {
         if (!player.uid) continue; // Skip players without UID
         
-        // Skip players with "Unknown" name or unclaimed/temporary UIDs
+        // Skip players with "Unknown" name (no temporary UIDs to filter anymore)
         const displayNameLower = player.displayName?.toLowerCase().trim() || "";
-        if (displayNameLower === "unknown" || 
-            player.uid.startsWith("unclaimed_") || 
-            player.uid.startsWith("unlinked_") ||
-            player.uid === "imported") {
+        if (displayNameLower === "unknown") {
           continue;
         }
         

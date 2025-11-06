@@ -29,10 +29,8 @@ const PlayerDetails = () => {
     const fetchPlayerData = async () => {
       if (!playerId) return;
       
-      // Prevent accessing unclaimed player profiles
-      if (playerId === "imported" || 
-          playerId.startsWith("unlinked_") || 
-          playerId.startsWith("unclaimed_")) {
+      // Prevent accessing unclaimed player profiles (empty/null playerId)
+      if (!playerId || playerId.trim() === "") {
         setPlayer(null);
         setPlayerRuns([]);
         setLoading(false);
@@ -49,10 +47,7 @@ const PlayerDetails = () => {
         ]);
         
         // Double-check: if player is still unclaimed, don't show profile
-        if (!fetchedPlayer || 
-            fetchedPlayer.uid === "imported" || 
-            fetchedPlayer.uid.startsWith("unlinked_") || 
-            fetchedPlayer.uid.startsWith("unclaimed_")) {
+        if (!fetchedPlayer || !fetchedPlayer.uid || fetchedPlayer.uid.trim() === "") {
           setPlayer(null);
           setPlayerRuns([]);
           setLoading(false);

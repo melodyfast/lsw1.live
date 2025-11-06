@@ -574,7 +574,7 @@ export async function mapSRCRunToLeaderboardEntry(
   categoryMapping: Map<string, string>,
   platformMapping: Map<string, string>,
   levelMapping: Map<string, string>,
-  defaultPlayerId: string = "imported",
+  defaultPlayerId: string = "",
   categoryNameMapping?: Map<string, string>,
   platformNameMapping?: Map<string, string>,
   srcPlatformIdToName?: Map<string, string>,

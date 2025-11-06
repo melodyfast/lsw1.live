@@ -1895,17 +1895,14 @@ const Admin = () => {
         }
       }
       
-      // If player still not found, use a generated ID based on player name
+      // If player still not found, use empty string for unclaimed runs
       // This ensures runs for non-existent players don't get assigned to admin's account
       if (!playerId) {
-        // Generate a unique ID based on player name that won't conflict with real UIDs
-        // Real Firebase UIDs are 28 characters, so we'll use a different format
-        const nameHash = manualRun.playerName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-        playerId = `unlinked_${nameHash}_${Date.now()}`;
+        playerId = ""; // Empty string indicates unclaimed run
         
         toast({
           title: "Player Not Found",
-          description: `Player "${manualRun.playerName}" does not have an account. Run will be submitted but won't be linked to any player profile.`,
+          description: `Player "${manualRun.playerName}" does not have an account. Run will be submitted but won't be linked to any player profile until claimed.`,
           variant: "default",
         });
       }
