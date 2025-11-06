@@ -1058,7 +1058,7 @@ export const getRecentRunsFirestore = async (limitCount: number = 10): Promise<L
         }
       }
       
-        if (entry.player2Name && entry.runType === 'co-op') {
+      if (entry.player2Name && entry.runType === 'co-op') {
         const player2 = playerMap.get(entry.player2Name.trim().toLowerCase());
         if (player2) {
           entry.player2Name = player2.displayName || entry.player2Name;
@@ -1236,17 +1236,16 @@ export const getPlayerRunsFirestore = async (playerId: string): Promise<Leaderbo
       rankMap.set(comboKey, comboRankMap);
     }
 
-    // Enrich with player display name and color, and assign ranks
+    // Enrich with player display name and color
     const player = await getPlayerByUidFirestore(playerId);
     return entries.map(entry => {
       if (player) {
-        // Use displayName from player document if available
         if (player.displayName) {
           entry.playerName = player.displayName;
         }
         if (player.nameColor) {
-        entry.nameColor = player.nameColor;
-      }
+          entry.nameColor = player.nameColor;
+        }
       }
       
       // Assign rank based on the combination
@@ -1297,7 +1296,6 @@ export const getPlayerPendingRunsFirestore = async (playerId: string): Promise<L
     const player = await getPlayerByUidFirestore(playerId);
     return entries.map(entry => {
       if (player) {
-        // Use displayName from player document if available
         if (player.displayName) {
           entry.playerName = player.displayName;
         }
@@ -1325,34 +1323,7 @@ export const getUnverifiedLeaderboardEntriesFirestore = async (): Promise<Leader
     const entries = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
     
     // Enrich entries with player display names and colors
-    const enrichedEntries = await Promise.all(entries.map(async (entry) => {
-      try {
-        const player = await getPlayerByUidFirestore(entry.playerId);
-        if (player) {
-          // Use displayName from player document if available
-          if (player.displayName) {
-            entry.playerName = player.displayName;
-          }
-          if (player.nameColor) {
-          entry.nameColor = player.nameColor;
-        }
-        }
-        // For co-op runs, also fetch player2 display name and color
-        if (entry.player2Name && entry.runType === 'co-op') {
-          const player2 = await getPlayerByDisplayNameFirestore(entry.player2Name);
-          if (player2) {
-            // Update player2Name to use displayName from player document
-            entry.player2Name = player2.displayName;
-            if (player2.nameColor) {
-            entry.player2Color = player2.nameColor;
-            }
-          }
-        }
-      } catch (error) {
-        // Silent fail - continue without enrichment
-      }
-      return entry;
-    }));
+    const enrichedEntries = await Promise.all(entries.map(entry => enrichEntryWithPlayerData(entry)));
 
     return enrichedEntries;
   } catch (error) {
@@ -1440,32 +1411,11 @@ export const getLeaderboardEntryByIdFirestore = async (runId: string): Promise<L
       
       // Enrich with player display names and colors
       try {
-        const player = await getPlayerByUidFirestore(entry.playerId);
-        if (player) {
-          // Use displayName from player document if available
-          if (player.displayName) {
-            entry.playerName = player.displayName;
-          }
-          if (player.nameColor) {
-          entry.nameColor = player.nameColor;
-        }
-        }
-        // For co-op runs, also fetch player2 display name and color
-        if (entry.player2Name && entry.runType === 'co-op') {
-          const player2 = await getPlayerByDisplayNameFirestore(entry.player2Name);
-          if (player2) {
-            // Update player2Name to use displayName from player document
-            entry.player2Name = player2.displayName;
-            if (player2.nameColor) {
-            entry.player2Color = player2.nameColor;
-            }
-          }
-        }
+        return await enrichEntryWithPlayerData(entry);
       } catch (error) {
         // Silent fail - continue without enrichment
+        return entry;
       }
-      
-      return entry;
     }
     return null;
   } catch (error) {
@@ -1551,21 +1501,11 @@ export const updateLeaderboardEntryFirestore = async (runId: string, data: Parti
       let rank: number | undefined = undefined;
       if (!isObsolete) {
         const calculatedRank = rankMap.get(runId);
-        if (calculatedRank !== undefined) {
-          // Ensure rank is a valid number
-          if (typeof calculatedRank === 'number' && !isNaN(calculatedRank) && calculatedRank > 0) {
-            rank = calculatedRank;
-          } else {
-            const parsed = Number(calculatedRank);
-            if (!isNaN(parsed) && parsed > 0) {
-              rank = parsed;
-            }
-          }
-        }
+        rank = normalizeRank(calculatedRank);
       }
       
       // Store rank in update data (only if rank is 1, 2, or 3 for bonus points)
-      if (rank !== undefined && rank !== null && rank >= 1 && rank <= 3) {
+      if (rank !== undefined) {
         updateData.rank = rank;
       } else {
         updateData.rank = deleteField(); // Remove rank if obsolete, not ranked, or rank > 3
@@ -1578,18 +1518,17 @@ export const updateLeaderboardEntryFirestore = async (runId: string, data: Parti
         platformName,
         newCategoryId,
         newPlatformId,
-        rank
+        rank,
+        (data.runType || runData.runType || 'solo') as 'solo' | 'co-op' | undefined
       );
       updateData.points = points;
       
-      // Recalculate player's total points
-      await recalculatePlayerPointsFirestore(runData.playerId);
-      if (runData.player2Name && runData.runType === 'co-op') {
-        const player2 = await getPlayerByDisplayNameFirestore(runData.player2Name);
-        if (player2) {
-          await recalculatePlayerPointsFirestore(player2.uid);
-        }
+      // Recalculate points for affected players
+      const playerIds: string[] = [];
+      if (runData.playerId && runData.playerId !== "imported" && !runData.playerId.startsWith("unlinked_") && !runData.playerId.startsWith("unclaimed_")) {
+        playerIds.push(runData.playerId);
       }
+      await recalculatePointsForPlayers(playerIds, runData);
     }
     
     await updateDoc(runDocRef, updateData);
@@ -1694,17 +1633,7 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
       let rank: number | undefined = undefined;
       if (!runData.isObsolete) {
         const calculatedRank = rankMap.get(runId);
-        if (calculatedRank !== undefined) {
-          // Ensure rank is a valid number
-          if (typeof calculatedRank === 'number' && !isNaN(calculatedRank) && calculatedRank > 0) {
-            rank = calculatedRank;
-          } else {
-            const parsed = Number(calculatedRank);
-            if (!isNaN(parsed) && parsed > 0) {
-              rank = parsed;
-            }
-          }
-        }
+        rank = normalizeRank(calculatedRank);
       }
       
       // Calculate points with rank (split for co-op runs)
@@ -1721,7 +1650,7 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
       // Update the document with calculated points and rank
       // Only store rank if it's 1, 2, or 3 (for bonus points)
       const updateFields: { points: number; rank?: number | ReturnType<typeof deleteField> } = { points };
-      if (rank !== undefined && rank !== null && rank >= 1 && rank <= 3) {
+      if (rank !== undefined) {
         updateFields.rank = rank;
       } else {
         // Remove rank field if obsolete, not ranked, or rank > 3
@@ -1729,106 +1658,23 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
       }
       await updateDoc(runDocRef, updateFields);
       
-      // Always recalculate player points to ensure accuracy (handles re-verification correctly)
-      // Now that the run is verified, it will be included in the recalculation
-      try {
-        await recalculatePlayerPointsFirestore(runData.playerId);
-        
-        // For co-op runs, also recalculate player2's points
-        if (runData.runType === 'co-op' && runData.player2Name) {
-          try {
-            const player2NameTrimmed = runData.player2Name.trim();
-            let player2 = await getPlayerByDisplayNameFirestore(player2NameTrimmed);
-            
-            // If player2 doesn't have a player document, check if they have player1 runs to get their UID
-            if (!player2) {
-              const player1Query = query(
-                collection(db, "leaderboardEntries"),
-                where("playerName", "==", player2NameTrimmed),
-                where("verified", "==", true),
-                firestoreLimit(1)
-              );
-              const player1Snapshot = await getDocs(player1Query);
-              if (!player1Snapshot.empty) {
-                const firstRun = player1Snapshot.docs[0].data() as LeaderboardEntry;
-                if (firstRun.playerId && !firstRun.playerId.startsWith("unlinked_")) {
-                  // Player2 has player1 runs - recalculate their points using that UID
-                  await recalculatePlayerPointsFirestore(firstRun.playerId);
-                } else {
-                  // Player2 has player1 runs but with unlinked UID - create proper player document
-                  const nameHash = player2NameTrimmed.toLowerCase().replace(/[^a-z0-9]/g, '_');
-                  const generatedUid = `player_${nameHash}`;
-                  await createPlayerDocumentForPlayer2(player2NameTrimmed, generatedUid, firstRun.date);
-                  await recalculatePlayerPointsFirestore(generatedUid);
-                }
-              } else {
-                // Player2 has no player document and no player1 runs - create one
-                // Generate a consistent UID based on their name
-                const nameHash = player2NameTrimmed.toLowerCase().replace(/[^a-z0-9]/g, '_');
-                const generatedUid = `player_${nameHash}`;
-                
-                // Find their earliest co-op run date for joinDate
-                const coOpQuery = query(
-                  collection(db, "leaderboardEntries"),
-                  where("verified", "==", true),
-                  where("runType", "==", "co-op"),
-                  where("player2Name", "==", player2NameTrimmed),
-                  orderBy("date", "asc"),
-                  firestoreLimit(1)
-                );
-                let joinDate = new Date().toISOString().split('T')[0];
-                try {
-                  const coOpSnapshot = await getDocs(coOpQuery);
-                  if (!coOpSnapshot.empty) {
-                    const firstCoOpRun = coOpSnapshot.docs[0].data() as LeaderboardEntry;
-                    if (firstCoOpRun.date) {
-                      joinDate = firstCoOpRun.date;
-                    }
-                  }
-                } catch (error) {
-                  // If orderBy fails, use current date
-                }
-                
-                await createPlayerDocumentForPlayer2(player2NameTrimmed, generatedUid, joinDate);
-                await recalculatePlayerPointsFirestore(generatedUid);
-              }
-            } else {
-              // Player2 has a document - recalculate their points
-              await recalculatePlayerPointsFirestore(player2.uid);
-            }
-          } catch (error) {
-            console.error("Error recalculating player2 points on verify:", error);
-          }
-        }
-      } catch (error) {
-        console.error("Error recalculating player points on verify:", error);
-        // Don't fail verification if points recalculation fails
+      // Recalculate points for affected players
+      const playerIds: string[] = [];
+      if (runData.playerId && runData.playerId !== "imported" && !runData.playerId.startsWith("unlinked_") && !runData.playerId.startsWith("unclaimed_")) {
+        playerIds.push(runData.playerId);
       }
+      await recalculatePointsForPlayers(playerIds, runData);
       
       return true;
     } else if (!verified && runData.verified) {
-      // When unverifying, update the document first, then recalculate points
-      // This ensures the run is marked as unverified before recalculation
-    await updateDoc(runDocRef, updateData);
+      await updateDoc(runDocRef, updateFields);
       
-      // Recalculate points for all affected players
-      // This will subtract the points since the run is no longer verified
-      try {
-        await recalculatePlayerPointsFirestore(runData.playerId);
-        if (runData.runType === 'co-op' && runData.player2Name) {
-          try {
-            const player2NameTrimmed = runData.player2Name.trim();
-            const player2 = await getPlayerByDisplayNameFirestore(player2NameTrimmed);
-            if (player2) {
-              await recalculatePlayerPointsFirestore(player2.uid);
-            }
-          } catch (error) {
-            console.error("Error recalculating player2 points on unverify:", error);
-          }
-        }
-      } catch (error) {
-        console.error("Error recalculating player points on unverify:", error);
+      // Recalculate points for affected players
+      const playerIds: string[] = [];
+      if (runData.playerId && runData.playerId !== "imported" && !runData.playerId.startsWith("unlinked_") && !runData.playerId.startsWith("unclaimed_")) {
+        playerIds.push(runData.playerId);
       }
+      await recalculatePointsForPlayers(playerIds, runData);
     } else {
       // If just changing verified status without recalculation, update the document
       await updateDoc(runDocRef, updateData);
@@ -2037,17 +1883,7 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
         if (!playerRun.isObsolete) {
           // Try to get rank from the calculated rankMap first (most accurate)
           const calculatedRank = rankMap.get(playerRun.id);
-          if (calculatedRank !== undefined) {
-            // Ensure it's a valid number
-            if (typeof calculatedRank === 'number' && !isNaN(calculatedRank) && calculatedRank > 0) {
-              rank = calculatedRank;
-            } else {
-              const parsed = Number(calculatedRank);
-              if (!isNaN(parsed) && parsed > 0) {
-                rank = parsed;
-              }
-            }
-          }
+          rank = normalizeRank(calculatedRank);
           
           // If not in rankMap, calculate rank from the group runs
           // This ensures all runs in the group get ranked correctly
@@ -2064,17 +1900,14 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
             // Find the index (rank) of this run
             const runIndex = nonObsoleteGroupRuns.findIndex(r => r.id === playerRun.id);
             if (runIndex >= 0) {
-              rank = runIndex + 1; // 1-based rank
+              rank = normalizeRank(runIndex + 1); // 1-based rank
             }
           }
           
           // Last resort: check if run already has a stored rank (only if it's 1, 2, or 3)
           // This is a fallback for cases where the run might not be in the current group
-          if (rank === undefined && playerRun.rank !== undefined && playerRun.rank !== null) {
-            const storedRank = typeof playerRun.rank === 'number' ? playerRun.rank : Number(playerRun.rank);
-            if (!isNaN(storedRank) && storedRank >= 1 && storedRank <= 3) {
-              rank = storedRank;
-            }
+          if (rank === undefined) {
+            rank = normalizeRank(playerRun.rank);
           }
         }
         allRunsWithRanks.push({ run: playerRun, rank: rank });
@@ -2090,19 +1923,6 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
       const categoryName = categoryMap.get(runData.category) || "Unknown";
       const platformName = platformMap.get(runData.platform) || "Unknown";
       
-      // Ensure rank is a valid number if provided
-      let numericRank: number | undefined = undefined;
-      if (rank !== undefined && rank !== null) {
-        if (typeof rank === 'number' && !isNaN(rank) && rank > 0) {
-          numericRank = rank;
-        } else {
-          const parsed = Number(rank);
-          if (!isNaN(parsed) && parsed > 0) {
-            numericRank = parsed;
-          }
-        }
-      }
-      
       // Calculate points (already split for co-op runs)
       const points = calculatePoints(
         runData.time, 
@@ -2110,12 +1930,12 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
         platformName,
         runData.category,
         runData.platform,
-        numericRank,
+        rank,
         runData.runType as 'solo' | 'co-op' | undefined
       );
       
       // Always update the run with recalculated points and rank
-      runsToUpdate.push({ id: runData.id, points, rank: numericRank });
+      runsToUpdate.push({ id: runData.id, points, rank: rank });
       
       // For co-op runs, points are already split, so each player gets the calculated points
       // For solo runs, player gets full points
@@ -2133,8 +1953,9 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
         points: run.points 
       };
       // Store rank if it's 1, 2, or 3 (for bonus points), otherwise remove it
-      if (run.rank !== undefined && run.rank !== null && run.rank >= 1 && run.rank <= 3) {
-        updateData.rank = run.rank;
+      const normalizedRank = normalizeRank(run.rank);
+      if (normalizedRank !== undefined) {
+        updateData.rank = normalizedRank;
       } else {
         updateData.rank = deleteField();
       }
@@ -2222,13 +2043,162 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
   }
 };
 
+/**
+ * Helper function to enrich a single entry with player data
+ * Updates playerName, nameColor, player2Name, and player2Color from player documents
+ */
+async function enrichEntryWithPlayerData(entry: LeaderboardEntry, playerMap?: Map<string, Player>): Promise<LeaderboardEntry> {
+  const isUnclaimed = entry.playerId === "imported" || entry.importedFromSRC === true;
+  
+  // Only enrich player data for claimed runs
+  if (!isUnclaimed && entry.playerId) {
+    let player: Player | null = null;
+    
+    // Use provided playerMap if available, otherwise fetch
+    if (playerMap) {
+      player = playerMap.get(entry.playerId) || null;
+    } else {
+      player = await getPlayerByUidFirestore(entry.playerId);
+    }
+    
+    if (player) {
+      if (player.displayName) {
+        entry.playerName = player.displayName;
+      }
+      if (player.nameColor) {
+        entry.nameColor = player.nameColor;
+      }
+    }
+    
+    // For co-op runs, look up player2
+    if (entry.player2Name && entry.runType === 'co-op') {
+      let player2: Player | null = null;
+      
+      if (playerMap) {
+        player2 = playerMap.get(entry.player2Name.trim().toLowerCase()) || null;
+      } else {
+        player2 = await getPlayerByDisplayNameFirestore(entry.player2Name);
+      }
+      
+      if (player2) {
+        entry.player2Name = player2.displayName || entry.player2Name;
+        if (player2.nameColor) {
+          entry.player2Color = player2.nameColor;
+        }
+      }
+    }
+  } else {
+    // For unclaimed imported runs, use SRC player names if available
+    if (entry.srcPlayerName) {
+      entry.playerName = entry.srcPlayerName;
+    }
+    if (entry.srcPlayer2Name && entry.runType === 'co-op') {
+      entry.player2Name = entry.srcPlayer2Name;
+    }
+  }
+  
+  return entry;
+}
+
+/**
+ * Helper function to validate and normalize rank values
+ * Returns a valid number rank (1-3) or undefined
+ */
+function normalizeRank(rank: number | string | undefined | null): number | undefined {
+  if (rank === undefined || rank === null) return undefined;
+  
+  let numericRank: number | undefined = undefined;
+  if (typeof rank === 'number' && !isNaN(rank) && rank > 0) {
+    numericRank = rank;
+  } else {
+    const parsed = Number(rank);
+    if (!isNaN(parsed) && parsed > 0) {
+      numericRank = parsed;
+    }
+  }
+  
+  // Only return ranks 1-3 (for bonus points)
+  if (numericRank !== undefined && numericRank >= 1 && numericRank <= 3 && Number.isInteger(numericRank)) {
+    return numericRank;
+  }
+  
+  return undefined;
+}
+
+/**
+ * Helper function to recalculate points for players affected by run changes
+ * Handles both solo and co-op runs efficiently
+ * @param playerIds - Array of player IDs to recalculate points for
+ * @param runData - Optional run data to extract player2 info for co-op runs
+ */
+async function recalculatePointsForPlayers(
+  playerIds: string[],
+  runData?: LeaderboardEntry
+): Promise<void> {
+  if (!db || playerIds.length === 0) return;
+  
+  // Use Set to deduplicate player IDs
+  const uniquePlayerIds = new Set(playerIds);
+  
+  // Add player2 if it's a co-op run
+  if (runData?.runType === 'co-op' && runData.player2Name) {
+    try {
+      const player2 = await getPlayerByDisplayNameFirestore(runData.player2Name.trim());
+      if (player2?.uid) {
+        uniquePlayerIds.add(player2.uid);
+      }
+    } catch (error) {
+      console.error("Error fetching player2 for points recalculation:", error);
+    }
+  }
+  
+  // Recalculate points for all affected players in parallel (but limit concurrency)
+  const recalculationPromises = Array.from(uniquePlayerIds).map(async (playerId) => {
+    try {
+      await recalculatePlayerPointsFirestore(playerId);
+    } catch (error) {
+      console.error(`Error recalculating points for player ${playerId}:`, error);
+      // Don't throw - continue with other players
+    }
+  });
+  
+  // Wait for all recalculations to complete (with some parallelism)
+  await Promise.all(recalculationPromises);
+}
+
 export const deleteLeaderboardEntryFirestore = async (runId: string): Promise<boolean> => {
   if (!db) return false;
   try {
     const runDocRef = doc(db, "leaderboardEntries", runId);
+    const runDocSnap = await getDoc(runDocRef);
+    
+    if (!runDocSnap.exists()) {
+      return false;
+    }
+    
+    const runData = runDocSnap.data() as LeaderboardEntry;
+    const playerIds: string[] = [];
+    
+    // Collect player IDs that need recalculation
+    if (runData.playerId && runData.verified) {
+      // Only recalculate if run was verified (verified runs count for points)
+      const playerId = runData.playerId;
+      if (playerId && playerId !== "imported" && !playerId.startsWith("unlinked_") && !playerId.startsWith("unclaimed_")) {
+        playerIds.push(playerId);
+      }
+    }
+    
+    // Delete the run
     await deleteDoc(runDocRef);
+    
+    // Recalculate points for affected players
+    if (playerIds.length > 0) {
+      await recalculatePointsForPlayers(playerIds, runData);
+    }
+    
     return true;
   } catch (error) {
+    console.error("Error deleting leaderboard entry:", error);
     return false;
   }
 };
@@ -3056,33 +3026,22 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
     // Update the run with the new playerId
     await updateDoc(runDocRef, { playerId: userId });
     
-    // Recalculate points for the new player (the one claiming the run)
-    // Only recalculate if the run is verified (verified runs count for points)
-    if (runData.verified) {
-      try {
-        await recalculatePlayerPointsFirestore(userId);
-        // For co-op runs, also recalculate player2's points
-        if (runData.runType === 'co-op' && runData.player2Name) {
-          const player2 = await getPlayerByDisplayNameFirestore(runData.player2Name);
-          if (player2) {
-            await recalculatePlayerPointsFirestore(player2.uid);
-          }
-        }
-      } catch (error) {
-        console.error(`Error recalculating points for new player ${userId}:`, error);
-        // Don't fail the claim if points recalculation fails
-      }
+    // Recalculate points for affected players
+    const playerIds: string[] = [];
+    
+    // Add new player (the one claiming the run) if run is verified
+    if (runData.verified && userId && userId !== "imported" && !userId.startsWith("unlinked_") && !userId.startsWith("unclaimed_")) {
+      playerIds.push(userId);
     }
     
-    // Recalculate points for the old player (if they had an account)
-    // This removes the run from their points if they were a linked player
+    // Add old player if they had an account
     if (oldPlayerId && oldPlayerId !== userId && oldPlayerId !== "imported" && !oldPlayerId.startsWith("unlinked_") && !oldPlayerId.startsWith("unclaimed_")) {
-      try {
-        await recalculatePlayerPointsFirestore(oldPlayerId);
-      } catch (error) {
-        console.error(`Error recalculating points for old player ${oldPlayerId}:`, error);
-        // Don't fail the claim if points recalculation fails
-      }
+      playerIds.push(oldPlayerId);
+    }
+    
+    // Recalculate points for all affected players
+    if (playerIds.length > 0) {
+      await recalculatePointsForPlayers(playerIds, runData);
     }
     
     return true;
@@ -3393,20 +3352,12 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
             if (!runData.isObsolete) {
               // First try to get rank from the calculated rankMap
               const calculatedRank = rankMap.get(runData.id);
-              if (calculatedRank !== undefined) {
-                // Ensure rank is a valid number
-                if (typeof calculatedRank === 'number' && !isNaN(calculatedRank) && calculatedRank > 0) {
-                  rank = calculatedRank;
-                } else {
-                  const parsed = Number(calculatedRank);
-                  if (!isNaN(parsed) && parsed > 0) {
-                    rank = parsed;
-                  }
-                }
-              } else {
-                // If run is not in rankMap, it might be beyond the fetch limit
-                // However, if it's in our group, it should be ranked
-                // Recalculate rank by comparing with other runs in the group
+              rank = normalizeRank(calculatedRank);
+              
+              // If run is not in rankMap, it might be beyond the fetch limit
+              // However, if it's in our group, it should be ranked
+              // Recalculate rank by comparing with other runs in the group
+              if (rank === undefined) {
                 // Sort all non-obsolete runs in this group by time
                 const nonObsoleteGroupRuns = runs
                   .filter(r => !r.isObsolete)
@@ -3419,7 +3370,7 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
                 // Find the index (rank) of this run
                 const runIndex = nonObsoleteGroupRuns.findIndex(r => r.id === runData.id);
                 if (runIndex >= 0) {
-                  rank = runIndex + 1; // 1-based rank
+                  rank = normalizeRank(runIndex + 1); // 1-based rank
                 }
               }
             }
@@ -3441,7 +3392,7 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
             runsToUpdate.push({
               id: runData.id,
               points,
-              rank,
+              rank: normalizeRank(rank), // Normalize rank to ensure it's 1-3 or undefined
               playerId: runData.playerId,
             });
           } catch (error) {
@@ -3496,19 +3447,23 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Recalculate total points for each player from all their verified runs
-    // This ensures accuracy even if we missed some runs due to pagination
+    // Process in batches to avoid overwhelming the system
     const playerIdsArray = Array.from(playerIdsSet);
-    for (const playerId of playerIdsArray) {
-      try {
-        const success = await recalculatePlayerPointsFirestore(playerId);
-        if (success) {
-          result.playersUpdated++;
-        } else {
-          result.errors.push(`Failed to recalculate points for player ${playerId}`);
+    const batchSize = 10;
+    for (let i = 0; i < playerIdsArray.length; i += batchSize) {
+      const batch = playerIdsArray.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (playerId) => {
+        try {
+          const success = await recalculatePlayerPointsFirestore(playerId);
+          if (success) {
+            result.playersUpdated++;
+          } else {
+            result.errors.push(`Failed to recalculate points for player ${playerId}`);
+          }
+        } catch (error) {
+          result.errors.push(`Error recalculating player ${playerId}: ${error instanceof Error ? error.message : String(error)}`);
         }
-      } catch (error) {
-        result.errors.push(`Error recalculating player ${playerId}: ${error instanceof Error ? error.message : String(error)}`);
-      }
+      }));
     }
 
     return result;
@@ -4128,13 +4083,19 @@ export const removeDuplicateRunsFirestore = async (duplicateGroups: Array<{ runs
       }
     }
     
-    // Recalculate points for all affected players
-    for (const playerId of affectedPlayerIds) {
-      try {
-        await recalculatePlayerPointsFirestore(playerId);
-      } catch (error) {
-        console.error(`Error recalculating points for player ${playerId}:`, error);
-        result.errors.push(`Failed to recalculate points for player ${playerId}`);
+    // Recalculate points for all affected players using helper function
+    const affectedPlayerIdsArray = Array.from(affectedPlayerIds);
+    if (affectedPlayerIdsArray.length > 0) {
+      // Process in batches to avoid overwhelming the system
+      const batchSize = 10;
+      for (let i = 0; i < affectedPlayerIdsArray.length; i += batchSize) {
+        const batch = affectedPlayerIdsArray.slice(i, i + batchSize);
+        await Promise.all(batch.map(playerId => 
+          recalculatePlayerPointsFirestore(playerId).catch(error => {
+            console.error(`Error recalculating points for player ${playerId}:`, error);
+            result.errors.push(`Failed to recalculate points for player ${playerId}`);
+          })
+        ));
       }
     }
     
