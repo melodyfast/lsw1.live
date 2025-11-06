@@ -1167,70 +1167,38 @@ export const getPlayerRunsFirestore = async (playerId: string): Promise<Leaderbo
       return [];
     }
 
-    // Get unique category/platform/runType combinations from player's runs
+    // Get unique leaderboardType/level/category/platform/runType combinations from player's runs
+    // This ensures we calculate ranks correctly for regular, individual-level, and community-golds separately
     const combinations = new Set<string>();
     entries.forEach(entry => {
-      const key = `${entry.category}_${entry.platform}_${entry.runType || 'solo'}`;
+      const leaderboardType = entry.leaderboardType || 'regular';
+      const level = entry.level || '';
+      const key = `${leaderboardType}_${level}_${entry.category}_${entry.platform}_${entry.runType || 'solo'}`;
       combinations.add(key);
     });
 
-    // Fetch verified entries for only the relevant combinations to reduce data transfer
-    const allEntries: LeaderboardEntry[] = [];
-    for (const combinationKey of combinations) {
-      const [categoryId, platformId, runType] = combinationKey.split('_');
-      const comboQuery = query(
-        collection(db, "leaderboardEntries"),
-        where("verified", "==", true),
-        where("category", "==", categoryId),
-        where("platform", "==", platformId),
-        where("runType", "==", runType),
-        firestoreLimit(200)
-      );
-      const comboSnapshot = await getDocs(comboQuery);
-      const comboEntries = comboSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
-        .filter(entry => !entry.isObsolete);
-      allEntries.push(...comboEntries);
-    }
-
-    // Create a map to store ranks for each combination
+    // Create a map to store ranks for each combination using calculateRanksForGroup
     const rankMap = new Map<string, Map<string, number>>(); // combination -> runId -> rank
 
-    // Calculate ranks for each unique combination
+    // Calculate ranks for each unique combination using the proper helper function
     for (const comboKey of combinations) {
-      const [category, platform, runType] = comboKey.split('_');
+      const parts = comboKey.split('_');
+      const leaderboardType = parts[0] as 'regular' | 'individual-level' | 'community-golds';
+      const level = parts[1] || undefined;
+      const categoryId = parts[2]!;
+      const platformId = parts[3]!;
+      const runType = (parts[4] || 'solo') as 'solo' | 'co-op';
       
-      // Filter entries for this combination
-      const comboEntries = allEntries.filter(entry => 
-        entry.category === category &&
-        entry.platform === platform &&
-        (entry.runType || 'solo') === runType
+      // Use calculateRanksForGroup to get accurate ranks from all verified runs in this group
+      const groupRankMap = await calculateRanksForGroup(
+        leaderboardType,
+        categoryId,
+        platformId,
+        runType,
+        level
       );
-
-      // Parse and sort by time
-      const entriesWithTime = comboEntries.map(entry => {
-        const parts = entry.time.split(':').map(Number);
-        let totalSeconds = 0;
-        if (parts.length === 3) {
-          totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-        } else if (parts.length === 2) {
-          totalSeconds = parts[0] * 60 + parts[1];
-        } else {
-          totalSeconds = Infinity;
-        }
-        return { entry, totalSeconds };
-      });
-
-      // Sort by time (fastest first)
-      entriesWithTime.sort((a, b) => a.totalSeconds - b.totalSeconds);
-
-      // Assign ranks
-      const comboRankMap = new Map<string, number>();
-      entriesWithTime.forEach((item, index) => {
-        comboRankMap.set(item.entry.id, index + 1);
-      });
       
-      rankMap.set(comboKey, comboRankMap);
+      rankMap.set(comboKey, groupRankMap);
     }
 
     // Enrich with player display name and color
@@ -1245,11 +1213,20 @@ export const getPlayerRunsFirestore = async (playerId: string): Promise<Leaderbo
         }
       }
       
-      // Assign rank based on the combination
-      const comboKey = `${entry.category}_${entry.platform}_${entry.runType || 'solo'}`;
+      // Assign rank based on the combination (including leaderboardType and level)
+      const leaderboardType = entry.leaderboardType || 'regular';
+      const level = entry.level || '';
+      const comboKey = `${leaderboardType}_${level}_${entry.category}_${entry.platform}_${entry.runType || 'solo'}`;
       const comboRankMap = rankMap.get(comboKey);
       if (comboRankMap) {
-        entry.rank = comboRankMap.get(entry.id);
+        const calculatedRank = comboRankMap.get(entry.id);
+        // Show all calculated ranks (not just 1-3) for display on player profiles
+        // This ensures ranks match what's shown on leaderboards
+        if (calculatedRank !== undefined && calculatedRank >= 1) {
+          entry.rank = calculatedRank;
+        } else {
+          entry.rank = undefined;
+        }
       }
       
       return entry;
@@ -1336,69 +1313,26 @@ export const getLeaderboardEntryByIdFirestore = async (runId: string): Promise<L
     if (runDocSnap.exists()) {
       const entry = { id: runDocSnap.id, ...runDocSnap.data() } as LeaderboardEntry;
       
-      // Calculate rank if the run is verified
+      // Calculate rank if the run is verified using calculateRanksForGroup for accuracy
       if (entry.verified && !entry.isObsolete) {
         try {
-          // Build query constraints to get all verified entries for this run's category/platform/runType/leaderboardType/level
-          const constraints: QueryConstraint[] = [
-            where("verified", "==", true),
-            where("category", "==", entry.category),
-            where("platform", "==", entry.platform),
-            where("runType", "==", entry.runType || 'solo'),
-          ];
-
-          // Add leaderboardType filter
           const leaderboardType = entry.leaderboardType || 'regular';
-          if (leaderboardType !== 'regular') {
-            constraints.push(where("leaderboardType", "==", leaderboardType));
-          }
-
-          // Add level filter for ILs and Community Golds
-          if (entry.level) {
-            constraints.push(where("level", "==", entry.level));
-          }
-
-          constraints.push(firestoreLimit(200));
+          const rankMap = await calculateRanksForGroup(
+            leaderboardType,
+            entry.category,
+            entry.platform,
+            (entry.runType || 'solo') as 'solo' | 'co-op',
+            entry.level,
+            entry
+          );
           
-          const q = query(collection(db, "leaderboardEntries"), ...constraints);
-          const querySnapshot = await getDocs(q);
-          
-          const entries: LeaderboardEntry[] = querySnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
-            .filter(e => !e.isObsolete && (e.leaderboardType || 'regular') === leaderboardType);
-
-          // Sort by time in ascending order (fastest times first)
-          const entriesWithTime = entries.map(e => {
-            const parts = e.time.split(':').map(Number);
-            let totalSeconds = 0;
-            if (parts.length === 3) {
-              totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-            } else if (parts.length === 2) {
-              totalSeconds = parts[0] * 60 + parts[1];
-            } else {
-              totalSeconds = Infinity;
-            }
-            return { entry: e, totalSeconds };
-          });
-          entriesWithTime.sort((a, b) => a.totalSeconds - b.totalSeconds);
-          
-          // Find the rank of the current entry
-          const currentTimeParts = entry.time.split(':').map(Number);
-          let currentTotalSeconds = 0;
-          if (currentTimeParts.length === 3) {
-            currentTotalSeconds = currentTimeParts[0] * 3600 + currentTimeParts[1] * 60 + currentTimeParts[2];
-          } else if (currentTimeParts.length === 2) {
-            currentTotalSeconds = currentTimeParts[0] * 60 + currentTimeParts[1];
-          }
-          
-          // Find the rank (1-based index)
-          const rankIndex = entriesWithTime.findIndex(e => e.entry.id === entry.id);
-          if (rankIndex !== -1) {
-            entry.rank = rankIndex + 1;
+          const calculatedRank = rankMap.get(entry.id);
+          // Show all calculated ranks (not just 1-3) for display on run pages
+          // This ensures ranks match what's shown on leaderboards
+          if (calculatedRank !== undefined && calculatedRank >= 1) {
+            entry.rank = calculatedRank;
           } else {
-            // If not found in sorted list, calculate rank based on time
-            const fasterCount = entriesWithTime.filter(e => e.totalSeconds < currentTotalSeconds).length;
-            entry.rank = fasterCount + 1;
+            entry.rank = undefined;
           }
         } catch (error) {
           // Silent fail - rank will remain undefined

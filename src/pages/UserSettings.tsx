@@ -118,7 +118,10 @@ const UserSettings = () => {
       // This now includes all runs (verified, unverified, manual, imported) that match the username
       const runs = await getUnclaimedRunsByUsername(username, currentUser.uid);
       // Additional client-side filter as backup (though it should already be filtered)
-      const trulyUnclaimed = runs.filter(run => run.playerId !== currentUser.uid);
+      // Also filter out imported runs - those should only appear in the SRC username section
+      const trulyUnclaimed = runs.filter(run => 
+        run.playerId !== currentUser.uid && !run.importedFromSRC
+      );
       setUnclaimedRuns(trulyUnclaimed);
     } catch (error) {
       // Silent fail
