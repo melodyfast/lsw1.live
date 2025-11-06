@@ -89,9 +89,9 @@ const Admin = () => {
   const itemsPerPage = 25;
   // Filters for imported runs
   const [importedRunsLeaderboardType, setImportedRunsLeaderboardType] = useState<'regular' | 'individual-level'>('regular');
-  const [importedRunsCategory, setImportedRunsCategory] = useState(""); // Empty = All Categories
-  const [importedRunsPlatform, setImportedRunsPlatform] = useState(""); // Empty = All Platforms
-  const [importedRunsLevel, setImportedRunsLevel] = useState(""); // Empty = All Levels
+  const [importedRunsCategory, setImportedRunsCategory] = useState("__all__"); // "__all__" = All Categories
+  const [importedRunsPlatform, setImportedRunsPlatform] = useState("__all__"); // "__all__" = All Platforms
+  const [importedRunsLevel, setImportedRunsLevel] = useState("__all__"); // "__all__" = All Levels
   const [importedRunsCategories, setImportedRunsCategories] = useState<{ id: string; name: string }[]>([]);
   const [unmatchedPlayers, setUnmatchedPlayers] = useState<Map<string, { player1?: string; player2?: string }>>(new Map()); // Map of runId to unmatched player names
   const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
@@ -173,8 +173,8 @@ const Admin = () => {
       try {
         const categoriesData = await getCategories('regular');
         setImportedRunsCategories(categoriesData);
-        // Start with "All Categories" selected (empty string)
-        setImportedRunsCategory("");
+        // Start with "All Categories" selected
+        setImportedRunsCategory("__all__");
       } catch (error) {
         // Silent fail
       }
@@ -189,8 +189,8 @@ const Admin = () => {
         const categoriesData = await getCategories(importedRunsLeaderboardType);
         setImportedRunsCategories(categoriesData);
         // Reset to "All Categories" when switching types
-        setImportedRunsCategory("");
-        setImportedRunsLevel(""); // Reset level filter
+        setImportedRunsCategory("__all__");
+        setImportedRunsLevel("__all__"); // Reset level filter
         setImportedPage(1); // Reset to first page
       } catch (error) {
         // Silent fail
@@ -2438,7 +2438,7 @@ const Admin = () => {
                   console.log(`After leaderboardType filter: ${unverifiedImported.length}`);
                   
                   // Apply category filter (only if a category is selected)
-                  if (importedRunsCategory && importedRunsCategory.trim() !== '') {
+                  if (importedRunsCategory && importedRunsCategory !== '__all__') {
                     unverifiedImported = unverifiedImported.filter(run => {
                       const runCategory = normalizeCategoryId(run.category);
                       const matches = runCategory === importedRunsCategory;
@@ -2451,7 +2451,7 @@ const Admin = () => {
                   }
                   
                   // Apply platform filter (only if a platform is selected)
-                  if (importedRunsPlatform && importedRunsPlatform.trim() !== '') {
+                  if (importedRunsPlatform && importedRunsPlatform !== '__all__') {
                     unverifiedImported = unverifiedImported.filter(run => {
                       const runPlatform = normalizePlatformId(run.platform);
                       const matches = runPlatform === importedRunsPlatform;
@@ -2464,7 +2464,7 @@ const Admin = () => {
                   }
                   
                   // Apply level filter for ILs (only if a level is selected)
-                  if (importedRunsLeaderboardType === 'individual-level' && importedRunsLevel && importedRunsLevel.trim() !== '') {
+                  if (importedRunsLeaderboardType === 'individual-level' && importedRunsLevel && importedRunsLevel !== '__all__') {
                     unverifiedImported = unverifiedImported.filter(run => {
                       const runLevel = normalizeLevelId(run.level);
                       const matches = runLevel === importedRunsLevel;
@@ -2528,9 +2528,9 @@ const Admin = () => {
                               </div>
                               <div>
                                 Current filter: {importedRunsLeaderboardType} | 
-                                Category: {importedRunsCategory || 'All'} | 
-                                Platform: {importedRunsPlatform || 'All'} |
-                                {importedRunsLeaderboardType === 'individual-level' && ` Level: ${importedRunsLevel || 'All'}`}
+                                Category: {importedRunsCategory === '__all__' ? 'All' : importedRunsCategory} | 
+                                Platform: {importedRunsPlatform === '__all__' ? 'All' : importedRunsPlatform} |
+                                {importedRunsLeaderboardType === 'individual-level' && ` Level: ${importedRunsLevel === '__all__' ? 'All' : importedRunsLevel}`}
                               </div>
                             </div>
                           )}
@@ -2552,7 +2552,7 @@ const Admin = () => {
                               <SelectValue placeholder="All Categories" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">All Categories</SelectItem>
+                              <SelectItem value="__all__">All Categories</SelectItem>
                               {importedRunsCategories.map((cat) => (
                                 <SelectItem key={cat.id} value={cat.id}>
                                   {cat.name}
@@ -2574,7 +2574,7 @@ const Admin = () => {
                               <SelectValue placeholder="All Platforms" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">All Platforms</SelectItem>
+                              <SelectItem value="__all__">All Platforms</SelectItem>
                               {firestorePlatforms.map((platform) => (
                                 <SelectItem key={platform.id} value={platform.id}>
                                   {platform.name}
@@ -2597,7 +2597,7 @@ const Admin = () => {
                                 <SelectValue placeholder="All Levels" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">All Levels</SelectItem>
+                                <SelectItem value="__all__">All Levels</SelectItem>
                                 {availableLevels.map((level) => (
                                   <SelectItem key={level.id} value={level.id}>
                                     {level.name}

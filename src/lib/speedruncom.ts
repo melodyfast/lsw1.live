@@ -369,12 +369,40 @@ export function mapSRCRunToLeaderboardEntry(
   ourPlatformId = ourPlatformId ? String(ourPlatformId).trim() : '';
   
   // Determine leaderboard type
-  let leaderboardType: 'regular' | 'individual-level' | 'community-golds' = 'regular';
-  if (run.level) {
-    // Check if it's a community golds run (typically marked differently in SRC)
-    // For now, we'll assume level runs are Individual Level
-    leaderboardType = 'individual-level';
+  // In speedrun.com, categories have a "type" field: "per-game" or "per-level"
+  // - "per-game" categories are Full Game runs (regular)
+  // - "per-level" categories are Individual Level runs
+  // Note: speedrun.com does not support community golds, so we only handle regular and individual-level
+  let leaderboardType: 'regular' | 'individual-level' = 'regular';
+  
+  // Try to get category type from embedded data in the run object
+  let categoryType: "per-game" | "per-level" | undefined;
+  if (typeof run.category === 'object' && run.category?.data) {
+    categoryType = (run.category.data as SRCCategory).type;
+  } else if (embeddedData?.category) {
+    categoryType = embeddedData.category.type;
   }
+  
+  // Check if level exists and has a valid ID (not just empty string or null)
+  const levelId = extractId(run.level);
+  const hasLevel = levelId && levelId.trim() !== '';
+  
+  // Determine leaderboard type based on category type first, then level
+  if (categoryType === 'per-level') {
+    // Category is marked as per-level, so it's an Individual Level run
+    leaderboardType = 'individual-level';
+  } else if (categoryType === 'per-game') {
+    // Category is marked as per-game, so it's a Full Game run (even if it has a level field)
+    leaderboardType = 'regular';
+  } else if (hasLevel) {
+    // No category type info, but run has a valid level ID - treat as Individual Level
+    leaderboardType = 'individual-level';
+  } else {
+    // No level and no category type info, default to Full Game
+    leaderboardType = 'regular';
+  }
+  
+  console.log(`Run ${run.id}: categoryType=${categoryType}, hasLevel=${hasLevel}, leaderboardType=${leaderboardType}`);
   
   // Convert time
   const time = run.times.primary ? isoDurationToTime(run.times.primary) : 
