@@ -230,6 +230,7 @@ export function isDuplicateRun(
 
 /**
  * Import runs from speedrun.com
+ * Simple import - maps SRC data to leaderboard entries and adds them
  */
 export async function importSRCRuns(
   onProgress?: (progress: ImportProgress) => void
@@ -275,7 +276,6 @@ export async function importSRCRuns(
       }
     }
 
-    // Update progress
     onProgress?.({ total: srcRuns.length, imported: 0, skipped: 0 });
 
     // Import each run
@@ -284,21 +284,15 @@ export async function importSRCRuns(
         // Skip if already imported
         if (existingSRCRunIds.has(srcRun.id)) {
           result.skipped++;
-          onProgress?.({ 
-            total: srcRuns.length, 
-            imported: result.imported, 
-            skipped: result.skipped 
-          });
+          onProgress?.({ total: srcRuns.length, imported: result.imported, skipped: result.skipped });
           continue;
         }
 
-        // Extract SRC data
+        // Extract SRC data and map to our IDs
         const srcData = extractSRCData(srcRun);
-
-        // Map to our IDs
         const ourIds = mapSRCIdsToOurs(srcData, mappings, mappings.ourLevels);
 
-        // Map the run
+        // Map the run using the utility function
         const mappedRun = mapSRCRunToLeaderboardEntry(
           srcRun,
           undefined,
@@ -310,118 +304,80 @@ export async function importSRCRuns(
           mappings.platformNameMapping
         );
 
-        // Override with mapped IDs and preserve SRC names
+        // Override with mapped IDs
         mappedRun.category = ourIds.ourCategoryId;
         mappedRun.platform = ourIds.ourPlatformId;
-        mappedRun.level = ourIds.ourLevelId;
-
-        // Preserve SRC names
-        if (srcData.srcCategoryName && !mappedRun.srcCategoryName) {
-          mappedRun.srcCategoryName = srcData.srcCategoryName;
-        }
-        if (srcData.srcPlatformName && !mappedRun.srcPlatformName) {
-          mappedRun.srcPlatformName = srcData.srcPlatformName;
-        }
-        if (srcData.srcLevelName && !mappedRun.srcLevelName) {
-          mappedRun.srcLevelName = srcData.srcLevelName;
+        if (ourIds.ourLevelId) {
+          mappedRun.level = ourIds.ourLevelId;
         }
 
-        // Validate required fields
-        if (!mappedRun.category || !mappedRun.platform || mappedRun.category === '' || mappedRun.platform === '') {
+        // Preserve SRC names for display fallback
+        if (srcData.srcCategoryName) mappedRun.srcCategoryName = srcData.srcCategoryName;
+        if (srcData.srcPlatformName) mappedRun.srcPlatformName = srcData.srcPlatformName;
+        if (srcData.srcLevelName) mappedRun.srcLevelName = srcData.srcLevelName;
+
+        // Basic validation
+        if (!mappedRun.category || !mappedRun.platform) {
           result.skipped++;
           result.errors.push(`Run ${srcRun.id}: missing category or platform`);
-          onProgress?.({ 
-            total: srcRuns.length, 
-            imported: result.imported, 
-            skipped: result.skipped 
-          });
+          onProgress?.({ total: srcRuns.length, imported: result.imported, skipped: result.skipped });
           continue;
         }
 
-        // Validate and normalize player names
-        if (typeof mappedRun.playerName !== 'string' || !mappedRun.playerName || mappedRun.playerName.trim() === '') {
-          mappedRun.playerName = 'Unknown';
-        } else {
-          mappedRun.playerName = mappedRun.playerName.trim();
-        }
+        // Normalize player names
+        mappedRun.playerName = (mappedRun.playerName || 'Unknown').trim();
         if (mappedRun.player2Name) {
-          if (typeof mappedRun.player2Name !== 'string' || mappedRun.player2Name.trim() === '') {
-            mappedRun.player2Name = undefined;
-          } else {
-            mappedRun.player2Name = mappedRun.player2Name.trim();
-          }
+          mappedRun.player2Name = mappedRun.player2Name.trim() || undefined;
         }
 
         // Check for duplicates
         if (isDuplicateRun(mappedRun, existingRunKeys)) {
           result.skipped++;
-          onProgress?.({ 
-            total: srcRuns.length, 
-            imported: result.imported, 
-            skipped: result.skipped 
-          });
+          onProgress?.({ total: srcRuns.length, imported: result.imported, skipped: result.skipped });
           continue;
         }
 
         // Check player matching
-        const player1Matched = await getPlayerByDisplayName(mappedRun.playerName || '');
-        const player2Matched = mappedRun.player2Name 
-          ? await getPlayerByDisplayName(mappedRun.player2Name) 
-          : null;
+        const player1Matched = await getPlayerByDisplayName(mappedRun.playerName);
+        const player2Matched = mappedRun.player2Name ? await getPlayerByDisplayName(mappedRun.player2Name) : null;
 
         const unmatched: { player1?: string; player2?: string } = {};
-        if (!player1Matched) {
-          unmatched.player1 = mappedRun.playerName;
-        }
-        if (mappedRun.player2Name && !player2Matched) {
-          unmatched.player2 = mappedRun.player2Name;
-        }
+        if (!player1Matched) unmatched.player1 = mappedRun.playerName;
+        if (mappedRun.player2Name && !player2Matched) unmatched.player2 = mappedRun.player2Name;
 
-        // Ensure import flags are set
+        // Set import flags
         mappedRun.importedFromSRC = true;
         mappedRun.srcRunId = srcRun.id;
+        mappedRun.verified = false;
 
         // Add the run
-        const addedRunId = await addLeaderboardEntry(mappedRun as any);
+        const addedRunId = await addLeaderboardEntry(mappedRun as LeaderboardEntry);
 
         if (!addedRunId) {
           result.skipped++;
-          result.errors.push(`Run ${srcRun.id}: failed to add to database`);
-          onProgress?.({ 
-            total: srcRuns.length, 
-            imported: result.imported, 
-            skipped: result.skipped 
-          });
+          result.errors.push(`Run ${srcRun.id}: failed to add`);
+          onProgress?.({ total: srcRuns.length, imported: result.imported, skipped: result.skipped });
           continue;
         }
 
         // Store unmatched players
-        if ((unmatched.player1 || unmatched.player2) && addedRunId) {
+        if ((unmatched.player1 || unmatched.player2)) {
           result.unmatchedPlayers.set(addedRunId, unmatched);
         }
 
-        // Add to existing keys to prevent duplicates within batch
-        const normalizeName = (name: string) => name.trim().toLowerCase();
-        const player1Name = normalizeName(mappedRun.playerName || '');
+        // Add to existing keys to prevent batch duplicates
+        const player1Name = normalizeName(mappedRun.playerName);
         const player2Name = mappedRun.player2Name ? normalizeName(mappedRun.player2Name) : '';
         const runKey = `${player1Name}|${mappedRun.category}|${mappedRun.platform}|${mappedRun.runType}|${mappedRun.time}|${mappedRun.leaderboardType || 'regular'}|${mappedRun.level || ''}`;
         existingRunKeys.add(runKey);
 
         result.imported++;
-        onProgress?.({ 
-          total: srcRuns.length, 
-          imported: result.imported, 
-          skipped: result.skipped 
-        });
+        onProgress?.({ total: srcRuns.length, imported: result.imported, skipped: result.skipped });
 
       } catch (error) {
         result.skipped++;
         result.errors.push(`Run ${srcRun.id}: ${error instanceof Error ? error.message : String(error)}`);
-        onProgress?.({ 
-          total: srcRuns.length, 
-          imported: result.imported, 
-          skipped: result.skipped 
-        });
+        onProgress?.({ total: srcRuns.length, imported: result.imported, skipped: result.skipped });
       }
     }
 

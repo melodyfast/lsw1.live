@@ -383,11 +383,11 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "verified",
+          "fieldPath": "importedFromSRC",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "importedFromSRC",
+          "fieldPath": "verified",
           "order": "ASCENDING"
         },
         {

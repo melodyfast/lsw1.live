@@ -3057,13 +3057,13 @@ export const getExistingSRCRunIdsFirestore = async (): Promise<Set<string>> => {
 
 /**
  * Get all runs that were imported from speedrun.com
- * Uses optimized Firestore query with proper indexing
+ * Simple query - just fetch unverified imported runs
  */
 export const getImportedSRCRunsFirestore = async (): Promise<LeaderboardEntry[]> => {
   if (!db) return [];
   
   try {
-    // Query by verified and importedFromSRC (indexed query)
+    // Simple query: unverified imported runs, ordered by date
     const q = query(
       collection(db, "leaderboardEntries"),
       where("verified", "==", false),
@@ -3074,53 +3074,11 @@ export const getImportedSRCRunsFirestore = async (): Promise<LeaderboardEntry[]>
     
     const querySnapshot = await getDocs(q);
     
-    // Normalize and validate entries
-    const entries: LeaderboardEntry[] = querySnapshot.docs
-      .map(doc => {
-        const data = doc.data();
-        // Normalize the entry data
-        const normalized = normalizeLeaderboardEntry({ 
-          id: doc.id, 
-          ...data 
-        } as LeaderboardEntry);
-        // Ensure id is always present
-        return {
-          ...normalized,
-          id: doc.id,
-        } as LeaderboardEntry;
-      })
-      .filter(entry => {
-        // Validate entry
-        const validation = validateLeaderboardEntry(entry);
-        if (!validation.valid) {
-          return false;
-        }
-        
-        // Ensure required fields exist
-        if (!entry.category || !entry.platform || !entry.time || !entry.runType) {
-          return false;
-        }
-        
-        // Ensure it's actually an imported run
-        if (!entry.importedFromSRC) {
-          return false;
-        }
-        
-        // Ensure it's unverified
-        if (entry.verified !== false) {
-          return false;
-        }
-        
-        return true;
-      });
-    
-    // Sort by date descending (most recent first)
-    entries.sort((a, b) => {
-      if (!a.date || !b.date) return 0;
-      return b.date.localeCompare(a.date);
-    });
-    
-    return entries;
+    // Simple mapping - just return the data
+    return querySnapshot.docs.map(doc => ({ 
+      id: doc.id, 
+      ...doc.data() 
+    } as LeaderboardEntry));
   } catch (error) {
     console.error("Error fetching imported SRC runs:", error);
     return [];
@@ -3214,7 +3172,7 @@ export const getVerifiedRunsWithInvalidDataFirestore = async (): Promise<Leaderb
 
 /**
  * Delete all imported runs from speedrun.com
- * Uses optimized batch deletes with proper error handling
+ * Simple purge - deletes all unverified imported runs
  */
 export const deleteAllImportedSRCRunsFirestore = async (): Promise<{ deleted: number; errors: string[] }> => {
   if (!db) return { deleted: 0, errors: ["Firestore not initialized"] };
@@ -3222,7 +3180,7 @@ export const deleteAllImportedSRCRunsFirestore = async (): Promise<{ deleted: nu
   const result = { deleted: 0, errors: [] as string[] };
   
   try {
-    // Query for unverified imported runs (indexed query)
+    // Simple query: get all unverified imported runs
     const q = query(
       collection(db, "leaderboardEntries"),
       where("verified", "==", false),
@@ -3232,6 +3190,7 @@ export const deleteAllImportedSRCRunsFirestore = async (): Promise<{ deleted: nu
     
     let hasMore = true;
     
+    // Delete in batches until no more runs
     while (hasMore) {
       const querySnapshot = await getDocs(q);
       
@@ -3240,7 +3199,7 @@ export const deleteAllImportedSRCRunsFirestore = async (): Promise<{ deleted: nu
         break;
       }
       
-      // Delete in batches (Firestore limit is 500 operations per batch)
+      // Delete in batches (Firestore limit is 500 per batch)
       const batch = writeBatch(db);
       let batchSize = 0;
       
@@ -3258,7 +3217,6 @@ export const deleteAllImportedSRCRunsFirestore = async (): Promise<{ deleted: nu
         } catch (batchError: any) {
           const errorMsg = batchError instanceof Error ? batchError.message : String(batchError);
           result.errors.push(`Failed to delete batch: ${errorMsg}`);
-          console.error(`Batch delete error:`, batchError);
         }
         
         // Check if we've processed all documents
@@ -3271,8 +3229,7 @@ export const deleteAllImportedSRCRunsFirestore = async (): Promise<{ deleted: nu
     return result;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    result.errors.push(`Delete all imported runs error: ${errorMsg}`);
-    console.error("Delete all imported runs error:", error);
+    result.errors.push(`Delete error: ${errorMsg}`);
     return result;
   }
 };
