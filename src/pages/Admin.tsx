@@ -279,6 +279,7 @@ const Admin = () => {
         getDownloadEntries(),
         getCategoriesFromFirestore('regular')
       ]);
+      console.log(`fetchAllData: Loaded ${importedData.length} imported runs`);
       setUnverifiedRuns(unverifiedData.filter(run => !run.importedFromSRC));
       setImportedSRCRuns(importedData);
       setDownloadEntries(downloadData);
@@ -295,6 +296,13 @@ const Admin = () => {
       setLoading(false);
     }
   };
+
+  // Fetch data on mount
+  useEffect(() => {
+    if (!authLoading && currentUser) {
+      fetchAllData();
+    }
+  }, [authLoading, currentUser]);
   
   const fetchCategories = async (leaderboardType?: 'regular' | 'individual-level' | 'community-golds') => {
     try {
@@ -963,6 +971,7 @@ const Admin = () => {
         name: newDownload.name,
         description: newDownload.description,
         category: newDownload.category,
+        addedBy: currentUser.uid,
         ...(newDownload.useFileUpload && newDownload.fileUrl
           ? { fileUrl: newDownload.fileUrl } 
           : newDownload.url
@@ -2411,52 +2420,123 @@ const Admin = () => {
               </CardHeader>
               <CardContent>
                 {(() => {
+                  console.log(`Rendering imported runs card. Total in state: ${importedSRCRuns.length}`);
+                  
                   // Filter unverified imported runs
-                  let unverifiedImported = importedSRCRuns.filter(r => !r.verified);
+                  let unverifiedImported = importedSRCRuns.filter(r => r.verified !== true);
+                  console.log(`Unverified imported runs: ${unverifiedImported.length}`);
                   
                   // Apply leaderboardType filter
                   unverifiedImported = unverifiedImported.filter(run => {
                     const runLeaderboardType = run.leaderboardType || 'regular';
-                    return runLeaderboardType === importedRunsLeaderboardType;
+                    const matches = runLeaderboardType === importedRunsLeaderboardType;
+                    if (!matches) {
+                      console.log(`Run ${run.id} filtered out by leaderboardType: ${runLeaderboardType} !== ${importedRunsLeaderboardType}`);
+                    }
+                    return matches;
                   });
+                  console.log(`After leaderboardType filter: ${unverifiedImported.length}`);
                   
-                  // Apply category filter
-                  if (importedRunsCategory) {
-                    unverifiedImported = unverifiedImported.filter(run => 
-                      normalizeCategoryId(run.category) === importedRunsCategory
-                    );
+                  // Apply category filter (only if a category is selected)
+                  if (importedRunsCategory && importedRunsCategory.trim() !== '') {
+                    unverifiedImported = unverifiedImported.filter(run => {
+                      const runCategory = normalizeCategoryId(run.category);
+                      const matches = runCategory === importedRunsCategory;
+                      if (!matches) {
+                        console.log(`Run ${run.id} filtered out by category: ${runCategory} !== ${importedRunsCategory}`);
+                      }
+                      return matches;
+                    });
+                    console.log(`After category filter: ${unverifiedImported.length}`);
                   }
                   
-                  // Apply platform filter
-                  if (importedRunsPlatform) {
-                    unverifiedImported = unverifiedImported.filter(run => 
-                      normalizePlatformId(run.platform) === importedRunsPlatform
-                    );
+                  // Apply platform filter (only if a platform is selected)
+                  if (importedRunsPlatform && importedRunsPlatform.trim() !== '') {
+                    unverifiedImported = unverifiedImported.filter(run => {
+                      const runPlatform = normalizePlatformId(run.platform);
+                      const matches = runPlatform === importedRunsPlatform;
+                      if (!matches) {
+                        console.log(`Run ${run.id} filtered out by platform: ${runPlatform} !== ${importedRunsPlatform}`);
+                      }
+                      return matches;
+                    });
+                    console.log(`After platform filter: ${unverifiedImported.length}`);
                   }
                   
-                  // Apply level filter for ILs
-                  if (importedRunsLeaderboardType === 'individual-level' && importedRunsLevel) {
-                    unverifiedImported = unverifiedImported.filter(run => 
-                      normalizeLevelId(run.level) === importedRunsLevel
-                    );
+                  // Apply level filter for ILs (only if a level is selected)
+                  if (importedRunsLeaderboardType === 'individual-level' && importedRunsLevel && importedRunsLevel.trim() !== '') {
+                    unverifiedImported = unverifiedImported.filter(run => {
+                      const runLevel = normalizeLevelId(run.level);
+                      const matches = runLevel === importedRunsLevel;
+                      if (!matches) {
+                        console.log(`Run ${run.id} filtered out by level: ${runLevel} !== ${importedRunsLevel}`);
+                      }
+                      return matches;
+                    });
+                    console.log(`After level filter: ${unverifiedImported.length}`);
                   }
                   
-                  return unverifiedImported.length === 0 ? (
-                    <p className="text-[hsl(222,15%,60%)] text-center py-8">No imported runs awaiting verification for the selected filters.</p>
-                  ) : (
+                  console.log(`Final filtered count: ${unverifiedImported.length}`);
+                  console.log(`Sample runs:`, unverifiedImported.slice(0, 3).map(r => ({
+                    id: r.id,
+                    playerName: r.playerName,
+                    category: r.category,
+                    platform: r.platform,
+                    leaderboardType: r.leaderboardType,
+                    verified: r.verified,
+                    importedFromSRC: r.importedFromSRC
+                  })));
+                  
+                  // Calculate counts for tabs (before category/platform/level filters)
+                  const baseUnverified = importedSRCRuns.filter(r => r.verified !== true);
+                  const fullGameCount = baseUnverified.filter(r => (r.leaderboardType || 'regular') === 'regular').length;
+                  const ilCount = baseUnverified.filter(r => r.leaderboardType === 'individual-level').length;
+                  
+                  return (
                     <>
-                      {/* Tabs for Full Game vs Individual Level */}
-                      <Tabs value={importedRunsLeaderboardType} onValueChange={(value) => setImportedRunsLeaderboardType(value as 'regular' | 'individual-level')} className="mb-6">
+                      {/* Tabs for Full Game vs Individual Level - Always show tabs */}
+                      <Tabs 
+                        value={importedRunsLeaderboardType} 
+                        onValueChange={(value) => {
+                          console.log(`Tab changed to: ${value}`);
+                          setImportedRunsLeaderboardType(value as 'regular' | 'individual-level');
+                        }} 
+                        className="mb-6"
+                      >
                         <TabsList className="grid w-full max-w-md grid-cols-2 mb-4 bg-[hsl(240,21%,15%)]">
                           <TabsTrigger value="regular" className="data-[state=active]:bg-[hsl(240,21%,20%)]">
-                            Full Game
+                            Full Game ({fullGameCount})
                           </TabsTrigger>
                           <TabsTrigger value="individual-level" className="data-[state=active]:bg-[hsl(240,21%,20%)]">
-                            Individual Levels
+                            Individual Levels ({ilCount})
                           </TabsTrigger>
                         </TabsList>
                       </Tabs>
-
+                      
+                      {unverifiedImported.length === 0 ? (
+                        <div className="space-y-4">
+                          <p className="text-[hsl(222,15%,60%)] text-center py-8">
+                            {importedSRCRuns.length === 0 
+                              ? "No imported runs found. Import runs from speedrun.com to get started."
+                              : "No imported runs awaiting verification for the selected filters."}
+                          </p>
+                          {importedSRCRuns.length > 0 && (
+                            <div className="text-xs text-[hsl(222,15%,50%)] text-center space-y-1">
+                              <div>
+                                Total imported runs in database: {importedSRCRuns.length} | 
+                                Unverified: {baseUnverified.length}
+                              </div>
+                              <div>
+                                Current filter: {importedRunsLeaderboardType} | 
+                                Category: {importedRunsCategory || 'All'} | 
+                                Platform: {importedRunsPlatform || 'All'} |
+                                {importedRunsLeaderboardType === 'individual-level' && ` Level: ${importedRunsLevel || 'All'}`}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <>
                       {/* Filters */}
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                         <div>
@@ -2556,7 +2636,9 @@ const Admin = () => {
                                   <div className="flex items-center gap-1">
                                     <span style={{ color: run.nameColor || 'inherit' }}>{run.playerName}</span>
                                     {unmatched?.player1 && (
-                                      <AlertTriangle className="h-4 w-4 text-yellow-500" title={`Player "${run.playerName}" not found on site`} />
+                                      <div title={`Player "${run.playerName}" not found on site`}>
+                                        <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                                      </div>
                                     )}
                                   </div>
                                   {run.player2Name && (
@@ -2564,7 +2646,9 @@ const Admin = () => {
                                       <span className="text-muted-foreground"> & </span>
                                       <span style={{ color: run.player2Color || 'inherit' }}>{run.player2Name}</span>
                                       {unmatched?.player2 && (
-                                        <AlertTriangle className="h-4 w-4 text-yellow-500" title={`Player "${run.player2Name}" not found on site`} />
+                                        <div title={`Player "${run.player2Name}" not found on site`}>
+                                          <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                                        </div>
                                       )}
                                     </div>
                                   )}
@@ -2641,6 +2725,8 @@ const Admin = () => {
                           itemsPerPage={itemsPerPage}
                           totalItems={unverifiedImported.length}
                         />
+                      )}
+                        </>
                       )}
                     </>
                   );
@@ -3379,7 +3465,8 @@ const Admin = () => {
                               
                               if (Array.isArray(uploadedFiles) && uploadedFiles.length > 0) {
                                 // Standard array response
-                                fileUrl = uploadedFiles[0]?.url || uploadedFiles[0]?.serverData?.url || null;
+                                const firstFile = uploadedFiles[0] as any;
+                                fileUrl = firstFile?.url || firstFile?.serverData?.url || null;
                               } else if (uploadedFiles && typeof uploadedFiles === 'object') {
                                 // Object response - try different possible properties
                                 fileUrl = (uploadedFiles as any).url || 
