@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { isDisplayNameAvailable } from "@/lib/db";
 
 interface LoginModalProps {
   open: boolean;
@@ -18,6 +19,8 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [srcUsername, setSrcUsername] = useState("");
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -60,6 +63,59 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
 
     // Validate password on signup
     if (!isLogin) {
+      // Validate display name
+      const trimmedDisplayName = displayName.trim();
+      if (!trimmedDisplayName) {
+        toast({
+          title: "Display Name Required",
+          description: "Please enter a display name.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (trimmedDisplayName.length < 2) {
+        toast({
+          title: "Display Name Too Short",
+          description: "Display name must be at least 2 characters long.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (trimmedDisplayName.length > 50) {
+        toast({
+          title: "Display Name Too Long",
+          description: "Display name must be 50 characters or less.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Check if display name is available
+      setLoading(true);
+      try {
+        const isAvailable = await isDisplayNameAvailable(trimmedDisplayName);
+        if (!isAvailable) {
+          toast({
+            title: "Display Name Taken",
+            description: "This display name is already taken. Please choose a different one.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to check display name availability. Please try again.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+      setLoading(false);
+
       const passwordValidation = validatePassword(password);
       if (!passwordValidation.valid) {
         toast({
@@ -97,10 +153,27 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
         }, 10000);
       });
 
-      await Promise.race([authOperation, timeoutPromise]);
+      const userCredential = await Promise.race([authOperation, timeoutPromise]);
       
       if (timeoutId) {
         clearTimeout(timeoutId);
+      }
+
+      // If signup, update profile with display name and store SRC username
+      if (!isLogin && userCredential && 'user' in userCredential) {
+        const user = userCredential.user;
+        
+        // Update Firebase Auth profile with display name
+        if (displayName.trim()) {
+          await updateProfile(user, { displayName: displayName.trim() });
+        }
+        
+        // Store display name and SRC username in localStorage temporarily (AuthProvider will read it)
+        // This ensures we have the correct values even if Firebase Auth hasn't updated yet
+        localStorage.setItem(`displayName_${user.uid}`, displayName.trim());
+        if (srcUsername.trim()) {
+          localStorage.setItem(`srcUsername_${user.uid}`, srcUsername.trim());
+        }
       }
       
       toast({
@@ -111,6 +184,8 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
       setEmail("");
       setPassword("");
       setConfirmPassword("");
+      setDisplayName("");
+      setSrcUsername("");
       onOpenChange(false);
     } catch (error: any) {
       // Generic error messages to prevent user enumeration
@@ -216,6 +291,62 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
             >
               {loading ? "Processing..." : (isLogin ? "Login" : "Sign Up")}
             </Button>
+            {!isLogin && (
+              <>
+                <div>
+                  <Label htmlFor="displayName" className="text-[hsl(220,17%,92%)]">
+                    Display Name <span className="text-[#fab387]">*</span>
+                  </Label>
+                  <Input
+                    id="displayName"
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    required
+                    placeholder="Your display name"
+                    maxLength={50}
+                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] text-[hsl(220,17%,92%)]"
+                  />
+                  <p className="text-xs text-[hsl(222,15%,60%)] mt-1">
+                    This will be shown on leaderboards and your profile. Must be unique.
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="srcUsername" className="text-[hsl(220,17%,92%)]">
+                    Speedrun.com Username <span className="text-[#fab387] text-xs">(Recommended)</span>
+                  </Label>
+                  <Input
+                    id="srcUsername"
+                    type="text"
+                    value={srcUsername}
+                    onChange={(e) => setSrcUsername(e.target.value)}
+                    placeholder="Your SRC username (optional)"
+                    maxLength={50}
+                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] text-[hsl(220,17%,92%)]"
+                  />
+                  <p className="text-xs text-[#fab387] mt-1 font-medium">
+                    💡 We recommend using your Speedrun.com username! This will automatically claim your imported runs.
+                  </p>
+                  <p className="text-xs text-[hsl(222,15%,60%)] mt-1">
+                    Enter your exact Speedrun.com username to automatically claim runs imported from Speedrun.com.
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="confirmPassword" className="text-[hsl(220,17%,92%)]">Confirm Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required={!isLogin}
+                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] text-[hsl(220,17%,92%)]"
+                  />
+                  <p className="text-xs text-[hsl(222,15%,60%)] mt-1">
+                    Password must be at least 8 characters with uppercase, lowercase, and a number.
+                  </p>
+                </div>
+              </>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -223,27 +354,13 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
                 setIsLogin(!isLogin);
                 setPassword("");
                 setConfirmPassword("");
+                setDisplayName("");
+                setSrcUsername("");
               }}
               className="text-[hsl(220,17%,92%)] border-[hsl(235,13%,30%)] hover:bg-[hsl(234,14%,29%)]"
             >
               {isLogin ? "Need an account? Sign Up" : "Already have an account? Login"}
             </Button>
-            {!isLogin && (
-              <div>
-                <Label htmlFor="confirmPassword" className="text-[hsl(220,17%,92%)]">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required={!isLogin}
-                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] text-[hsl(220,17%,92%)]"
-                />
-                <p className="text-xs text-[hsl(222,15%,60%)] mt-1">
-                  Password must be at least 8 characters with uppercase, lowercase, and a number.
-                </p>
-              </div>
-            )}
             {isLogin && (
               <Button
                 type="button"

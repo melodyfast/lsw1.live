@@ -596,6 +596,35 @@ export const getPlayerByDisplayNameFirestore = async (displayName: string): Prom
   }
 };
 
+/**
+ * Check if a display name is available (case-insensitive)
+ * Returns true if available, false if taken
+ */
+export const isDisplayNameAvailableFirestore = async (displayName: string): Promise<boolean> => {
+  if (!db || !displayName || !displayName.trim()) return false;
+  try {
+    const normalizedDisplayName = displayName.trim().toLowerCase();
+    
+    // Get all players and check case-insensitive match
+    const allPlayersQuery = query(collection(db, "players"), firestoreLimit(1000));
+    const querySnapshot = await getDocs(allPlayersQuery);
+    
+    for (const doc of querySnapshot.docs) {
+      const player = doc.data() as Player;
+      const playerDisplayName = (player.displayName || "").trim().toLowerCase();
+      
+      if (playerDisplayName === normalizedDisplayName) {
+        return false; // Display name is taken
+      }
+    }
+    
+    return true; // Display name is available
+  } catch (error) {
+    console.error("Error checking display name availability:", error);
+    return false; // On error, assume not available to be safe
+  }
+};
+
 export const getPlayersWithTwitchUsernamesFirestore = async (): Promise<Array<{ uid: string; displayName: string; twitchUsername: string; nameColor?: string; profilePicture?: string }>> => {
   if (!db) return [];
   try {
@@ -2928,25 +2957,28 @@ export const getUnclaimedRunsByUsernameFirestore = async (username: string, curr
       ...unverifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
     ];
     
-    // Filter runs that match the username (as player1 or player2) and aren't already claimed by current user
+    // Filter runs that match the username (as player1 or player2) and are truly unclaimed
+    // IMPORTANT: For co-op runs, both players should see the run if it's unclaimed
     const unclaimedRuns = allRuns
       .filter(entry => {
         const entryPlayerName = (entry.playerName || "").trim().toLowerCase();
         const entryPlayer2Name = (entry.player2Name || "").trim().toLowerCase();
         
-        // Check if username matches player1 or player2
+        // Check if username matches player1 or player2 (for co-op runs, both players can see it)
         const nameMatches = entryPlayerName === normalizedUsername || 
                            (entryPlayer2Name && entryPlayer2Name === normalizedUsername);
         
         if (!nameMatches) return false;
         
-        // Exclude runs already claimed by the current user
-        if (currentUserId && entry.playerId === currentUserId) {
-          return false;
-        }
+        // Check if run is truly unclaimed (not already assigned to any user)
+        const playerId = entry.playerId || "";
+        const isUnclaimed = !playerId || 
+                           playerId === "imported" || 
+                           playerId.startsWith("unlinked_") ||
+                           playerId.startsWith("unclaimed_");
         
-        // Include the run - it matches the username and isn't already claimed
-        return true;
+        // Only return unclaimed runs (exclude runs already claimed by any user, including current user)
+        return isUnclaimed;
       });
     
     return unclaimedRuns;

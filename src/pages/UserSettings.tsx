@@ -716,7 +716,20 @@ const UserSettings = () => {
                             )}
                           </div>
                           <div className="text-sm text-[hsl(222,15%,60%)]">
-                            {formatDate(run.date)} • {run.runType === 'solo' ? 'Solo' : 'Co-op'}
+                            {formatDate(run.date)} • {run.runType === 'solo' ? 'Solo' : (() => {
+                              // For co-op runs, show the partner's name
+                              const currentDisplayName = displayName?.toLowerCase().trim() || "";
+                              const runPlayer1Name = (run.playerName || "").toLowerCase().trim();
+                              const runPlayer2Name = (run.player2Name || "").toLowerCase().trim();
+                              
+                              if (currentDisplayName === runPlayer1Name && runPlayer2Name) {
+                                return `Co-op with ${run.player2Name}`;
+                              } else if (currentDisplayName === runPlayer2Name && runPlayer1Name) {
+                                return `Co-op with ${run.playerName}`;
+                              } else {
+                                return run.player2Name ? `Co-op with ${run.player2Name}` : 'Co-op';
+                              }
+                            })()}
                             {run.videoUrl && (
                               <Link
                                 to={`/run/${run.id}`}
@@ -782,7 +795,20 @@ const UserSettings = () => {
                             </Badge>
                           </div>
                           <div className="text-sm text-[hsl(222,15%,60%)]">
-                            {formatDate(run.date)} • {run.runType === 'solo' ? 'Solo' : 'Co-op'}
+                            {formatDate(run.date)} • {run.runType === 'solo' ? 'Solo' : (() => {
+                              // For co-op runs, show the partner's name
+                              const currentDisplayName = displayName?.toLowerCase().trim() || "";
+                              const runPlayer1Name = (run.playerName || "").toLowerCase().trim();
+                              const runPlayer2Name = (run.player2Name || "").toLowerCase().trim();
+                              
+                              if (currentDisplayName === runPlayer1Name && runPlayer2Name) {
+                                return `Co-op with ${run.player2Name}`;
+                              } else if (currentDisplayName === runPlayer2Name && runPlayer1Name) {
+                                return `Co-op with ${run.playerName}`;
+                              } else {
+                                return run.player2Name ? `Co-op with ${run.player2Name}` : 'Co-op';
+                              }
+                            })()}
                             {run.videoUrl && (
                               <Link
                                 to={`/run/${run.id}`}

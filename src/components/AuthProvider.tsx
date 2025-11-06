@@ -83,9 +83,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
             } else {
               const today = new Date().toISOString().split('T')[0];
+              
+              // Check localStorage for display name and SRC username (set during signup)
+              const storedDisplayName = localStorage.getItem(`displayName_${user.uid}`);
+              const storedSRCUsername = localStorage.getItem(`srcUsername_${user.uid}`);
+              
+              // Use stored display name if available, otherwise fall back to Firebase Auth or email
+              const finalDisplayName = storedDisplayName || user.displayName || user.email?.split('@')[0] || "Player";
+              const srcUsername = storedSRCUsername || "";
+              
+              // Clear localStorage after reading
+              if (storedDisplayName) {
+                localStorage.removeItem(`displayName_${user.uid}`);
+              }
+              if (storedSRCUsername) {
+                localStorage.removeItem(`srcUsername_${user.uid}`);
+              }
+              
               const newPlayer = {
                 uid: user.uid,
-                displayName: user.displayName || user.email?.split('@')[0] || "Player",
+                displayName: finalDisplayName,
                 email: user.email || "",
                 joinDate: today,
                 totalRuns: 0,
@@ -94,6 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 favoritePlatform: null,
                 nameColor: "#cba6f7",
                 isAdmin: false,
+                srcUsername: srcUsername || undefined,
               };
               createPlayer(newPlayer).catch(() => {});
             }
