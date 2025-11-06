@@ -125,7 +125,7 @@ export interface SRCRunData {
 /**
  * Convert ISO 8601 duration to HH:MM:SS format
  */
-function isoDurationToTime(duration: string): string {
+export function isoDurationToTime(duration: string): string {
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
   if (!match) return "00:00:00";
   
@@ -145,7 +145,7 @@ function isoDurationToTime(duration: string): string {
 /**
  * Convert seconds to HH:MM:SS format
  */
-function secondsToTime(seconds: number): string {
+export function secondsToTime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
@@ -593,6 +593,22 @@ export async function mapSRCRunToLeaderboardEntry(
   // Extract and normalize players array
   const players = normalizePlayersArray(run.players);
   
+  // Extract SRC player IDs for claiming
+  const extractSRCPlayerId = (player: SRCRun['players'][0]): string | undefined => {
+    if (!player) return undefined;
+    // Handle unwrapped player data
+    if (typeof player === 'object' && 'data' in player && Array.isArray((player as any).data) && (player as any).data.length > 0) {
+      const actualPlayer = (player as any).data[0];
+      return actualPlayer?.id || player.id;
+    } else if (typeof player === 'object' && 'data' in player && !Array.isArray((player as any).data)) {
+      return (player as any).data?.id || player.id;
+    }
+    return player.id;
+  };
+  
+  const srcPlayerId = players[0] ? extractSRCPlayerId(players[0]) : undefined;
+  const srcPlayer2Id = players.length > 1 ? extractSRCPlayerId(players[1]) : undefined;
+  
   // Determine run type based on player count
   const runType: 'solo' | 'co-op' = players.length > 1 ? 'co-op' : 'solo';
   
@@ -705,11 +721,23 @@ export async function mapSRCRunToLeaderboardEntry(
   }
   
   // === Convert Time ===
-  const time = run.times.primary 
-    ? isoDurationToTime(run.times.primary)
-    : run.times.primary_t 
-      ? secondsToTime(run.times.primary_t)
-      : "00:00:00";
+  let time = "00:00:00";
+  if (run.times.primary) {
+    time = isoDurationToTime(run.times.primary);
+  } else if (run.times.primary_t !== undefined && run.times.primary_t !== null) {
+    time = secondsToTime(run.times.primary_t);
+  }
+  
+  // Validate time conversion - log if conversion failed or returned 00:00:00 for a real run
+  if (time === "00:00:00" && run.times.primary_t && run.times.primary_t > 0) {
+    console.warn(`[mapSRCRunToLeaderboardEntry] Time conversion resulted in 00:00:00 for run ${run.id} with primary_t=${run.times.primary_t}:`, {
+      primary: run.times.primary,
+      primary_t: run.times.primary_t,
+      runType: players.length > 1 ? 'co-op' : 'solo',
+      player1Name: player1Name,
+      player2Name: player2Name,
+    });
+  }
   
   // === Convert Date ===
   const date = run.date ? run.date.split('T')[0] : new Date().toISOString().split('T')[0];
@@ -738,5 +766,8 @@ export async function mapSRCRunToLeaderboardEntry(
     srcCategoryName: categoryName || undefined,
     srcPlatformName: platformName || undefined,
     srcLevelName: levelName || undefined,
+    // Store SRC player IDs for claiming
+    srcPlayerId: srcPlayerId || undefined,
+    srcPlayer2Id: srcPlayer2Id || undefined,
   };
 }

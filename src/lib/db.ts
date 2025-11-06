@@ -35,7 +35,10 @@ import {
   movePlatformUpFirestore,
   movePlatformDownFirestore,
   getUnclaimedRunsByUsernameFirestore,
+  getUnclaimedRunsBySRCUsernameFirestore,
+  getUnassignedRunsFirestore,
   claimRunFirestore,
+  autoLinkRunsByDisplayNameFirestore,
   getAllVerifiedRunsFirestore,
   getPlayersByPointsFirestore,
   getLevelsFirestore,
@@ -195,7 +198,10 @@ export const movePlatformUp = movePlatformUpFirestore;
 export const movePlatformDown = movePlatformDownFirestore;
 
 export const getUnclaimedRunsByUsername = getUnclaimedRunsByUsernameFirestore;
+export const getUnclaimedRunsBySRCUsername = getUnclaimedRunsBySRCUsernameFirestore;
+export const getUnassignedRuns = getUnassignedRunsFirestore;
 export const claimRun = claimRunFirestore;
+export const autoLinkRunsByDisplayName = autoLinkRunsByDisplayNameFirestore;
 
 export const getAllVerifiedRuns = getAllVerifiedRunsFirestore;
 

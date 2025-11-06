@@ -40,10 +40,28 @@ export function normalizePlayerName(name: string | undefined | null): string {
 export function normalizeTime(time: string | undefined | null): string {
   if (!time) return "00:00:00";
   const normalized = String(time).trim();
+  
+  // Handle empty or invalid strings
+  if (normalized === "" || normalized === "00:00:00") {
+    return "00:00:00";
+  }
+  
   // Validate format (HH:MM:SS or H:MM:SS)
+  // This regex allows 1-2 digits for hours, and exactly 2 digits for minutes and seconds
   if (/^\d{1,2}:\d{2}:\d{2}$/.test(normalized)) {
+    // Ensure proper padding: convert "1:23:45" to "01:23:45"
+    const parts = normalized.split(':');
+    if (parts.length === 3) {
+      const hours = parts[0].padStart(2, '0');
+      const minutes = parts[1].padStart(2, '0');
+      const seconds = parts[2].padStart(2, '0');
+      return `${hours}:${minutes}:${seconds}`;
+    }
     return normalized;
   }
+  
+  // If format doesn't match, log warning but don't silently fail
+  console.warn(`[normalizeTime] Invalid time format: "${normalized}". Expected HH:MM:SS or H:MM:SS`);
   return "00:00:00";
 }
 

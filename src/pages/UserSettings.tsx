@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Settings, User, Mail, Lock, Palette, Trophy, CheckCircle, Upload, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
-import { updatePlayerProfile, getPlayerByUid, getUnclaimedRunsByUsername, claimRun, getCategories, getPlatforms } from "@/lib/db";
+import { updatePlayerProfile, getPlayerByUid, getUnclaimedRunsByUsername, getUnclaimedRunsBySRCUsername, claimRun, getCategories, getPlatforms } from "@/lib/db";
 import { updateEmail, updatePassword, updateProfile } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useNavigate, Link } from "react-router-dom";
@@ -33,9 +33,12 @@ const UserSettings = () => {
   const [bio, setBio] = useState("");
   const [pronouns, setPronouns] = useState("");
   const [twitchUsername, setTwitchUsername] = useState("");
+  const [srcUsername, setSrcUsername] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
   const [unclaimedRuns, setUnclaimedRuns] = useState<LeaderboardEntry[]>([]);
+  const [unclaimedSRCRuns, setUnclaimedSRCRuns] = useState<LeaderboardEntry[]>([]);
   const [loadingUnclaimed, setLoadingUnclaimed] = useState(false);
+  const [loadingSRCUnclaimed, setLoadingSRCUnclaimed] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [platforms, setPlatforms] = useState<{ id: string; name: string }[]>([]);
   const { startUpload, isUploading } = useUploadThing("profilePicture");
@@ -72,9 +75,13 @@ const UserSettings = () => {
             setBio(player.bio || "");
             setPronouns(player.pronouns || "");
             setTwitchUsername(player.twitchUsername || "");
+            setSrcUsername(player.srcUsername || "");
             // Check for unclaimed runs after loading player data
             if (player.displayName) {
               fetchUnclaimedRuns(player.displayName);
+            }
+            if (player.srcUsername) {
+              fetchUnclaimedSRCRuns(player.srcUsername);
             }
           } else {
             // If player doesn't exist in DB, use Firebase auth data
@@ -120,6 +127,20 @@ const UserSettings = () => {
     }
   };
 
+  const fetchUnclaimedSRCRuns = async (srcUsername: string) => {
+    if (!srcUsername || !currentUser) return;
+    setLoadingSRCUnclaimed(true);
+    try {
+      const runs = await getUnclaimedRunsBySRCUsername(srcUsername, currentUser.uid);
+      const trulyUnclaimed = runs.filter(run => run.playerId !== currentUser.uid);
+      setUnclaimedSRCRuns(trulyUnclaimed);
+    } catch (error) {
+      // Silent fail
+    } finally {
+      setLoadingSRCUnclaimed(false);
+    }
+  };
+
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -159,7 +180,8 @@ const UserSettings = () => {
         email: currentUser.email || email || "",
         bio: bio.trim() || "",
         pronouns: pronouns.trim() || "",
-        twitchUsername: twitchUsername.trim() || ""
+        twitchUsername: twitchUsername.trim() || "",
+        srcUsername: srcUsername.trim() || ""
       };
       
       // Only include profilePicture if it has a value (empty string will delete it)
@@ -343,9 +365,12 @@ const UserSettings = () => {
           title: "Run Claimed",
           description: "This run has been linked to your account.",
         });
-        // Refresh unclaimed runs list
+        // Refresh unclaimed runs lists
         if (displayName) {
           fetchUnclaimedRuns(displayName);
+        }
+        if (srcUsername) {
+          fetchUnclaimedSRCRuns(srcUsername);
         }
       } else {
         throw new Error("Failed to claim run.");
@@ -646,63 +671,147 @@ const UserSettings = () => {
           </CardHeader>
           <CardContent>
             <p className="text-[hsl(222,15%,60%)] mb-4">
-              If runs were added manually with your username before you created an account, you can claim them here to link them to your profile.
+              If runs were added manually with your username before you created an account, or imported from Speedrun.com, you can claim them here to link them to your profile.
             </p>
-            {loadingUnclaimed ? (
-              <div className="text-center py-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#cba6f7] mx-auto"></div>
-              </div>
-            ) : unclaimedRuns.length === 0 ? (
-              <p className="text-[hsl(222,15%,60%)] text-center py-4">
-                No unclaimed runs found for your username.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {unclaimedRuns.map((run) => (
-                  <div
-                    key={run.id}
-                    className="flex items-center justify-between p-4 bg-[hsl(234,14%,29%)] rounded-lg border border-[hsl(235,13%,30%)]"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="text-base font-semibold text-[#cba6f7]">
-                          {formatTime(run.time)}
-                        </span>
-                        <Badge variant="outline" className="border-[hsl(235,13%,30%)]">
-                          {categories?.find(c => c.id === run.category)?.name || run.category || "Unknown"}
-                        </Badge>
-                        <Badge variant="outline" className="border-[hsl(235,13%,30%)]">
-                          {platforms?.find(p => p.id === run.platform)?.name || run.platform || "Unknown"}
-                        </Badge>
-                        {run.rank && (
-                          <Badge variant={run.rank <= 3 ? "default" : "secondary"}>
-                            #{run.rank}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-sm text-[hsl(222,15%,60%)]">
-                        {formatDate(run.date)} • {run.runType === 'solo' ? 'Solo' : 'Co-op'}
-                        {run.videoUrl && (
-                          <Link
-                            to={`/run/${run.id}`}
-                            className="ml-2 text-[#cba6f7] hover:underline"
-                          >
-                            View Run
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                    <Button
-                      onClick={() => handleClaimRun(run.id)}
-                      size="sm"
-                      className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold ml-4"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Claim
-                    </Button>
+            
+            {/* Display Name Runs */}
+            {displayName && (
+              <>
+                <h3 className="text-sm font-semibold text-ctp-text mb-2 mt-4">Runs matching your display name ({displayName})</h3>
+                {loadingUnclaimed ? (
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#cba6f7] mx-auto"></div>
                   </div>
-                ))}
-              </div>
+                ) : unclaimedRuns.length === 0 ? (
+                  <p className="text-[hsl(222,15%,60%)] text-center py-4">
+                    No unclaimed runs found for your display name.
+                  </p>
+                ) : (
+                  <div className="space-y-3 mb-6">
+                    {unclaimedRuns.map((run) => (
+                      <div
+                        key={run.id}
+                        className="flex items-center justify-between p-4 bg-[hsl(234,14%,29%)] rounded-lg border border-[hsl(235,13%,30%)]"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-base font-semibold text-[#cba6f7]">
+                              {formatTime(run.time)}
+                            </span>
+                            <Badge variant="outline" className="border-[hsl(235,13%,30%)]">
+                              {categories?.find(c => c.id === run.category)?.name || run.category || "Unknown"}
+                            </Badge>
+                            <Badge variant="outline" className="border-[hsl(235,13%,30%)]">
+                              {platforms?.find(p => p.id === run.platform)?.name || run.platform || "Unknown"}
+                            </Badge>
+                            {run.rank && (
+                              <Badge variant={run.rank <= 3 ? "default" : "secondary"}>
+                                #{run.rank}
+                              </Badge>
+                            )}
+                            {run.importedFromSRC && (
+                              <Badge variant="outline" className="border-[hsl(235,13%,30%)] text-xs">
+                                From SRC
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-sm text-[hsl(222,15%,60%)]">
+                            {formatDate(run.date)} • {run.runType === 'solo' ? 'Solo' : 'Co-op'}
+                            {run.videoUrl && (
+                              <Link
+                                to={`/run/${run.id}`}
+                                className="ml-2 text-[#cba6f7] hover:underline"
+                              >
+                                View Run
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => handleClaimRun(run.id)}
+                          size="sm"
+                          className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold ml-4"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Claim
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            
+            {/* SRC Username Runs */}
+            {srcUsername && (
+              <>
+                <h3 className="text-sm font-semibold text-ctp-text mb-2 mt-4">Runs imported from Speedrun.com ({srcUsername})</h3>
+                {loadingSRCUnclaimed ? (
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#cba6f7] mx-auto"></div>
+                  </div>
+                ) : unclaimedSRCRuns.length === 0 ? (
+                  <p className="text-[hsl(222,15%,60%)] text-center py-4">
+                    No unclaimed runs found for your SRC username. Make sure you've entered your exact Speedrun.com username above.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {unclaimedSRCRuns.map((run) => (
+                      <div
+                        key={run.id}
+                        className="flex items-center justify-between p-4 bg-[hsl(234,14%,29%)] rounded-lg border border-[hsl(235,13%,30%)]"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-base font-semibold text-[#cba6f7]">
+                              {formatTime(run.time)}
+                            </span>
+                            <Badge variant="outline" className="border-[hsl(235,13%,30%)]">
+                              {categories?.find(c => c.id === run.category)?.name || run.srcCategoryName || run.category || "Unknown"}
+                            </Badge>
+                            <Badge variant="outline" className="border-[hsl(235,13%,30%)]">
+                              {platforms?.find(p => p.id === run.platform)?.name || run.srcPlatformName || run.platform || "Unknown"}
+                            </Badge>
+                            {run.rank && (
+                              <Badge variant={run.rank <= 3 ? "default" : "secondary"}>
+                                #{run.rank}
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="border-[hsl(235,13%,30%)] text-xs">
+                              From SRC
+                            </Badge>
+                          </div>
+                          <div className="text-sm text-[hsl(222,15%,60%)]">
+                            {formatDate(run.date)} • {run.runType === 'solo' ? 'Solo' : 'Co-op'}
+                            {run.videoUrl && (
+                              <Link
+                                to={`/run/${run.id}`}
+                                className="ml-2 text-[#cba6f7] hover:underline"
+                              >
+                                View Run
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => handleClaimRun(run.id)}
+                          size="sm"
+                          className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold ml-4"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Claim
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            
+            {!displayName && !srcUsername && (
+              <p className="text-[hsl(222,15%,60%)] text-center py-4">
+                Set your display name or Speedrun.com username above to find unclaimed runs.
+              </p>
             )}
           </CardContent>
         </Card>

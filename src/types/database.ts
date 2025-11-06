@@ -25,6 +25,8 @@ export interface LeaderboardEntry {
   srcCategoryName?: string; // Original category name from SRC
   srcPlatformName?: string; // Original platform name from SRC
   srcLevelName?: string; // Original level name from SRC
+  srcPlayerId?: string; // Speedrun.com player ID (for claiming)
+  srcPlayer2Id?: string; // Speedrun.com player2 ID (for co-op runs claiming)
 }
 
 export interface Player {
@@ -44,6 +46,7 @@ export interface Player {
   bio?: string; // Bio/description for the player
   pronouns?: string; // Pronouns for the player
   twitchUsername?: string; // Twitch username for the player
+  srcUsername?: string; // Speedrun.com username for claiming imported runs
 }
 
 export interface Category {

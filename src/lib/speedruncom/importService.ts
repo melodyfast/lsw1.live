@@ -474,6 +474,37 @@ export async function importSRCRuns(
         if (!mappedRun.playerName || mappedRun.playerName.trim() === '') {
           mappedRun.playerName = 'Unknown';
         }
+        
+        // Validate time - check if time is missing or 00:00:00 when it shouldn't be
+        if (!mappedRun.time || mappedRun.time.trim() === '' || mappedRun.time === '00:00:00') {
+          // Check if the source run actually has a time
+          if (srcRun.times?.primary_t && srcRun.times.primary_t > 0) {
+            // Time exists in source but was lost during conversion - try to fix it
+            const { secondsToTime } = await import('../speedruncom');
+            const fixedTime = secondsToTime(srcRun.times.primary_t);
+            if (fixedTime && fixedTime !== '00:00:00') {
+              mappedRun.time = fixedTime;
+              console.warn(`[importSRCRuns] Fixed missing time for run ${srcRun.id}: ${fixedTime}`);
+            } else {
+              console.error(`[importSRCRuns] Time conversion failed for run ${srcRun.id}: primary_t=${srcRun.times.primary_t}, got ${fixedTime}`);
+              result.errors.push(`Run ${srcRun.id}: time conversion failed`);
+            }
+          } else if (srcRun.times?.primary && srcRun.times.primary.trim() !== '') {
+            // Try ISO duration conversion
+            const { isoDurationToTime } = await import('../speedruncom');
+            const fixedTime = isoDurationToTime(srcRun.times.primary);
+            if (fixedTime && fixedTime !== '00:00:00') {
+              mappedRun.time = fixedTime;
+              console.warn(`[importSRCRuns] Fixed missing time for run ${srcRun.id} using ISO duration: ${fixedTime}`);
+            } else {
+              console.error(`[importSRCRuns] ISO duration conversion failed for run ${srcRun.id}: primary=${srcRun.times.primary}, got ${fixedTime}`);
+              result.errors.push(`Run ${srcRun.id}: time conversion failed`);
+            }
+          } else {
+            console.error(`[importSRCRuns] No time data available for run ${srcRun.id}`);
+            result.errors.push(`Run ${srcRun.id}: missing time data in source run`);
+          }
+        }
 
         // Validate the mapped run
         const validationErrors = validateMappedRun(mappedRun, srcRun.id);

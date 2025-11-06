@@ -67,6 +67,26 @@ service cloud.firestore {
                        resource.data.verified == true &&
                        // Only allow updates to comment and date fields
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comment', 'date']);
+      // Users can claim runs by updating playerId if the run's playerName or player2Name matches their display name
+      // This allows users to claim runs that were manually submitted or imported with their username
+      // Note: Client-side code in getUnclaimedRunsByUsername ensures only matching runs are shown
+      // This rule allows authenticated users to claim runs by updating playerId to their own uid
+      allow update: if isAuthenticated() && 
+                       // User is setting playerId to their own uid (claiming the run)
+                       request.resource.data.playerId == request.auth.uid &&
+                       // Only allowing update to playerId field (must be in the changed fields)
+                       ('playerId' in request.resource.data.diff(resource.data).affectedKeys()) &&
+                       // Ensure the player document exists (user must have a profile)
+                       exists(/databases/$(database)/documents/players/$(request.auth.uid)) &&
+                       // Allow claiming runs where playerName matches (case-sensitive exact match)
+                       // OR player2Name matches (for co-op runs where user is second player)
+                       // Client-side code handles case-insensitive matching and filtering
+                       ((resource.data.playerName != null && 
+                         get(/databases/$(database)/documents/players/$(request.auth.uid)).data.displayName != null &&
+                         resource.data.playerName == get(/databases/$(database)/documents/players/$(request.auth.uid)).data.displayName) ||
+                        (resource.data.player2Name != null && 
+                         get(/databases/$(database)/documents/players/$(request.auth.uid)).data.displayName != null &&
+                         resource.data.player2Name == get(/databases/$(database)/documents/players/$(request.auth.uid)).data.displayName));
     }
     
     // Download entries
