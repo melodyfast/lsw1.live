@@ -182,24 +182,51 @@ const Leaderboards = () => {
 
           <TabsContent value={leaderboardType} className="mt-0 animate-fade-in">
             {/* Category Tabs */}
-            {availableCategories.length > 0 && (
-              <div className="mb-6 animate-slide-up">
-                <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide" style={{ minWidth: 'max-content' }}>
-                    {availableCategories.map((category, index) => (
-                      <TabsTrigger 
-                        key={category.id} 
-                        value={category.id} 
-                        className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap"
-                        style={{ animationDelay: `${index * 50}ms` }}
-                      >
-                        {category.name}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                </Tabs>
-              </div>
-            )}
+            {(() => {
+              // Filter out categories that are disabled for the selected level
+              const filteredCategories = availableCategories.filter(category => {
+                // Only filter if we have a level selected and it's IL or Community Golds
+                if ((leaderboardType === 'individual-level' || leaderboardType === 'community-golds') && selectedLevel) {
+                  const levelData = availableLevels.find(l => l.id === selectedLevel);
+                  if (levelData && levelData.disabledCategories?.[category.id] === true) {
+                    return false; // Category is disabled for this level
+                  }
+                }
+                return true;
+              });
+              
+              // If the currently selected category is disabled, reset to first available
+              if (filteredCategories.length > 0 && !filteredCategories.find(c => c.id === selectedCategory)) {
+                setTimeout(() => setSelectedCategory(filteredCategories[0].id), 0);
+              }
+              
+              return filteredCategories.length > 0 ? (
+                <div className="mb-6 animate-slide-up">
+                  <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide" style={{ minWidth: 'max-content' }}>
+                      {filteredCategories.map((category, index) => (
+                        <TabsTrigger 
+                          key={category.id} 
+                          value={category.id} 
+                          className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap"
+                          style={{ animationDelay: `${index * 50}ms` }}
+                        >
+                          {category.name}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </Tabs>
+                </div>
+              ) : (
+                availableCategories.length > 0 && (
+                  <div className="mb-6 p-4 bg-ctp-surface0 rounded-lg border border-ctp-surface1">
+                    <p className="text-sm text-ctp-subtext1">
+                      No categories available for the selected level. Please enable categories for this level in the admin panel.
+                    </p>
+                  </div>
+                )
+              );
+            })()}
 
         {/* Filters */}
             <Card className="bg-gradient-to-br from-ctp-base to-ctp-mantle border-ctp-surface1 shadow-xl mb-6 transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-ctp-mauve/20 hover:border-ctp-mauve/50 animate-slide-up-delay">

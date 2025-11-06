@@ -58,6 +58,7 @@ import {
   updateLevelCategoryDisabled,
 } from "@/lib/db";
 import { importSRCRuns, type ImportResult } from "@/lib/speedruncom/importService";
+import { fetchSRCRunById, extractIdAndName, getPlayerName, type SRCRun } from "@/lib/speedruncom";
 import { useUploadThing } from "@/lib/uploadthing";
 import { LeaderboardEntry, DownloadEntry } from "@/types/database";
 import { useNavigate } from "react-router-dom";
@@ -78,6 +79,8 @@ const Admin = () => {
   const [editingImportedRun, setEditingImportedRun] = useState<LeaderboardEntry | null>(null);
   const [editingImportedRunForm, setEditingImportedRunForm] = useState<Partial<LeaderboardEntry>>({});
   const [savingImportedRun, setSavingImportedRun] = useState(false);
+  const [srcRunData, setSrcRunData] = useState<SRCRun | null>(null);
+  const [loadingSRCData, setLoadingSRCData] = useState(false);
   const [unverifiedPage, setUnverifiedPage] = useState(1);
   const [importedPage, setImportedPage] = useState(1);
   const [clearingImportedRuns, setClearingImportedRuns] = useState(false);
@@ -193,6 +196,22 @@ const Admin = () => {
     };
     fetchData();
   }, [importedRunsLeaderboardType]);
+
+  // Fetch categories for level management when levelLeaderboardType changes
+  useEffect(() => {
+    const fetchLevelCategories = async () => {
+      try {
+        // For community-golds, use regular categories (community golds use regular categories)
+        // For individual-level, use individual-level categories
+        const categoryType = levelLeaderboardType === 'community-golds' ? 'regular' : levelLeaderboardType;
+        const categoriesData = await getCategories(categoryType);
+        setFirestoreCategories(categoriesData);
+      } catch (error) {
+        // Silent fail
+      }
+    };
+    fetchLevelCategories();
+  }, [levelLeaderboardType]);
 
   const fetchImportedRunsCategories = async (leaderboardType: 'regular' | 'individual-level') => {
     try {
@@ -2623,13 +2642,14 @@ const Admin = () => {
           </TabsContent>
 
         {/* Edit Imported Run Dialog */}
-        <Dialog open={!!editingImportedRun} onOpenChange={(open) => {
+          <Dialog open={!!editingImportedRun} onOpenChange={(open) => {
           if (!open) {
             setEditingImportedRun(null);
             setEditingImportedRunForm({});
+            setSrcRunData(null);
           }
         }}>
-          <DialogContent className="bg-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="bg-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-[#f2cdcd]">
                 {editingImportedRun?.importedFromSRC ? "Edit Imported Run" : "Edit Run"}
@@ -2637,6 +2657,383 @@ const Admin = () => {
             </DialogHeader>
             {editingImportedRun && (
               <div className="space-y-4 py-4">
+                {/* SRC Data Card - Show for imported runs */}
+                {editingImportedRun.importedFromSRC && editingImportedRun.srcRunId && (
+                  <Card className="bg-gradient-to-br from-[hsl(240,21%,18%)] via-[hsl(240,21%,16%)] to-[hsl(235,19%,14%)] border-[hsl(235,13%,30%)] shadow-lg">
+                    <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,20%)] to-[hsl(240,21%,17%)] border-b border-[hsl(235,13%,30%)]">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg text-[#94e2d5] flex items-center gap-2">
+                          <ExternalLink className="h-5 w-5" />
+                          Speedrun.com Original Data
+                        </CardTitle>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            if (!editingImportedRun.srcRunId) return;
+                            setLoadingSRCData(true);
+                            try {
+                              const srcData = await fetchSRCRunById(editingImportedRun.srcRunId);
+                              setSrcRunData(srcData);
+                            } catch (error) {
+                              toast({
+                                title: "Error",
+                                description: "Failed to fetch SRC data",
+                                variant: "destructive",
+                              });
+                            } finally {
+                              setLoadingSRCData(false);
+                            }
+                          }}
+                          disabled={loadingSRCData}
+                          className="text-xs text-[#94e2d5] hover:text-[#94e2d5] hover:bg-[#94e2d5]/10"
+                        >
+                          {loadingSRCData ? "Loading..." : srcRunData ? "Refresh" : "Load SRC Data"}
+                        </Button>
+                      </div>
+                      {editingImportedRun.srcRunId && (
+                        <a 
+                          href={`https://www.speedrun.com/lsw/run/${editingImportedRun.srcRunId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-[hsl(222,15%,60%)] hover:text-[#94e2d5] flex items-center gap-1"
+                        >
+                          View on speedrun.com <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      {loadingSRCData ? (
+                        <div className="flex items-center justify-center py-8">
+                          <LoadingSpinner />
+                        </div>
+                      ) : srcRunData ? (
+                        <div className="space-y-4">
+                          {/* Players */}
+                          <div>
+                            <Label className="text-sm text-[hsl(222,15%,60%)] mb-2 block">Players</Label>
+                            <div className="bg-[hsl(240,21%,15%)] rounded-lg p-3 border border-[hsl(235,13%,30%)]">
+                              <div className="space-y-2">
+                                {srcRunData.players && srcRunData.players.length > 0 ? (
+                                  srcRunData.players.map((player, idx) => {
+                                    const playerName = getPlayerName(player);
+                                    return (
+                                      <div key={idx} className="flex items-center justify-between">
+                                        <span className="text-sm text-ctp-text">
+                                          Player {idx + 1}: <strong className="text-[#94e2d5]">{playerName}</strong>
+                                        </span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => {
+                                            if (idx === 0) {
+                                              setEditingImportedRunForm({ ...editingImportedRunForm, playerName: playerName });
+                                            } else {
+                                              setEditingImportedRunForm({ ...editingImportedRunForm, player2Name: playerName });
+                                            }
+                                          }}
+                                          className="text-xs h-6 px-2 text-[#94e2d5] hover:bg-[#94e2d5]/10"
+                                        >
+                                          Use
+                                        </Button>
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  <span className="text-sm text-[hsl(222,15%,60%)]">No players found</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Category */}
+                          <div>
+                            <Label className="text-sm text-[hsl(222,15%,60%)] mb-2 block">Category</Label>
+                            <div className="bg-[hsl(240,21%,15%)] rounded-lg p-3 border border-[hsl(235,13%,30%)]">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="text-sm text-ctp-text">
+                                    <strong className="text-[#94e2d5]">{extractIdAndName(srcRunData.category).name || editingImportedRun.srcCategoryName || "Unknown"}</strong>
+                                  </div>
+                                  {extractIdAndName(srcRunData.category).id && (
+                                    <div className="text-xs text-[hsl(222,15%,60%)] mt-1">
+                                      SRC ID: {extractIdAndName(srcRunData.category).id}
+                                    </div>
+                                  )}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    // Try to find matching category by name
+                                    const categoryName = extractIdAndName(srcRunData.category).name || editingImportedRun.srcCategoryName;
+                                    if (categoryName) {
+                                      const matchingCategory = firestoreCategories.find(c => 
+                                        c.name.toLowerCase().trim() === categoryName.toLowerCase().trim()
+                                      );
+                                      if (matchingCategory) {
+                                        setEditingImportedRunForm({ ...editingImportedRunForm, category: matchingCategory.id });
+                                        toast({
+                                          title: "Category Matched",
+                                          description: `Set category to "${matchingCategory.name}"`,
+                                        });
+                                      } else {
+                                        toast({
+                                          title: "No Match Found",
+                                          description: `No category found matching "${categoryName}"`,
+                                          variant: "destructive",
+                                        });
+                                      }
+                                    }
+                                  }}
+                                  className="text-xs h-6 px-2 text-[#94e2d5] hover:bg-[#94e2d5]/10"
+                                >
+                                  Match & Use
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Platform */}
+                          <div>
+                            <Label className="text-sm text-[hsl(222,15%,60%)] mb-2 block">Platform</Label>
+                            <div className="bg-[hsl(240,21%,15%)] rounded-lg p-3 border border-[hsl(235,13%,30%)]">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="text-sm text-ctp-text">
+                                    <strong className="text-[#94e2d5]">{extractIdAndName(srcRunData.system?.platform).name || editingImportedRun.srcPlatformName || "Unknown"}</strong>
+                                  </div>
+                                  {srcRunData.system?.platform && extractIdAndName(srcRunData.system.platform).id && (
+                                    <div className="text-xs text-[hsl(222,15%,60%)] mt-1">
+                                      SRC ID: {extractIdAndName(srcRunData.system.platform).id}
+                                    </div>
+                                  )}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    // Try to find matching platform by name
+                                    const platformName = extractIdAndName(srcRunData.system?.platform).name || editingImportedRun.srcPlatformName;
+                                    if (platformName) {
+                                      const matchingPlatform = firestorePlatforms.find(p => 
+                                        p.name.toLowerCase().trim() === platformName.toLowerCase().trim()
+                                      );
+                                      if (matchingPlatform) {
+                                        setEditingImportedRunForm({ ...editingImportedRunForm, platform: matchingPlatform.id });
+                                        toast({
+                                          title: "Platform Matched",
+                                          description: `Set platform to "${matchingPlatform.name}"`,
+                                        });
+                                      } else {
+                                        toast({
+                                          title: "No Match Found",
+                                          description: `No platform found matching "${platformName}"`,
+                                          variant: "destructive",
+                                        });
+                                      }
+                                    }
+                                  }}
+                                  className="text-xs h-6 px-2 text-[#94e2d5] hover:bg-[#94e2d5]/10"
+                                >
+                                  Match & Use
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Level (if applicable) */}
+                          {srcRunData.level && (
+                            <div>
+                              <Label className="text-sm text-[hsl(222,15%,60%)] mb-2 block">Level</Label>
+                              <div className="bg-[hsl(240,21%,15%)] rounded-lg p-3 border border-[hsl(235,13%,30%)]">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <div className="text-sm text-ctp-text">
+                                      <strong className="text-[#94e2d5]">{extractIdAndName(srcRunData.level).name || editingImportedRun.srcLevelName || "Unknown"}</strong>
+                                    </div>
+                                    {extractIdAndName(srcRunData.level).id && (
+                                      <div className="text-xs text-[hsl(222,15%,60%)] mt-1">
+                                        SRC ID: {extractIdAndName(srcRunData.level).id}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      // Try to find matching level by name
+                                      const levelName = extractIdAndName(srcRunData.level).name || editingImportedRun.srcLevelName;
+                                      if (levelName) {
+                                        const matchingLevel = availableLevels.find(l => 
+                                          l.name.toLowerCase().trim() === levelName.toLowerCase().trim()
+                                        );
+                                        if (matchingLevel) {
+                                          setEditingImportedRunForm({ ...editingImportedRunForm, level: matchingLevel.id });
+                                          toast({
+                                            title: "Level Matched",
+                                            description: `Set level to "${matchingLevel.name}"`,
+                                          });
+                                        } else {
+                                          toast({
+                                            title: "No Match Found",
+                                            description: `No level found matching "${levelName}"`,
+                                            variant: "destructive",
+                                          });
+                                        }
+                                      }
+                                    }}
+                                    className="text-xs h-6 px-2 text-[#94e2d5] hover:bg-[#94e2d5]/10"
+                                  >
+                                    Match & Use
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Time */}
+                          <div>
+                            <Label className="text-sm text-[hsl(222,15%,60%)] mb-2 block">Time</Label>
+                            <div className="bg-[hsl(240,21%,15%)] rounded-lg p-3 border border-[hsl(235,13%,30%)]">
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm text-ctp-text font-mono">
+                                  <strong className="text-[#94e2d5]">
+                                    {srcRunData.times.primary_t ? 
+                                      (() => {
+                                        const hours = Math.floor(srcRunData.times.primary_t / 3600);
+                                        const minutes = Math.floor((srcRunData.times.primary_t % 3600) / 60);
+                                        const seconds = srcRunData.times.primary_t % 60;
+                                        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(Math.floor(seconds)).padStart(2, '0')}`;
+                                      })() :
+                                      srcRunData.times.primary || "Unknown"
+                                    }
+                                  </strong>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (srcRunData.times.primary_t) {
+                                      const hours = Math.floor(srcRunData.times.primary_t / 3600);
+                                      const minutes = Math.floor((srcRunData.times.primary_t % 3600) / 60);
+                                      const seconds = srcRunData.times.primary_t % 60;
+                                      const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(Math.floor(seconds)).padStart(2, '0')}`;
+                                      setEditingImportedRunForm({ ...editingImportedRunForm, time: timeStr });
+                                      toast({
+                                        title: "Time Updated",
+                                        description: `Set time to ${timeStr}`,
+                                      });
+                                    }
+                                  }}
+                                  className="text-xs h-6 px-2 text-[#94e2d5] hover:bg-[#94e2d5]/10"
+                                >
+                                  Use
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Date */}
+                          {srcRunData.date && (
+                            <div>
+                              <Label className="text-sm text-[hsl(222,15%,60%)] mb-2 block">Date</Label>
+                              <div className="bg-[hsl(240,21%,15%)] rounded-lg p-3 border border-[hsl(235,13%,30%)]">
+                                <div className="flex items-center justify-between">
+                                  <div className="text-sm text-ctp-text">
+                                    <strong className="text-[#94e2d5]">{srcRunData.date.split('T')[0]}</strong>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditingImportedRunForm({ ...editingImportedRunForm, date: srcRunData.date?.split('T')[0] });
+                                      toast({
+                                        title: "Date Updated",
+                                        description: `Set date to ${srcRunData.date?.split('T')[0]}`,
+                                      });
+                                    }}
+                                    className="text-xs h-6 px-2 text-[#94e2d5] hover:bg-[#94e2d5]/10"
+                                  >
+                                    Use
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Video URL */}
+                          {srcRunData.videos?.links && srcRunData.videos.links.length > 0 && (
+                            <div>
+                              <Label className="text-sm text-[hsl(222,15%,60%)] mb-2 block">Video URL</Label>
+                              <div className="bg-[hsl(240,21%,15%)] rounded-lg p-3 border border-[hsl(235,13%,30%)]">
+                                <div className="flex items-center justify-between gap-2">
+                                  <a 
+                                    href={srcRunData.videos.links[0].uri} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-[#94e2d5] hover:underline truncate flex-1"
+                                  >
+                                    {srcRunData.videos.links[0].uri}
+                                  </a>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditingImportedRunForm({ ...editingImportedRunForm, videoUrl: srcRunData.videos?.links?.[0]?.uri });
+                                      toast({
+                                        title: "Video URL Updated",
+                                        description: "Video URL copied from SRC",
+                                      });
+                                    }}
+                                    className="text-xs h-6 px-2 text-[#94e2d5] hover:bg-[#94e2d5]/10 flex-shrink-0"
+                                  >
+                                    Use
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Comment */}
+                          {srcRunData.comment && (
+                            <div>
+                              <Label className="text-sm text-[hsl(222,15%,60%)] mb-2 block">Comment</Label>
+                              <div className="bg-[hsl(240,21%,15%)] rounded-lg p-3 border border-[hsl(235,13%,30%)]">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="text-sm text-ctp-text flex-1">{srcRunData.comment}</p>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditingImportedRunForm({ ...editingImportedRunForm, comment: srcRunData.comment });
+                                      toast({
+                                        title: "Comment Updated",
+                                        description: "Comment copied from SRC",
+                                      });
+                                    }}
+                                    className="text-xs h-6 px-2 text-[#94e2d5] hover:bg-[#94e2d5]/10 flex-shrink-0"
+                                  >
+                                    Use
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <p className="text-sm text-[hsl(222,15%,60%)] mb-4">
+                            Click "Load SRC Data" to view the original run data from speedrun.com
+                          </p>
+                          <p className="text-xs text-[hsl(222,15%,50%)]">
+                            This will help you fill in missing or incorrect data that didn't import properly.
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="edit-playerName">Player Name</Label>
@@ -3128,16 +3525,21 @@ const Admin = () => {
                       </p>
                       <div className="space-y-4 max-h-[500px] overflow-y-auto">
                         {availableLevels.map((level) => {
-                          // Get categories for the current leaderboard type
-                          // For community-golds, use regular categories (community golds use regular categories)
-                          const categoryType = levelLeaderboardType === 'community-golds' ? 'regular' : levelLeaderboardType;
-                          const relevantCategories = firestoreCategories.filter(cat => 
-                            (cat.leaderboardType === categoryType) || 
-                            (levelLeaderboardType === 'community-golds' && cat.leaderboardType === 'regular')
-                          );
+                          // Categories are already filtered by levelLeaderboardType in the useEffect above
+                          // firestoreCategories should already contain the correct categories
+                          // For community-golds, we use regular categories
+                          // For individual-level, we use individual-level categories
+                          const relevantCategories = firestoreCategories;
                           
                           if (relevantCategories.length === 0) {
-                            return null;
+                            return (
+                              <div key={level.id} className="bg-[hsl(240,21%,15%)] rounded-lg p-4 border border-[hsl(235,13%,30%)]">
+                                <div className="font-medium text-sm mb-3 text-[#f2cdcd]">{level.name}</div>
+                                <p className="text-xs text-[hsl(222,15%,60%)]">
+                                  No categories available for {levelLeaderboardType === 'community-golds' ? 'Community Golds' : 'Individual Level'} runs.
+                                </p>
+                              </div>
+                            );
                           }
                           
                           const isDisabled = (categoryId: string) => {

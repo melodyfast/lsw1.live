@@ -211,6 +211,21 @@ export async function fetchRunsNotOnLeaderboards(
   return allRuns.slice(0, limit);
 }
 
+/**
+ * Fetch a single run by ID from speedrun.com
+ * Useful for getting full run details when editing imported runs
+ */
+export async function fetchSRCRunById(runId: string): Promise<SRCRun | null> {
+  try {
+    const data = await fetchSRCAPI<{ data: SRCRun }>(
+      `/runs/${runId}?embed=players,category,level,platform`
+    );
+    return data.data || null;
+  } catch (error) {
+    console.error(`Error fetching SRC run ${runId}:`, error);
+    return null;
+  }
+}
 
 /**
  * Fetch all categories for a game
@@ -255,7 +270,7 @@ export async function fetchPlatforms(): Promise<SRCPlatform[]> {
  * Get player name from embedded player data
  * Handles various SRC API response structures
  */
-function getPlayerName(player: SRCRun['players'][0]): string {
+export function getPlayerName(player: SRCRun['players'][0]): string {
   if (!player) return "Unknown";
   
   // Check for direct name field first (guest runs - these are anonymous/unregistered players)

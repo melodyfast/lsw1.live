@@ -180,6 +180,14 @@ export const getLeaderboardEntriesFirestore = async (
           return false;
         }
         
+        // Check if category is disabled for this level (for ILs and Community Golds)
+        if (normalizedLevelId && selectedLevelData && (leaderboardType === 'individual-level' || leaderboardType === 'community-golds')) {
+          const isCategoryDisabled = selectedLevelData.disabledCategories?.[entry.category] === true;
+          if (isCategoryDisabled) {
+            return false; // Filter out entries where category is disabled for this level
+          }
+        }
+        
         return true;
       });
 
@@ -243,7 +251,7 @@ export const getLeaderboardEntriesFirestore = async (
       });
     }
 
-    // Fetch categories, platforms, and levels for SRC name fallback
+    // Fetch categories, platforms, and levels for SRC name fallback and disabled category checking
     const [categoriesSnapshot, platformsSnapshot, levelsSnapshot] = await Promise.all([
       getDocs(collection(db, "categories")),
       getDocs(collection(db, "platforms")),
@@ -253,6 +261,9 @@ export const getLeaderboardEntriesFirestore = async (
     const categories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
     const platforms = platformsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Platform));
     const levels = levelsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Level));
+    
+    // Get the level data if we're filtering by level (for checking disabled categories)
+    const selectedLevelData = normalizedLevelId ? levels.find(l => l.id === normalizedLevelId) : undefined;
 
     // Enrich entries with player data and SRC fallback names
     const enrichedEntries = entries.map(entry => {
