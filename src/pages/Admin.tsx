@@ -57,6 +57,8 @@ import {
   getVerifiedRunsWithInvalidData,
   updateLevelCategoryDisabled,
   getUnassignedRuns,
+  findDuplicateRuns,
+  removeDuplicateRuns,
 } from "@/lib/db";
 import { importSRCRuns, type ImportResult } from "@/lib/speedruncom/importService";
 import { useUploadThing } from "@/lib/uploadthing";
@@ -166,6 +168,9 @@ const Admin = () => {
   const [foundPlayer, setFoundPlayer] = useState<{ uid: string; displayName: string; email: string; isAdmin: boolean } | null>(null);
   const [searchingPlayer, setSearchingPlayer] = useState(false);
   const [backfillingPoints, setBackfillingPoints] = useState(false);
+  const [duplicateRuns, setDuplicateRuns] = useState<Array<{ runs: LeaderboardEntry[]; key: string }>>([]);
+  const [loadingDuplicates, setLoadingDuplicates] = useState(false);
+  const [removingDuplicates, setRemovingDuplicates] = useState(false);
   const [activeTab, setActiveTab] = useState("runs");
 
   useEffect(() => {
@@ -1989,6 +1994,132 @@ const Admin = () => {
                       </>
                     )}
                   </Button>
+              </CardContent>
+            </Card>
+
+            {/* Duplicate Detection Card */}
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
+              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
+                <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
+                  <span>
+                    Duplicate Run Detection
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <p className="text-sm text-ctp-subtext1 leading-relaxed mb-4">
+                  Find and remove duplicate runs from the database. Duplicates are detected based on player names, category, platform, run type, time, leaderboard type, and level. When removing duplicates, the system keeps the best run (verified over unverified, older date over newer).
+                </p>
+                
+                {duplicateRuns.length > 0 && (
+                  <div className="mb-4 p-4 bg-[hsl(240,21%,12%)] rounded-lg border border-[hsl(235,13%,30%)]">
+                    <p className="text-sm font-semibold text-ctp-text mb-2">
+                      Found {duplicateRuns.length} duplicate group(s) with {duplicateRuns.reduce((sum, group) => sum + group.runs.length, 0)} total runs
+                    </p>
+                    <p className="text-xs text-ctp-subtext1">
+                      {duplicateRuns.reduce((sum, group) => sum + group.runs.length - 1, 0)} run(s) will be removed (keeping the best one from each group).
+                    </p>
+                  </div>
+                )}
+                
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button
+                    onClick={async () => {
+                      setLoadingDuplicates(true);
+                      try {
+                        const duplicates = await findDuplicateRuns();
+                        setDuplicateRuns(duplicates);
+                        if (duplicates.length === 0) {
+                          toast({
+                            title: "No Duplicates Found",
+                            description: "No duplicate runs were found in the database.",
+                          });
+                        } else {
+                          toast({
+                            title: "Duplicates Found",
+                            description: `Found ${duplicates.length} duplicate group(s) with ${duplicates.reduce((sum, group) => sum + group.runs.length, 0)} total runs.`,
+                          });
+                        }
+                      } catch (error: any) {
+                        toast({
+                          title: "Error",
+                          description: error.message || "Failed to find duplicate runs.",
+                          variant: "destructive",
+                        });
+                      } finally {
+                        setLoadingDuplicates(false);
+                      }
+                    }}
+                    disabled={loadingDuplicates}
+                    className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-semibold transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#cba6f7]/50"
+                  >
+                    {loadingDuplicates ? (
+                      <>
+                        <LoadingSpinner size="sm" className="mr-2" />
+                        Scanning...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Find Duplicates
+                      </>
+                    )}
+                  </Button>
+                  
+                  {duplicateRuns.length > 0 && (
+                    <Button
+                      onClick={async () => {
+                        if (!window.confirm(
+                          `This will remove ${duplicateRuns.reduce((sum, group) => sum + group.runs.length - 1, 0)} duplicate run(s). ` +
+                          "This operation cannot be undone. Continue?"
+                        )) {
+                          return;
+                        }
+                        
+                        setRemovingDuplicates(true);
+                        try {
+                          const result = await removeDuplicateRuns(duplicateRuns);
+                          if (result.errors.length > 0) {
+                            toast({
+                              title: "Removal Complete with Errors",
+                              description: `Removed ${result.removed} duplicate run(s). ${result.errors.length} error(s) occurred.`,
+                              variant: "destructive",
+                            });
+                          } else {
+                            toast({
+                              title: "Duplicates Removed",
+                              description: `Successfully removed ${result.removed} duplicate run(s).`,
+                            });
+                          }
+                          setDuplicateRuns([]);
+                        } catch (error: any) {
+                          toast({
+                            title: "Error",
+                            description: error.message || "Failed to remove duplicate runs.",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setRemovingDuplicates(false);
+                        }
+                      }}
+                      disabled={removingDuplicates}
+                      variant="destructive"
+                      className="font-semibold transition-all duration-300 hover:scale-105 hover:shadow-xl"
+                    >
+                      {removingDuplicates ? (
+                        <>
+                          <LoadingSpinner size="sm" className="mr-2" />
+                          Removing...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Remove Duplicates
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
 

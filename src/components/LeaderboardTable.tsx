@@ -92,9 +92,6 @@ export function LeaderboardTable({ data, platforms = [], categories = [] }: Lead
                             </span>
                           </>
                         )}
-                        <Badge variant="outline" className="border-[#9147ff] bg-[#9147ff]/10 text-[#9147ff] text-xs px-1.5 py-0.5 ml-1">
-                          Unclaimed
-                        </Badge>
                       </>
                     );
                   } else {
@@ -135,11 +132,6 @@ export function LeaderboardTable({ data, platforms = [], categories = [] }: Lead
                       {entry.runType === 'solo' ? <User className="h-3 w-3" /> : <Users className="h-3 w-3" />}
                       {entry.runType.charAt(0).toUpperCase() + entry.runType.slice(1)}
                     </Badge>
-                    {(entry.playerId === "imported" || entry.importedFromSRC === true) && (
-                      <Badge variant="outline" className="border-[#9147ff] bg-[#9147ff]/10 text-[#9147ff] text-xs px-1.5 py-0.5">
-                        Unclaimed
-                      </Badge>
-                    )}
                   </div>
                 </div>
               </TableCell>

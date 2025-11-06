@@ -633,6 +633,121 @@ export const createPlayerFirestore = async (player: Omit<Player, 'id'>): Promise
 };
 
 /**
+ * Automatically claim runs by SRC username matching
+ * This finds all imported runs where srcPlayerName or srcPlayer2Name matches the SRC username
+ * and automatically claims them for the user
+ */
+export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUsername: string): Promise<{ claimed: number; errors: string[] }> => {
+  if (!db || !srcUsername || !srcUsername.trim()) {
+    return { claimed: 0, errors: [] };
+  }
+  
+  const result = { claimed: 0, errors: [] as string[] };
+  const normalizedSrcUsername = srcUsername.trim().toLowerCase();
+  
+  try {
+    // Get all runs (verified and unverified) to check for matches
+    const queries = [
+      query(collection(db, "leaderboardEntries"), where("verified", "==", true), firestoreLimit(1000)),
+      query(collection(db, "leaderboardEntries"), where("verified", "==", false), firestoreLimit(1000))
+    ];
+    
+    const [verifiedSnapshot, unverifiedSnapshot] = await Promise.all([
+      getDocs(queries[0]),
+      getDocs(queries[1])
+    ]);
+    
+    const allRuns = [
+      ...verifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry)),
+      ...unverifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
+    ];
+    
+    // Find imported runs where srcPlayerName or srcPlayer2Name matches (case-insensitive)
+    const runsToClaim = allRuns.filter(run => {
+      if (!run.importedFromSRC) return false;
+      
+      const runSRCPlayerName = (run.srcPlayerName || "").trim().toLowerCase();
+      const runSRCPlayer2Name = (run.srcPlayer2Name || "").trim().toLowerCase();
+      
+      // Match if either SRC player name matches (case-insensitive)
+      const matches = runSRCPlayerName === normalizedSrcUsername || 
+                     (runSRCPlayer2Name && runSRCPlayer2Name === normalizedSrcUsername);
+      
+      if (!matches) return false;
+      
+      const currentPlayerId = run.playerId || "";
+      // Skip if already claimed by this user
+      if (currentPlayerId === userId) return false;
+      
+      // Only claim if unclaimed (imported, unlinked_*, unclaimed_*, or empty)
+      return !currentPlayerId || 
+             currentPlayerId === "imported" || 
+             currentPlayerId.startsWith("unlinked_") ||
+             currentPlayerId.startsWith("unclaimed_");
+    });
+    
+    if (runsToClaim.length === 0) {
+      return result;
+    }
+    
+    // Batch update runs
+    let batch = writeBatch(db);
+    let batchCount = 0;
+    const MAX_BATCH_SIZE = 500;
+    
+    for (const run of runsToClaim) {
+      const runDocRef = doc(db, "leaderboardEntries", run.id);
+      batch.update(runDocRef, { playerId: userId });
+      batchCount++;
+      
+      if (batchCount >= MAX_BATCH_SIZE) {
+        await batch.commit();
+        batchCount = 0;
+        batch = writeBatch(db);
+      }
+    }
+    
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+    
+    result.claimed = runsToClaim.length;
+    
+    // Recalculate points for the user if any verified runs were claimed
+    const verifiedRunsClaimed = runsToClaim.filter(run => run.verified).length;
+    if (verifiedRunsClaimed > 0) {
+      try {
+        await recalculatePlayerPointsFirestore(userId);
+      } catch (error) {
+        console.error(`Error recalculating points after auto-claiming:`, error);
+        result.errors.push(`Failed to recalculate points: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    
+    // For co-op runs, also recalculate player2's points if they have a different userId
+    const coOpRuns = runsToClaim.filter(run => run.runType === 'co-op' && run.verified);
+    for (const run of coOpRuns) {
+      if (run.player2Name) {
+        try {
+          const player2 = await getPlayerByDisplayNameFirestore(run.player2Name);
+          if (player2 && player2.uid !== userId) {
+            await recalculatePlayerPointsFirestore(player2.uid);
+          }
+        } catch (error) {
+          console.error(`Error recalculating player2 points for ${run.player2Name}:`, error);
+        }
+      }
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("Error auto-claiming runs by SRC username:", error);
+    result.errors.push(error instanceof Error ? error.message : String(error));
+    return result;
+  }
+};
+
+/**
  * Automatically link runs to a player based on display name matching (case-insensitive)
  * This finds all runs (verified and unverified) where playerName or player2Name matches the display name
  * and updates their playerId to the given userId
@@ -812,6 +927,11 @@ export const updatePlayerProfileFirestore = async (uid: string, data: Partial<Pl
       await setDoc(playerDocRef, newPlayer);
     }
     
+    // Check if SRC username is being updated
+    const oldSRCUsername = docSnap.exists() ? (docSnap.data() as Player).srcUsername : null;
+    const newSRCUsername = data.srcUsername?.trim();
+    const srcUsernameChanged = newSRCUsername && newSRCUsername !== oldSRCUsername;
+    
     // Automatically link runs when display name is set or changed
     if (displayNameChanged && newDisplayName) {
       // Run auto-linking asynchronously (don't block the profile update)
@@ -822,6 +942,27 @@ export const updatePlayerProfileFirestore = async (uid: string, data: Partial<Pl
       // If creating a new profile, also auto-link runs
       autoLinkRunsByDisplayNameFirestore(uid, newDisplayName).catch(error => {
         console.error("Error auto-linking runs after profile creation:", error);
+      });
+    }
+    
+    // Automatically claim runs when SRC username is set or changed
+    if (srcUsernameChanged && newSRCUsername) {
+      // Run auto-claiming asynchronously (don't block the profile update)
+      autoClaimRunsBySRCUsernameFirestore(uid, newSRCUsername).then(result => {
+        if (result.claimed > 0) {
+          console.log(`Auto-claimed ${result.claimed} runs for SRC username: ${newSRCUsername}`);
+        }
+      }).catch(error => {
+        console.error("Error auto-claiming runs after SRC username update:", error);
+      });
+    } else if (!docSnap.exists() && newSRCUsername) {
+      // If creating a new profile with SRC username, also auto-claim runs
+      autoClaimRunsBySRCUsernameFirestore(uid, newSRCUsername).then(result => {
+        if (result.claimed > 0) {
+          console.log(`Auto-claimed ${result.claimed} runs for new profile with SRC username: ${newSRCUsername}`);
+        }
+      }).catch(error => {
+        console.error("Error auto-claiming runs after profile creation:", error);
       });
     }
     
@@ -1730,6 +1871,7 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
     
     // Also find runs by display name matching (case-insensitive)
     // This handles cases where runs haven't been auto-linked yet
+    // IMPORTANT: Only count claimed runs for points - unclaimed runs don't contribute to points
     let runsByDisplayName: LeaderboardEntry[] = [];
     if (playerDisplayName) {
       const normalizedDisplayName = playerDisplayName.toLowerCase();
@@ -1749,17 +1891,13 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
           const runPlayer2Name = (run.player2Name || "").trim().toLowerCase();
           
           // Match if playerName matches (case-insensitive)
-          // Only include runs that aren't already linked to this player or another player
           const nameMatches = runPlayerName === normalizedDisplayName;
           if (!nameMatches) return false;
           
-          // Include if unclaimed or already linked to this player
+          // Only include runs that are already linked to this player
+          // Unclaimed runs (imported, unlinked_*, unclaimed_*) should NOT count for points
           const currentPlayerId = run.playerId || "";
-          return !currentPlayerId || 
-                 currentPlayerId === playerId || 
-                 currentPlayerId === "imported" || 
-                 currentPlayerId.startsWith("unlinked_") ||
-                 currentPlayerId.startsWith("unclaimed_");
+          return currentPlayerId === playerId;
         });
     }
     
@@ -1769,6 +1907,7 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
     const additionalRuns = runsByDisplayName.filter(r => !runIds.has(r.id));
     
     // Also check for co-op runs where this player is player2 (all leaderboard types)
+    // IMPORTANT: Only count claimed runs for points - unclaimed runs don't contribute to points
     let player2Runs: LeaderboardEntry[] = [];
     
     if (playerDisplayName) {
@@ -1787,43 +1926,11 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
           const nameMatches = entryPlayer2Name === normalizedDisplayName;
           if (!nameMatches) return false;
           
-          // Include if unclaimed or already linked to this player
+          // Only include runs that are already linked to this player
+          // Unclaimed runs should NOT count for points
           const currentPlayerId = entry.playerId || "";
-          return !currentPlayerId || 
-                 currentPlayerId === playerId || 
-                 currentPlayerId === "imported" || 
-                 currentPlayerId.startsWith("unlinked_") ||
-                 currentPlayerId.startsWith("unclaimed_");
+          return currentPlayerId === playerId;
         });
-      
-      // Also auto-link any unclaimed runs that match this player's display name
-      const runsToAutoLink = [
-        ...additionalRuns.filter(r => !r.playerId || r.playerId === "imported" || r.playerId.startsWith("unlinked_") || r.playerId.startsWith("unclaimed_")),
-        ...player2Runs.filter(r => !r.playerId || r.playerId === "imported" || r.playerId.startsWith("unlinked_") || r.playerId.startsWith("unclaimed_"))
-      ];
-      
-      if (runsToAutoLink.length > 0) {
-        // Auto-link these runs in a batch
-        let batch = writeBatch(db);
-        let batchCount = 0;
-        const MAX_BATCH_SIZE = 500;
-        
-        for (const run of runsToAutoLink) {
-          const runDocRef = doc(db, "leaderboardEntries", run.id);
-          batch.update(runDocRef, { playerId: playerId });
-          batchCount++;
-          
-          if (batchCount >= MAX_BATCH_SIZE) {
-            await batch.commit();
-            batchCount = 0;
-            batch = writeBatch(db);
-          }
-        }
-        
-        if (batchCount > 0) {
-          await batch.commit();
-        }
-      }
     }
     
     // Get all categories and platforms for lookup
@@ -2018,8 +2125,9 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
       await batch.commit();
     }
     
-    // Calculate total verified runs (including both player1 and player2 runs)
-    const totalVerifiedRuns = querySnapshot.docs.length + player2Runs.length;
+    // Calculate total verified runs (only claimed runs count)
+    // Only count runs that are actually linked to this player (not unclaimed)
+    const totalVerifiedRuns = allRuns.length; // allRuns already contains only claimed runs for this player
     
     // Update or create player's total points and total runs
     if (playerDocSnap && playerDocSnap.exists()) {
@@ -2975,112 +3083,29 @@ export const getPlayersByPointsFirestore = async (limit: number = 100): Promise<
         .map(doc => ({ id: doc.id, ...doc.data() } as Player))
         .filter(p => (p.totalPoints || 0) > 0); // Only include players with points
       
-      // Also find players with unclaimed imported SRC runs (temporary profiles)
-      // Get all verified runs where playerId indicates an unclaimed run
-      // Query for runs with playerId = "imported" (most common for SRC imports)
-      const unclaimedRunsQuery = query(
-        collection(db, "leaderboardEntries"),
-        where("verified", "==", true),
-        where("playerId", "==", "imported"),
-        firestoreLimit(500)
-      );
+      // IMPORTANT: Unclaimed runs should NOT contribute to points leaderboard
+      // Only players with actual accounts and claimed runs should appear
+      // Removed temporary player creation for unclaimed runs
       
-      // Also query for runs with playerId starting with "unlinked_" (for other unclaimed runs)
-      // Note: Firestore doesn't support "starts with" queries, so we'll handle this in the processing
-      
-      let temporaryPlayers: Player[] = [];
-      try {
-        // Fetch categories and platforms once before processing runs
-        const [categories, platforms, unclaimedSnapshot] = await Promise.all([
-          getCategoriesFirestore(),
-          getPlatformsFirestore(),
-          getDocs(unclaimedRunsQuery)
-        ]);
-        
-        const playerPointsMap = new Map<string, { points: number; runs: number; playerName: string; earliestDate: string }>();
-        
-        // Group runs by player name and calculate points
-        for (const doc of unclaimedSnapshot.docs) {
-          const run = { id: doc.id, ...doc.data() } as LeaderboardEntry;
-          const playerName = run.playerName || "Unknown";
-          const normalizedName = playerName.trim().toLowerCase();
-          
-          // Skip if this player already has a real player document
-          const existingPlayer = allPlayers.find(p => 
-            p.displayName?.trim().toLowerCase() === normalizedName
-          );
-          if (existingPlayer) continue;
-          
-          // Calculate points for this run
-          const category = categories.find(c => c.id === run.category);
-          const platform = platforms.find(p => p.id === run.platform);
-          
-          const runPoints = calculatePoints(
-            run.time,
-            category?.name || run.category || "",
-            platform?.name || run.platform || "",
-            run.category,
-            run.platform,
-            run.rank,
-            run.runType
-          );
-          
-          if (!playerPointsMap.has(normalizedName)) {
-            playerPointsMap.set(normalizedName, {
-              points: runPoints,
-              runs: 1,
-              playerName: playerName,
-              earliestDate: run.date || new Date().toISOString().split('T')[0]
-            });
-          } else {
-            const existing = playerPointsMap.get(normalizedName)!;
-            existing.points += runPoints;
-            existing.runs += 1;
-            if (run.date && run.date < existing.earliestDate) {
-              existing.earliestDate = run.date;
-            }
-          }
-        }
-        
-        // Create temporary player profiles for unclaimed players
-        for (const [normalizedName, data] of playerPointsMap.entries()) {
-          if (data.points > 0) {
-            // Generate a temporary UID based on the player name
-            const nameHash = normalizedName.replace(/[^a-z0-9]/g, '_');
-            const tempUid = `unclaimed_${nameHash}`;
-            
-            temporaryPlayers.push({
-              id: tempUid,
-              uid: tempUid,
-              displayName: data.playerName,
-              email: "",
-              joinDate: data.earliestDate,
-              totalRuns: data.runs,
-              bestRank: null,
-              favoriteCategory: null,
-              favoritePlatform: null,
-              nameColor: "#cba6f7",
-              isAdmin: false,
-              totalPoints: data.points,
-            });
-          }
-        }
-      } catch (error) {
-        console.warn("Error fetching temporary players from unclaimed runs:", error);
-        // Continue with regular players even if temporary player fetch fails
-      }
-      
-      // Combine regular players and temporary players
-      const combinedPlayers = [...allPlayers, ...temporaryPlayers];
+      const combinedPlayers = allPlayers;
       
       // Deduplicate by UID and displayName - keep the player with the highest totalPoints
-      // If points are equal, keep the first one encountered
+      // Filter out any players with "Unknown" name or unclaimed UIDs
       const playerMap = new Map<string, Player>();
       const seenUIDs = new Set<string>();
       const seenNames = new Map<string, string>(); // name -> uid
       
       for (const player of combinedPlayers) {
         if (!player.uid) continue; // Skip players without UID
+        
+        // Skip players with "Unknown" name or unclaimed/temporary UIDs
+        const displayNameLower = player.displayName?.toLowerCase().trim() || "";
+        if (displayNameLower === "unknown" || 
+            player.uid.startsWith("unclaimed_") || 
+            player.uid.startsWith("unlinked_") ||
+            player.uid === "imported") {
+          continue;
+        }
         
         // Check if we've seen this UID before
         if (seenUIDs.has(player.uid)) {
@@ -3097,26 +3122,20 @@ export const getPlayersByPointsFirestore = async (limit: number = 100): Promise<
         }
         
         // Check if we've seen this displayName before (case-insensitive)
-        const nameLower = player.displayName?.toLowerCase().trim();
-        if (nameLower) {
-          const existingUIDForName = seenNames.get(nameLower);
+        if (displayNameLower) {
+          const existingUIDForName = seenNames.get(displayNameLower);
           if (existingUIDForName && existingUIDForName !== player.uid) {
             // Same name but different UID - treat as duplicate
-            // Keep the one with higher points, but prefer real players over temporary ones
+            // Keep the one with higher points
             const existingPlayer = playerMap.get(existingUIDForName);
             if (existingPlayer) {
               const existingPoints = existingPlayer.totalPoints || 0;
               const currentPoints = player.totalPoints || 0;
-              const isExistingTemp = existingPlayer.uid.startsWith("unclaimed_");
-              const isCurrentTemp = player.uid.startsWith("unclaimed_");
-              
-              // Prefer real players over temporary ones if points are equal
-              if (currentPoints > existingPoints || 
-                  (currentPoints === existingPoints && isCurrentTemp && !isExistingTemp)) {
+              if (currentPoints > existingPoints) {
                 // Replace with the new player
                 playerMap.delete(existingUIDForName);
                 playerMap.set(player.uid, player);
-                seenNames.set(nameLower, player.uid);
+                seenNames.set(displayNameLower, player.uid);
               }
             }
             continue;
@@ -3125,14 +3144,15 @@ export const getPlayersByPointsFirestore = async (limit: number = 100): Promise<
         
         // New unique player
         seenUIDs.add(player.uid);
-        if (nameLower) {
-          seenNames.set(nameLower, player.uid);
+        if (displayNameLower) {
+          seenNames.set(displayNameLower, player.uid);
         }
         playerMap.set(player.uid, player);
       }
       
       // Convert map to array and sort by points (descending) again after deduplication
       const uniquePlayers = Array.from(playerMap.values())
+        .filter(p => (p.totalPoints || 0) > 0) // Only include players with points
         .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
         .slice(0, limit); // Apply limit after deduplication
       
@@ -3177,6 +3197,7 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
     const platformMap = new Map(platforms.map(p => [p.id, p.name]));
 
     // Get all verified runs (all leaderboard types) - use a single query with high limit
+    // IMPORTANT: Only process claimed runs - unclaimed runs should NOT contribute to points
     // Note: Firestore has a limit of 10,000 documents per query, but for most use cases this should be sufficient
     // If needed, we can implement pagination later for databases with >10k verified runs
     const q = query(
@@ -3185,21 +3206,37 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
       firestoreLimit(10000)
     );
     const querySnapshot = await getDocs(q);
-    const allRuns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
+    const allRuns = querySnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
+      .filter(run => {
+        // Only process claimed runs - exclude unclaimed runs
+        const playerId = run.playerId || "";
+        return playerId && 
+               playerId !== "imported" && 
+               !playerId.startsWith("unlinked_") && 
+               !playerId.startsWith("unclaimed_");
+      });
     
     if (querySnapshot.docs.length === 10000) {
       result.errors.push("Warning: Hit Firestore query limit of 10,000 runs. Some runs may not have been processed. Consider implementing pagination for databases with more than 10,000 verified runs.");
     }
 
-    // Track unique player IDs
+    // Track unique player IDs (only for claimed runs)
     const playerIdsSet = new Set<string>();
-
+    
     // Group runs by leaderboardType + level + category + platform + runType for proper ranking
     const runsByGroup = new Map<string, LeaderboardEntry[]>();
     
     for (const runData of allRuns) {
       if (!runData.playerId) {
         result.errors.push(`Run ${runData.id} has no playerId`);
+        continue;
+      }
+      
+      // Skip unclaimed runs
+      if (runData.playerId === "imported" || 
+          runData.playerId.startsWith("unlinked_") || 
+          runData.playerId.startsWith("unclaimed_")) {
         continue;
       }
 
@@ -3925,6 +3962,155 @@ export const getVerifiedRunsWithInvalidDataFirestore = async (): Promise<Leaderb
   } catch (error) {
     console.error("Error fetching verified runs with invalid data:", error);
     return [];
+  }
+};
+
+/**
+ * Find duplicate runs in the database
+ * Returns groups of duplicate runs, where each group contains runs that are considered duplicates
+ */
+export const findDuplicateRunsFirestore = async (): Promise<Array<{ runs: LeaderboardEntry[]; key: string }>> => {
+  if (!db) return [];
+  
+  try {
+    // Get all runs
+    const queries = [
+      query(collection(db, "leaderboardEntries"), where("verified", "==", true), firestoreLimit(2000)),
+      query(collection(db, "leaderboardEntries"), where("verified", "==", false), firestoreLimit(2000))
+    ];
+    
+    const [verifiedSnapshot, unverifiedSnapshot] = await Promise.all([
+      getDocs(queries[0]),
+      getDocs(queries[1])
+    ]);
+    
+    const allRuns: LeaderboardEntry[] = [
+      ...verifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry)),
+      ...unverifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
+    ];
+    
+    const normalizeName = (name: string) => (name || "").trim().toLowerCase();
+    
+    // Group runs by their duplicate key
+    const runGroups = new Map<string, LeaderboardEntry[]>();
+    
+    for (const run of allRuns) {
+      const player1Name = normalizeName(run.playerName);
+      const player2Name = normalizeName(run.player2Name || "");
+      
+      // Create run key: player1|player2|category|platform|runType|time|leaderboardType|level
+      // For co-op runs, normalize order (alphabetically sort player names)
+      let key: string;
+      if (run.runType === 'co-op' && player2Name) {
+        const [p1, p2] = [player1Name, player2Name].sort();
+        key = `${p1}|${p2}|${run.category || ''}|${run.platform || ''}|${run.runType || 'solo'}|${run.time || ''}|${run.leaderboardType || 'regular'}|${run.level || ''}`;
+      } else {
+        key = `${player1Name}|${player2Name}|${run.category || ''}|${run.platform || ''}|${run.runType || 'solo'}|${run.time || ''}|${run.leaderboardType || 'regular'}|${run.level || ''}`;
+      }
+      
+      if (!runGroups.has(key)) {
+        runGroups.set(key, []);
+      }
+      runGroups.get(key)!.push(run);
+    }
+    
+    // Filter to only groups with duplicates (more than 1 run)
+    const duplicateGroups: Array<{ runs: LeaderboardEntry[]; key: string }> = [];
+    for (const [key, runs] of runGroups.entries()) {
+      if (runs.length > 1) {
+        duplicateGroups.push({ runs, key });
+      }
+    }
+    
+    return duplicateGroups;
+  } catch (error) {
+    console.error("Error finding duplicate runs:", error);
+    return [];
+  }
+};
+
+/**
+ * Remove duplicate runs, keeping the best one based on priority:
+ * 1. Verified runs over unverified
+ * 2. Older submission date (earlier date = better)
+ * 3. If same date, keep the one with lower ID (arbitrary but consistent)
+ */
+export const removeDuplicateRunsFirestore = async (duplicateGroups: Array<{ runs: LeaderboardEntry[]; key: string }>): Promise<{ removed: number; errors: string[] }> => {
+  if (!db) return { removed: 0, errors: [] };
+  
+  const result = { removed: 0, errors: [] as string[] };
+  
+  try {
+    let batch = writeBatch(db);
+    let batchCount = 0;
+    const MAX_BATCH_SIZE = 500;
+    
+    for (const group of duplicateGroups) {
+      const runs = group.runs;
+      
+      // Sort runs to determine which to keep
+      // Priority: verified > unverified, then older date, then lower ID
+      runs.sort((a, b) => {
+        // Verified runs first
+        if (a.verified && !b.verified) return -1;
+        if (!a.verified && b.verified) return 1;
+        
+        // Then by date (older = better)
+        if (a.date && b.date) {
+          const dateCompare = a.date.localeCompare(b.date);
+          if (dateCompare !== 0) return dateCompare;
+        }
+        
+        // Finally by ID (lower = better, arbitrary but consistent)
+        return a.id.localeCompare(b.id);
+      });
+      
+      // Keep the first run (best one), remove the rest
+      const runsToRemove = runs.slice(1);
+      
+      for (const run of runsToRemove) {
+        const runDocRef = doc(db, "leaderboardEntries", run.id);
+        batch.delete(runDocRef);
+        batchCount++;
+        result.removed++;
+        
+        if (batchCount >= MAX_BATCH_SIZE) {
+          await batch.commit();
+          batchCount = 0;
+          batch = writeBatch(db);
+        }
+      }
+    }
+    
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+    
+    // Recalculate points for affected players
+    const affectedPlayerIds = new Set<string>();
+    for (const group of duplicateGroups) {
+      for (const run of group.runs) {
+        if (run.playerId && run.playerId !== "imported" && !run.playerId.startsWith("unlinked_") && !run.playerId.startsWith("unclaimed_")) {
+          affectedPlayerIds.add(run.playerId);
+        }
+      }
+    }
+    
+    // Recalculate points for all affected players
+    for (const playerId of affectedPlayerIds) {
+      try {
+        await recalculatePlayerPointsFirestore(playerId);
+      } catch (error) {
+        console.error(`Error recalculating points for player ${playerId}:`, error);
+        result.errors.push(`Failed to recalculate points for player ${playerId}`);
+      }
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("Error removing duplicate runs:", error);
+    result.errors.push(error instanceof Error ? error.message : String(error));
+    return result;
   }
 };
 

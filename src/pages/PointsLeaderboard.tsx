@@ -21,12 +21,22 @@ const PointsLeaderboard = () => {
         const playersData = await getPlayersByPoints(100);
         
         // Additional deduplication by UID and displayName as a safety measure
+        // Also filter out "Unknown" players and unclaimed players
         const uniquePlayers = new Map<string, Player>();
         const seenUIDs = new Set<string>();
         const seenNames = new Map<string, string>(); // name -> uid
         
         for (const player of playersData) {
           if (!player.uid) continue;
+          
+          // Filter out "Unknown" players and unclaimed/temporary players
+          const displayNameLower = player.displayName?.toLowerCase().trim() || "";
+          if (displayNameLower === "unknown" || 
+              player.uid.startsWith("unclaimed_") || 
+              player.uid.startsWith("unlinked_") ||
+              player.uid === "imported") {
+            continue;
+          }
           
           // Check by UID first
           if (seenUIDs.has(player.uid)) {
@@ -42,9 +52,8 @@ const PointsLeaderboard = () => {
           }
           
           // Check by displayName (case-insensitive)
-          const nameLower = player.displayName?.toLowerCase().trim();
-          if (nameLower) {
-            const existingUIDForName = seenNames.get(nameLower);
+          if (displayNameLower) {
+            const existingUIDForName = seenNames.get(displayNameLower);
             if (existingUIDForName && existingUIDForName !== player.uid) {
               // Same name but different UID - treat as duplicate
               const existingPlayer = uniquePlayers.get(existingUIDForName);
@@ -54,7 +63,7 @@ const PointsLeaderboard = () => {
                 if (currentPoints > existingPoints) {
                   uniquePlayers.delete(existingUIDForName);
                   uniquePlayers.set(player.uid, player);
-                  seenNames.set(nameLower, player.uid);
+                  seenNames.set(displayNameLower, player.uid);
                 }
               }
               continue;
@@ -63,14 +72,15 @@ const PointsLeaderboard = () => {
           
           // New unique player
           seenUIDs.add(player.uid);
-          if (nameLower) {
-            seenNames.set(nameLower, player.uid);
+          if (displayNameLower) {
+            seenNames.set(displayNameLower, player.uid);
           }
           uniquePlayers.set(player.uid, player);
         }
         
         // Convert back to array and sort by points
         const deduplicatedPlayers = Array.from(uniquePlayers.values())
+          .filter(p => (p.totalPoints || 0) > 0) // Only include players with points
           .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
         
         setPlayers(deduplicatedPlayers);
