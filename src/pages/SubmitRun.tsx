@@ -490,26 +490,31 @@ const SubmitRun = () => {
                   <div>
                     <Label className="text-sm font-semibold mb-2 block flex items-center gap-2">
                       <Trophy className="h-3.5 w-3.5 text-[#cba6f7]" />
-                      Subcategory
+                      Subcategory (Optional)
                     </Label>
-                    <Select 
-                      value={formData.subcategory || ""} 
-                      onValueChange={(value) => handleSelectChange("subcategory", value)}
+                    <Tabs 
+                      value={formData.subcategory || "none"} 
+                      onValueChange={(value) => handleSelectChange("subcategory", value === "none" ? "" : value)}
                     >
-                      <SelectTrigger className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-10 text-sm hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300">
-                        <SelectValue placeholder="Select subcategory (optional)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="" className="text-sm">
+                      <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide" style={{ minWidth: 'max-content' }}>
+                        <TabsTrigger 
+                          value="none" 
+                          className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#cba6f7]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap"
+                        >
                           None
-                        </SelectItem>
-                        {availableSubcategories.map((subcategory) => (
-                          <SelectItem key={subcategory.id} value={subcategory.id} className="text-sm">
+                        </TabsTrigger>
+                        {availableSubcategories.map((subcategory, index) => (
+                          <TabsTrigger 
+                            key={subcategory.id} 
+                            value={subcategory.id} 
+                            className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#cba6f7]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap"
+                            style={{ animationDelay: `${(index + 1) * 50}ms` }}
+                          >
                             {subcategory.name}
-                          </SelectItem>
+                          </TabsTrigger>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </TabsList>
+                    </Tabs>
                     <p className="text-xs text-[hsl(222,15%,60%)] mt-1">
                       Optional: Select a subcategory for this run (e.g., Glitchless, No Major Glitches)
                     </p>

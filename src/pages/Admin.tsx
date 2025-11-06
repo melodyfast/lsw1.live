@@ -66,8 +66,9 @@ import {
   deletePlayer,
 } from "@/lib/db";
 import { importSRCRuns, type ImportResult } from "@/lib/speedruncom/importService";
+import { fetchCategoryVariables, getLSWGameId } from "@/lib/speedruncom";
 import { useUploadThing } from "@/lib/uploadthing";
-import { LeaderboardEntry, DownloadEntry, Category, Level } from "@/types/database";
+import { LeaderboardEntry, DownloadEntry, Category, Level, Subcategory } from "@/types/database";
 import { useNavigate } from "react-router-dom";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { formatTime } from "@/lib/utils";
@@ -139,6 +140,18 @@ const Admin = () => {
   const [addingCategory, setAddingCategory] = useState(false);
   const [updatingCategory, setUpdatingCategory] = useState(false);
   const [reorderingCategory, setReorderingCategory] = useState<string | null>(null);
+  
+  // Subcategory management state
+  const [categoryManagementTab, setCategoryManagementTab] = useState<'categories' | 'subcategories'>('categories');
+  const [selectedCategoryForSubcategories, setSelectedCategoryForSubcategories] = useState<Category | null>(null);
+  const [srcVariables, setSrcVariables] = useState<Array<{ id: string; name: string; values: Record<string, { label: string }> }>>([]);
+  const [loadingSRCVariables, setLoadingSRCVariables] = useState(false);
+  const [editingSubcategory, setEditingSubcategory] = useState<Subcategory | null>(null);
+  const [newSubcategoryName, setNewSubcategoryName] = useState("");
+  const [editingSubcategoryName, setEditingSubcategoryName] = useState("");
+  const [addingSubcategory, setAddingSubcategory] = useState(false);
+  const [updatingSubcategory, setUpdatingSubcategory] = useState(false);
+  const [reorderingSubcategory, setReorderingSubcategory] = useState<string | null>(null);
   
   const [firestorePlatforms, setFirestorePlatforms] = useState<{ id: string; name: string }[]>([]);
   const [newPlatformName, setNewPlatformName] = useState("");
@@ -1671,7 +1684,11 @@ const Admin = () => {
     
     setUpdatingCategory(true);
     try {
-      const success = await updateCategory(editingCategory.id, editingCategoryName.trim());
+      // Get current category to preserve subcategories
+      const currentCategory = firestoreCategories.find(c => c.id === editingCategory.id) as Category | undefined;
+      const subcategories = currentCategory?.subcategories || [];
+      
+      const success = await updateCategory(editingCategory.id, editingCategoryName.trim(), subcategories);
       if (success) {
         toast({
           title: "Category Updated",
@@ -1763,6 +1780,362 @@ const Admin = () => {
       });
     } finally {
       setReorderingCategory(null);
+    }
+  };
+
+  // Subcategory management handlers
+  const fetchSRCVariablesForCategory = async (category: Category) => {
+    if (!category.srcCategoryId) {
+      setSrcVariables([]);
+      return;
+    }
+    
+    setLoadingSRCVariables(true);
+    try {
+      const variables = await fetchCategoryVariables(category.srcCategoryId);
+      if (variables?.data) {
+        setSrcVariables(variables.data);
+      } else {
+        setSrcVariables([]);
+      }
+    } catch (error: any) {
+      console.error("Error fetching SRC variables:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch SRC variables. Make sure the category has a linked SRC category ID.",
+        variant: "destructive",
+      });
+      setSrcVariables([]);
+    } finally {
+      setLoadingSRCVariables(false);
+    }
+  };
+
+  // Fetch SRC variables when category is selected (only for regular categories)
+  useEffect(() => {
+    if (selectedCategoryForSubcategories && categoryLeaderboardType === 'regular') {
+      fetchSRCVariablesForCategory(selectedCategoryForSubcategories);
+    } else {
+      setSrcVariables([]);
+    }
+  }, [selectedCategoryForSubcategories, categoryLeaderboardType]);
+
+  const handleAddSubcategory = async () => {
+    if (!selectedCategoryForSubcategories || !newSubcategoryName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please select a category and enter a subcategory name.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setAddingSubcategory(true);
+    try {
+      const currentCategory = firestoreCategories.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+      const existingSubcategories = currentCategory?.subcategories || [];
+      
+      // Check for duplicate names
+      if (existingSubcategories.some(s => s.name.toLowerCase().trim() === newSubcategoryName.toLowerCase().trim())) {
+        throw new Error("A subcategory with this name already exists.");
+      }
+      
+      // Generate a new ID
+      const newId = `subcat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const maxOrder = existingSubcategories.reduce((max, s) => Math.max(max, s.order || 0), 0);
+      
+      const newSubcategory: Subcategory = {
+        id: newId,
+        name: newSubcategoryName.trim(),
+        order: maxOrder + 1,
+      };
+      
+      const updatedSubcategories = [...existingSubcategories, newSubcategory];
+      const success = await updateCategory(selectedCategoryForSubcategories.id, selectedCategoryForSubcategories.name, updatedSubcategories);
+      
+      if (success) {
+        toast({
+          title: "Subcategory Added",
+          description: "New subcategory has been added.",
+        });
+        setNewSubcategoryName("");
+        await fetchCategories(categoryLeaderboardType);
+        // Refresh selected category
+        const updated = await getCategoriesFromFirestore(categoryLeaderboardType);
+        const refreshed = updated.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+        if (refreshed) {
+          setSelectedCategoryForSubcategories(refreshed);
+        }
+      } else {
+        throw new Error("Failed to add subcategory.");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add subcategory.",
+        variant: "destructive",
+      });
+    } finally {
+      setAddingSubcategory(false);
+    }
+  };
+
+  const handleStartEditSubcategory = (subcategory: Subcategory) => {
+    setEditingSubcategory(subcategory);
+    setEditingSubcategoryName(subcategory.name);
+  };
+
+  const handleCancelEditSubcategory = () => {
+    setEditingSubcategory(null);
+    setEditingSubcategoryName("");
+  };
+
+  const handleSaveEditSubcategory = async () => {
+    if (!selectedCategoryForSubcategories || !editingSubcategory || !editingSubcategoryName.trim()) {
+      return;
+    }
+    
+    setUpdatingSubcategory(true);
+    try {
+      const currentCategory = firestoreCategories.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+      const existingSubcategories = currentCategory?.subcategories || [];
+      
+      // Check for duplicate names (excluding current subcategory)
+      if (existingSubcategories.some(s => s.id !== editingSubcategory.id && s.name.toLowerCase().trim() === editingSubcategoryName.toLowerCase().trim())) {
+        throw new Error("Another subcategory with this name already exists.");
+      }
+      
+      const updatedSubcategories = existingSubcategories.map(s =>
+        s.id === editingSubcategory.id
+          ? { ...s, name: editingSubcategoryName.trim() }
+          : s
+      );
+      
+      const success = await updateCategory(selectedCategoryForSubcategories.id, selectedCategoryForSubcategories.name, updatedSubcategories);
+      
+      if (success) {
+        toast({
+          title: "Subcategory Updated",
+          description: "Subcategory has been updated.",
+        });
+        setEditingSubcategory(null);
+        setEditingSubcategoryName("");
+        await fetchCategories(categoryLeaderboardType);
+        // Refresh selected category
+        const updated = await getCategoriesFromFirestore(categoryLeaderboardType);
+        const refreshed = updated.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+        if (refreshed) {
+          setSelectedCategoryForSubcategories(refreshed);
+        }
+      } else {
+        throw new Error("Failed to update subcategory.");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update subcategory.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingSubcategory(false);
+    }
+  };
+
+  const handleDeleteSubcategory = async (subcategoryId: string) => {
+    if (!selectedCategoryForSubcategories) return;
+    
+    if (!window.confirm("Are you sure you want to delete this subcategory? This may affect existing runs.")) {
+      return;
+    }
+    
+    try {
+      const currentCategory = firestoreCategories.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+      const existingSubcategories = currentCategory?.subcategories || [];
+      const updatedSubcategories = existingSubcategories.filter(s => s.id !== subcategoryId);
+      
+      const success = await updateCategory(selectedCategoryForSubcategories.id, selectedCategoryForSubcategories.name, updatedSubcategories);
+      
+      if (success) {
+        toast({
+          title: "Subcategory Deleted",
+          description: "Subcategory has been removed.",
+        });
+        await fetchCategories(categoryLeaderboardType);
+        // Refresh selected category
+        const updated = await getCategoriesFromFirestore(categoryLeaderboardType);
+        const refreshed = updated.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+        if (refreshed) {
+          setSelectedCategoryForSubcategories(refreshed);
+        }
+      } else {
+        throw new Error("Failed to delete subcategory.");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete subcategory.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMoveSubcategoryUp = async (subcategoryId: string) => {
+    if (!selectedCategoryForSubcategories) return;
+    
+    setReorderingSubcategory(subcategoryId);
+    try {
+      const currentCategory = firestoreCategories.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+      const existingSubcategories = currentCategory?.subcategories || [];
+      const index = existingSubcategories.findIndex(s => s.id === subcategoryId);
+      
+      if (index <= 0) {
+        throw new Error("Subcategory is already at the top.");
+      }
+      
+      const updatedSubcategories = [...existingSubcategories];
+      const currentOrder = updatedSubcategories[index].order ?? index;
+      const prevOrder = updatedSubcategories[index - 1].order ?? index - 1;
+      
+      updatedSubcategories[index].order = prevOrder;
+      updatedSubcategories[index - 1].order = currentOrder;
+      
+      const success = await updateCategory(selectedCategoryForSubcategories.id, selectedCategoryForSubcategories.name, updatedSubcategories);
+      
+      if (success) {
+        await fetchCategories(categoryLeaderboardType);
+        // Refresh selected category
+        const updated = await getCategoriesFromFirestore(categoryLeaderboardType);
+        const refreshed = updated.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+        if (refreshed) {
+          setSelectedCategoryForSubcategories(refreshed);
+        }
+      } else {
+        throw new Error("Failed to reorder subcategory.");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to move subcategory.",
+        variant: "destructive",
+      });
+    } finally {
+      setReorderingSubcategory(null);
+    }
+  };
+
+  const handleMoveSubcategoryDown = async (subcategoryId: string) => {
+    if (!selectedCategoryForSubcategories) return;
+    
+    setReorderingSubcategory(subcategoryId);
+    try {
+      const currentCategory = firestoreCategories.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+      const existingSubcategories = currentCategory?.subcategories || [];
+      const index = existingSubcategories.findIndex(s => s.id === subcategoryId);
+      
+      if (index < 0 || index >= existingSubcategories.length - 1) {
+        throw new Error("Subcategory is already at the bottom.");
+      }
+      
+      const updatedSubcategories = [...existingSubcategories];
+      const currentOrder = updatedSubcategories[index].order ?? index;
+      const nextOrder = updatedSubcategories[index + 1].order ?? index + 1;
+      
+      updatedSubcategories[index].order = nextOrder;
+      updatedSubcategories[index + 1].order = currentOrder;
+      
+      const success = await updateCategory(selectedCategoryForSubcategories.id, selectedCategoryForSubcategories.name, updatedSubcategories);
+      
+      if (success) {
+        await fetchCategories(categoryLeaderboardType);
+        // Refresh selected category
+        const updated = await getCategoriesFromFirestore(categoryLeaderboardType);
+        const refreshed = updated.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+        if (refreshed) {
+          setSelectedCategoryForSubcategories(refreshed);
+        }
+      } else {
+        throw new Error("Failed to reorder subcategory.");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to move subcategory.",
+        variant: "destructive",
+      });
+    } finally {
+      setReorderingSubcategory(null);
+    }
+  };
+
+  const handleImportSubcategoriesFromSRC = async () => {
+    if (!selectedCategoryForSubcategories || !srcVariables.length) {
+      toast({
+        title: "Error",
+        description: "Please select a category with SRC variables available.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setUpdatingSubcategory(true);
+    try {
+      const currentCategory = firestoreCategories.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+      const existingSubcategories = currentCategory?.subcategories || [];
+      const existingNames = new Set(existingSubcategories.map(s => s.name.toLowerCase().trim()));
+      
+      // Import from the first variable (most categories have one main variable)
+      const variable = srcVariables[0];
+      const newSubcategories: Subcategory[] = [];
+      let maxOrder = existingSubcategories.reduce((max, s) => Math.max(max, s.order || 0), 0);
+      
+      for (const [valueId, valueData] of Object.entries(variable.values.values)) {
+        const valueLabel = valueData.label;
+        if (!existingNames.has(valueLabel.toLowerCase().trim())) {
+          maxOrder++;
+          newSubcategories.push({
+            id: `subcat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            name: valueLabel,
+            order: maxOrder,
+            srcVariableId: variable.id,
+            srcValueId: valueId,
+          });
+        }
+      }
+      
+      if (newSubcategories.length === 0) {
+        toast({
+          title: "No New Subcategories",
+          description: "All SRC variable values already exist as subcategories.",
+        });
+        return;
+      }
+      
+      const updatedSubcategories = [...existingSubcategories, ...newSubcategories];
+      const success = await updateCategory(selectedCategoryForSubcategories.id, selectedCategoryForSubcategories.name, updatedSubcategories);
+      
+      if (success) {
+        toast({
+          title: "Subcategories Imported",
+          description: `Successfully imported ${newSubcategories.length} subcategory(ies) from SRC.`,
+        });
+        await fetchCategories(categoryLeaderboardType);
+        // Refresh selected category
+        const updated = await getCategoriesFromFirestore(categoryLeaderboardType);
+        const refreshed = updated.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+        if (refreshed) {
+          setSelectedCategoryForSubcategories(refreshed);
+        }
+      } else {
+        throw new Error("Failed to import subcategories.");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to import subcategories from SRC.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingSubcategory(false);
     }
   };
 
@@ -3803,529 +4176,6 @@ const Admin = () => {
           </CardContent>
         </Card>
 
-            {/* Import Runs from SRC */}
-            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
-              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
-                    <Upload className="h-5 w-5" />
-                    <span>Import Runs from Speedrun.com</span>
-                  </CardTitle>
-                  {importedSRCRuns.filter(r => !r.verified).length > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleClearImportedRuns}
-                      disabled={clearingImportedRuns}
-                      className="bg-red-900/20 border-red-700/50 text-red-400 hover:bg-red-900/30 hover:border-red-600 transition-all duration-300"
-                    >
-                      {clearingImportedRuns ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          Clearing...
-                        </>
-                      ) : (
-                        <>
-                          <X className="h-4 w-4 mr-2" />
-                          Clear All Imported
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Import Section */}
-                <div className="space-y-4 pb-6 pt-2 border-b border-[hsl(235,13%,30%)]">
-                  <p className="text-[hsl(222,15%,60%)]">
-                    Import runs from speedrun.com that aren't on the leaderboards. 
-                    Runs will be added as unverified and can be edited or rejected.
-                  </p>
-                  <div className="flex gap-3 flex-wrap">
-                    <Button
-                      onClick={handleImportFromSRC}
-                      disabled={importingRuns}
-                      className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
-                    >
-                      {importingRuns ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          Importing...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Import Runs
-                        </>
-                      )}
-                    </Button>
-                    {importedSRCRuns.filter(r => r.verified !== true).length > 0 && (
-                      <>
-                        <Button
-                          onClick={handleBatchVerify}
-                          disabled={batchVerifying || batchVerifyingAll || importingRuns}
-                          className="bg-gradient-to-r from-[#94e2d5] to-[#74c7b0] hover:from-[#74c7b0] hover:to-[#94e2d5] text-[hsl(240,21%,15%)] font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
-                        >
-                          {batchVerifying ? (
-                            <>
-                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Verifying...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="h-4 w-4 mr-2" />
-                              Batch Verify 10 Most Recent
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          onClick={handleBatchVerifyAll}
-                          disabled={batchVerifying || batchVerifyingAll || importingRuns}
-                          className="bg-gradient-to-r from-[#a6e3a1] to-[#86c77a] hover:from-[#86c77a] hover:to-[#a6e3a1] text-[hsl(240,21%,15%)] font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg"
-                        >
-                          {batchVerifyingAll ? (
-                            <>
-                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Verifying All...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="h-4 w-4 mr-2" />
-                              Batch Verify All in Tab
-                            </>
-                          )}
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {importingRuns && importProgress.total > 0 && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm text-[hsl(222,15%,60%)]">
-                        <span>Progress: {importProgress.imported + importProgress.skipped} / {importProgress.total}</span>
-                        <span>Imported: {importProgress.imported} | Skipped: {importProgress.skipped}</span>
-                      </div>
-                      <div className="w-full bg-[hsl(235,19%,13%)] rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] h-2 rounded-full transition-all duration-300"
-                          style={{
-                            width: `${((importProgress.imported + importProgress.skipped) / importProgress.total) * 100}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Imported Runs List */}
-                {(() => {
-                  // Filter unverified imported runs
-                  let unverifiedImported = importedSRCRuns.filter(r => r.verified !== true);
-                  
-                  // Apply leaderboardType filter
-                  unverifiedImported = unverifiedImported.filter(run => {
-                    const runLeaderboardType = run.leaderboardType || 'regular';
-                    return runLeaderboardType === importedRunsLeaderboardType;
-                  });
-                  
-                  // Apply category filter (only if a category is selected)
-                  if (importedRunsCategory && importedRunsCategory !== '__all__') {
-                    unverifiedImported = unverifiedImported.filter(run => {
-                      const runCategory = normalizeCategoryId(run.category);
-                      return runCategory === importedRunsCategory;
-                    });
-                  }
-                  
-                  // Apply platform filter (only if a platform is selected)
-                  if (importedRunsPlatform && importedRunsPlatform !== '__all__') {
-                    unverifiedImported = unverifiedImported.filter(run => {
-                      const runPlatform = normalizePlatformId(run.platform);
-                      return runPlatform === importedRunsPlatform;
-                    });
-                  }
-                  
-                  // Apply level filter for ILs (only if a level is selected)
-                  if (importedRunsLeaderboardType === 'individual-level' && importedRunsLevel && importedRunsLevel !== '__all__') {
-                    unverifiedImported = unverifiedImported.filter(run => {
-                      const runLevel = normalizeLevelId(run.level);
-                      return runLevel === importedRunsLevel;
-                    });
-                  }
-                  
-                  // Apply run type filter (solo/co-op)
-                  if (importedRunsRunType && importedRunsRunType !== '__all__') {
-                    unverifiedImported = unverifiedImported.filter(run => {
-                      const runRunType = run.runType || 'solo';
-                      return runRunType === importedRunsRunType;
-                    });
-                  }
-                  
-                  // Sort by date (most recent first) - ensure sorting is maintained after filtering
-                  unverifiedImported.sort((a, b) => {
-                    // Handle missing dates
-                    if (!a.date && !b.date) return 0;
-                    if (!a.date) return 1; // Missing date goes to end
-                    if (!b.date) return -1; // Missing date goes to end
-                    
-                    // Compare dates (YYYY-MM-DD format)
-                    // Most recent first = descending order
-                    return b.date.localeCompare(a.date);
-                  });
-                  
-                  // Calculate counts for tabs (before category/platform/level filters)
-                  const baseUnverified = importedSRCRuns.filter(r => r.verified !== true);
-                  const fullGameCount = baseUnverified.filter(r => (r.leaderboardType || 'regular') === 'regular').length;
-                  const ilCount = baseUnverified.filter(r => r.leaderboardType === 'individual-level').length;
-                  
-                  return (
-                    <>
-                      {/* Tabs for Full Game vs Individual Level - Always show tabs */}
-                      <Tabs 
-                        value={importedRunsLeaderboardType} 
-                        onValueChange={(value) => {
-                          setImportedRunsLeaderboardType(value as 'regular' | 'individual-level');
-                        }} 
-                        className="mb-6"
-                      >
-                        <TabsList className="grid w-full max-w-md grid-cols-2 mb-4 bg-[hsl(240,21%,15%)]">
-                          <TabsTrigger value="regular" className="data-[state=active]:bg-[hsl(240,21%,20%)]">
-                            Full Game ({fullGameCount})
-                          </TabsTrigger>
-                          <TabsTrigger value="individual-level" className="data-[state=active]:bg-[hsl(240,21%,20%)]">
-                            Individual Levels ({ilCount})
-                          </TabsTrigger>
-                        </TabsList>
-                      </Tabs>
-                      
-                      {/* Filters - Always show so users can adjust when results are empty */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <div>
-                          <Label htmlFor="imported-category-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Category</Label>
-                          <Select
-                            value={importedRunsCategory}
-                            onValueChange={(value) => {
-                              setImportedRunsCategory(value);
-                              setImportedPage(1);
-                            }}
-                          >
-                            <SelectTrigger id="imported-category-filter" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                              <SelectValue placeholder="All Categories" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__all__">All Categories</SelectItem>
-                              {importedRunsCategories.map((cat) => (
-                                <SelectItem key={cat.id} value={cat.id}>
-                                  {cat.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label htmlFor="imported-platform-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Platform</Label>
-                          <Select
-                            value={importedRunsPlatform}
-                            onValueChange={(value) => {
-                              setImportedRunsPlatform(value);
-                              setImportedPage(1);
-                            }}
-                          >
-                            <SelectTrigger id="imported-platform-filter" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                              <SelectValue placeholder="All Platforms" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__all__">All Platforms</SelectItem>
-                              {firestorePlatforms.map((platform) => (
-                                <SelectItem key={platform.id} value={platform.id}>
-                                  {platform.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label htmlFor="imported-runtype-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Run Type</Label>
-                          <Select
-                            value={importedRunsRunType}
-                            onValueChange={(value) => {
-                              setImportedRunsRunType(value as "__all__" | "solo" | "co-op");
-                              setImportedPage(1);
-                            }}
-                          >
-                            <SelectTrigger id="imported-runtype-filter" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                              <SelectValue placeholder="All Run Types" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__all__">All Run Types</SelectItem>
-                              <SelectItem value="solo">Solo</SelectItem>
-                              <SelectItem value="co-op">Co-op</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {importedRunsLeaderboardType === 'individual-level' && (
-                          <div>
-                            <Label htmlFor="imported-level-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Level</Label>
-                            <Select
-                              value={importedRunsLevel}
-                              onValueChange={(value) => {
-                                setImportedRunsLevel(value);
-                                setImportedPage(1);
-                              }}
-                            >
-                              <SelectTrigger id="imported-level-filter" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
-                                <SelectValue placeholder="All Levels" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__all__">All Levels</SelectItem>
-                                {availableLevels.map((level) => (
-                                  <SelectItem key={level.id} value={level.id}>
-                                    {level.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-                      </div>
-
-                      {unverifiedImported.length === 0 ? (
-                        <div className="space-y-4">
-                          <p className="text-[hsl(222,15%,60%)] text-center py-8">
-                            {importedSRCRuns.length === 0 
-                              ? "No imported runs found. Import runs from speedrun.com to get started."
-                              : "No imported runs awaiting verification for the selected filters."}
-                          </p>
-                          {importedSRCRuns.length > 0 && (
-                            <div className="text-xs text-[hsl(222,15%,50%)] text-center space-y-1">
-                              <div>
-                                Total imported runs in database: {importedSRCRuns.length} | 
-                                Unverified: {baseUnverified.length}
-                              </div>
-                              <div>
-                                Current filter: {importedRunsLeaderboardType} | 
-                                Category: {importedRunsCategory === '__all__' ? 'All' : importedRunsCategory} | 
-                                Platform: {importedRunsPlatform === '__all__' ? 'All' : importedRunsPlatform} |
-                                {importedRunsLeaderboardType === 'individual-level' && ` Level: ${importedRunsLevel === '__all__' ? 'All' : importedRunsLevel}`}
-                              </div>
-                              <p className="text-[hsl(222,15%,60%)] mt-2">Adjust the filters above to see different runs.</p>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <>
-
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
-                              <TableHead className="py-3 px-4 text-left">Player(s)</TableHead>
-                              <TableHead className="py-3 px-4 text-left">Category</TableHead>
-                              {importedRunsLeaderboardType === 'individual-level' && (
-                                <TableHead className="py-3 px-4 text-left">Level</TableHead>
-                              )}
-                              <TableHead className="py-3 px-4 text-left">Time</TableHead>
-                              <TableHead className="py-3 px-4 text-left">Date</TableHead>
-                              <TableHead className="py-3 px-4 text-left">Platform</TableHead>
-                              <TableHead className="py-3 px-4 text-left">Type</TableHead>
-                              <TableHead className="py-3 px-4 text-left">Video</TableHead>
-                              <TableHead className="py-3 px-4 text-left">Issues</TableHead>
-                              <TableHead className="py-3 px-4 text-center">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {unverifiedImported.slice((importedPage - 1) * itemsPerPage, importedPage * itemsPerPage).map((run) => {
-                              // Check for issues with this run
-                              const issues: string[] = [];
-                              
-                              // Check if category is missing or invalid
-                              const categoryExists = run.category ? 
-                                [...importedRunsCategories, ...firestoreCategories].some(c => c.id === run.category) : false;
-                              if (!run.category || run.category.trim() === "") {
-                                if (!run.srcCategoryName || run.srcCategoryName.trim() === "") {
-                                  issues.push("Missing Category");
-                                }
-                              } else if (!categoryExists) {
-                                issues.push("Invalid Category ID");
-                              }
-                              
-                              // Check if platform is missing or invalid
-                              const platformExists = run.platform ? 
-                                firestorePlatforms.some(p => p.id === run.platform) : false;
-                              if (!run.platform || run.platform.trim() === "") {
-                                if (!run.srcPlatformName || run.srcPlatformName.trim() === "") {
-                                  issues.push("Missing Platform");
-                                }
-                              } else if (!platformExists) {
-                                issues.push("Invalid Platform ID");
-                              }
-                              
-                              // Check if level is missing or invalid (for IL runs)
-                              if (importedRunsLeaderboardType === 'individual-level') {
-                                const levelExists = run.level ? 
-                                  availableLevels.some(l => l.id === run.level) : false;
-                                if (!run.level || run.level.trim() === "") {
-                                  if (!run.srcLevelName || run.srcLevelName.trim() === "") {
-                                    issues.push("Missing Level");
-                                  }
-                                } else if (!levelExists) {
-                                  issues.push("Invalid Level ID");
-                                }
-                              }
-                              
-                              // Check for other missing essential fields
-                              if (!run.playerName || run.playerName.trim() === "") {
-                                issues.push("Missing Player Name");
-                              }
-                              if (!run.time || run.time.trim() === "") {
-                                issues.push("Missing Time");
-                              }
-                              if (!run.date || run.date.trim() === "") {
-                                issues.push("Missing Date");
-                              }
-                              if (!run.runType) {
-                                issues.push("Missing Run Type");
-                              }
-                              
-                              // Check for co-op runs missing player2
-                              if (run.runType === 'co-op' && (!run.player2Name || run.player2Name.trim() === "")) {
-                                issues.push("Missing Player 2");
-                              }
-                              
-                              // Check subcategory validity (only for regular leaderboard type)
-                              if (run.leaderboardType === 'regular' && run.category) {
-                                const allCategories = [...importedRunsCategories, ...firestoreCategories];
-                                const selectedCategory = allCategories.find(c => c.id === run.category);
-                                if (selectedCategory) {
-                                  const subcategories = selectedCategory.subcategories || [];
-                                  if (run.subcategory && run.subcategory.trim() !== '') {
-                                    // Run has a subcategory - check if it exists in the category's subcategories
-                                    const subcategoryExists = subcategories.some(s => s.id === run.subcategory);
-                                    if (!subcategoryExists) {
-                                      issues.push("Invalid Subcategory");
-                                    }
-                                  } else if (run.srcSubcategory && run.srcSubcategory.trim() !== '') {
-                                    // Run has SRC subcategory but no local subcategory ID - this is a mismatch
-                                    // Check if there's a matching subcategory by name
-                                    const matchingSubcategory = subcategories.find(s => 
-                                      s.name.toLowerCase().trim() === run.srcSubcategory.toLowerCase().trim()
-                                    );
-                                    if (!matchingSubcategory && subcategories.length > 0) {
-                                      // There are subcategories but none match the SRC subcategory
-                                      issues.push("Subcategory Mismatch");
-                                    }
-                                  }
-                                }
-                              }
-                              
-                              return (
-                          <TableRow key={run.id} className={`border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-md ${issues.length > 0 ? 'bg-yellow-900/10' : ''}`}>
-                            <TableCell className="py-3 px-4 font-medium">
-                              <div className="flex items-center gap-2">
-                                <div className="flex flex-col gap-1">
-                                  <div className="flex items-center gap-1">
-                                    <span style={{ color: run.nameColor || 'inherit' }}>{run.playerName}</span>
-                                  </div>
-                                  {run.player2Name && (
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-muted-foreground"> & </span>
-                                      <span style={{ color: run.player2Color || 'inherit' }}>{run.player2Name}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-3 px-4">{
-                              getCategoryName(run.category, [...importedRunsCategories, ...firestoreCategories], run.srcCategoryName)
-                            }</TableCell>
-                            {importedRunsLeaderboardType === 'individual-level' && (
-                              <TableCell className="py-3 px-4">{
-                                getLevelName(run.level, availableLevels, run.srcLevelName)
-                              }</TableCell>
-                            )}
-                            <TableCell className="py-3 px-4">{formatTime(run.time || '00:00:00')}</TableCell>
-                            <TableCell className="py-3 px-4">{run.date || 'N/A'}</TableCell>
-                            <TableCell className="py-3 px-4">{
-                              getPlatformName(run.platform, firestorePlatforms, run.srcPlatformName)
-                            }</TableCell>
-                            <TableCell className="py-3 px-4">{run.runType.charAt(0).toUpperCase() + run.runType.slice(1)}</TableCell>
-                            <TableCell className="py-3 px-4">
-                              {run.videoUrl && (
-                                <a href={run.videoUrl} target="_blank" rel="noopener noreferrer" className="text-[#cba6f7] hover:underline flex items-center gap-1">
-                                  Watch <ExternalLink className="h-4 w-4" />
-                                </a>
-                              )}
-                              {run.srcRunId && (
-                                <a 
-                                  href={`https://www.speedrun.com/lsw/run/${run.srcRunId}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="ml-2 text-[#94e2d5] hover:underline flex items-center gap-1 text-xs"
-                                >
-                                  SRC <ExternalLink className="h-3 w-3" />
-                                </a>
-                              )}
-                            </TableCell>
-                            <TableCell className="py-3 px-4">
-                              {issues.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {issues.map((issue, idx) => (
-                                    <Badge 
-                                      key={idx} 
-                                      variant="destructive" 
-                                      className="text-xs bg-yellow-600/20 text-yellow-400 border-yellow-600/50 hover:bg-yellow-600/30"
-                                    >
-                                      <AlertTriangle className="h-3 w-3 mr-1" />
-                                      {issue}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="py-3 px-4 text-center space-x-2">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => {
-                                  setEditingImportedRun(run);
-                                  // Form will be initialized by useEffect
-                                }}
-                                className="text-blue-500 hover:bg-blue-900/20 transition-all duration-300 hover:scale-110 hover:shadow-md"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => handleReject(run.id)}
-                                className="text-red-500 hover:bg-red-900/20 transition-all duration-300 hover:scale-110 hover:shadow-md"
-                              >
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                          );
-                          })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      {unverifiedImported.length > itemsPerPage && (
-                        <Pagination
-                          currentPage={importedPage}
-                          totalPages={Math.ceil(unverifiedImported.length / itemsPerPage)}
-                          onPageChange={setImportedPage}
-                          itemsPerPage={itemsPerPage}
-                          totalItems={unverifiedImported.length}
-                        />
-                      )}
-                        </>
-                      )}
-                    </>
-                  );
-                })()}
-          </CardContent>
-        </Card>
-
         {/* Verified Runs with Invalid Data Card */}
         <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl border-yellow-500/30">
           <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
@@ -5331,6 +5181,11 @@ const Admin = () => {
             <Tabs value={categoryLeaderboardType} onValueChange={(value) => {
               setCategoryLeaderboardType(value as 'regular' | 'individual-level' | 'community-golds');
               fetchCategories(value as 'regular' | 'individual-level' | 'community-golds');
+              // Reset subcategory selection when switching leaderboard types
+              if (value !== 'regular') {
+                setSelectedCategoryForSubcategories(null);
+                setCategoryManagementTab('categories');
+              }
             }}>
               <TabsList className="grid w-full grid-cols-3 rounded-lg p-0.5 gap-1 mb-4">
                 <TabsTrigger 
@@ -5357,6 +5212,25 @@ const Admin = () => {
               </TabsList>
 
               <TabsContent value={categoryLeaderboardType} className="mt-0">
+                {/* Inner tabs for Categories vs Subcategories (only show subcategories for regular) */}
+                {categoryLeaderboardType === 'regular' ? (
+                  <Tabs value={categoryManagementTab} onValueChange={(value) => setCategoryManagementTab(value as 'categories' | 'subcategories')} className="mb-4">
+                    <TabsList className="grid w-full grid-cols-2 rounded-lg p-0.5 gap-1 mb-4">
+                      <TabsTrigger 
+                        value="categories" 
+                        className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#cba6f7]/50 py-2 px-3 text-sm"
+                      >
+                        Categories
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="subcategories" 
+                        className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#cba6f7]/50 py-2 px-3 text-sm"
+                      >
+                        Subcategories
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="categories" className="mt-0">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
                     <h3 className="text-base font-semibold mb-3">Add New Category</h3>
@@ -5483,6 +5357,376 @@ const Admin = () => {
             )}
                   </div>
                 </div>
+                    </TabsContent>
+
+                    <TabsContent value="subcategories" className="mt-0">
+                      <div className="space-y-6">
+                        {/* Category Selection */}
+                        <div>
+                          <Label htmlFor="subcategory-category-select" className="text-sm mb-2 block">Select Category</Label>
+                          <Select
+                            value={selectedCategoryForSubcategories?.id || ""}
+                            onValueChange={(value) => {
+                              const category = firestoreCategories.find(c => c.id === value) as Category | undefined;
+                              setSelectedCategoryForSubcategories(category || null);
+                            }}
+                          >
+                            <SelectTrigger id="subcategory-category-select" className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                              <SelectValue placeholder="Select a category to manage subcategories" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {firestoreCategories.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                  {cat.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedCategoryForSubcategories && !selectedCategoryForSubcategories.srcCategoryId && (
+                            <p className="text-xs text-yellow-400 mt-2">
+                              Note: This category doesn't have a linked SRC category ID. SRC variable import will not be available.
+                            </p>
+                          )}
+                        </div>
+
+                        {selectedCategoryForSubcategories && (
+                          <>
+                            {/* SRC Variables Section */}
+                            {selectedCategoryForSubcategories.srcCategoryId && (
+                              <div className="bg-[hsl(240,21%,15%)] rounded-lg p-4 border border-[hsl(235,13%,30%)]">
+                                <div className="flex items-center justify-between mb-3">
+                                  <h4 className="text-sm font-semibold text-[#f2cdcd]">Speedrun.com Variables</h4>
+                                  {srcVariables.length > 0 && (
+                                    <Button
+                                      onClick={handleImportSubcategoriesFromSRC}
+                                      disabled={updatingSubcategory || loadingSRCVariables}
+                                      size="sm"
+                                      className="bg-gradient-to-r from-[#94e2d5] to-[#74c7b0] hover:from-[#74c7b0] hover:to-[#94e2d5] text-[hsl(240,21%,15%)] font-bold text-xs"
+                                    >
+                                      <Upload className="h-3 w-3 mr-1" />
+                                      Import from SRC
+                                    </Button>
+                                  )}
+                                </div>
+                                {loadingSRCVariables ? (
+                                  <p className="text-xs text-[hsl(222,15%,60%)]">Loading SRC variables...</p>
+                                ) : srcVariables.length > 0 ? (
+                                  <div className="space-y-2">
+                                    {srcVariables.map((variable) => (
+                                      <div key={variable.id} className="text-xs">
+                                        <div className="font-medium text-[#cba6f7] mb-1">{variable.name}</div>
+                                        <div className="text-[hsl(222,15%,60%)] space-y-1">
+                                          {Object.entries(variable.values.values).slice(0, 5).map(([valueId, valueData]) => (
+                                            <div key={valueId}>• {valueData.label}</div>
+                                          ))}
+                                          {Object.keys(variable.values.values).length > 5 && (
+                                            <div className="text-[hsl(222,15%,50%)]">
+                                              ... and {Object.keys(variable.values.values).length - 5} more
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-[hsl(222,15%,60%)]">No variables found for this category on Speedrun.com.</p>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Add Subcategory */}
+                            <div className="bg-[hsl(240,21%,15%)] rounded-lg p-4 border border-[hsl(235,13%,30%)]">
+                              <h4 className="text-sm font-semibold mb-3 text-[#f2cdcd]">Add New Subcategory</h4>
+                              <form onSubmit={(e) => { e.preventDefault(); handleAddSubcategory(); }} className="space-y-3">
+                                <div>
+                                  <Label htmlFor="new-subcategory-name" className="text-xs">Subcategory Name</Label>
+                                  <Input
+                                    id="new-subcategory-name"
+                                    type="text"
+                                    value={newSubcategoryName}
+                                    onChange={(e) => setNewSubcategoryName(e.target.value)}
+                                    placeholder="e.g., Glitchless"
+                                    required
+                                    className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-9 text-sm"
+                                  />
+                                </div>
+                                <Button
+                                  type="submit"
+                                  disabled={addingSubcategory}
+                                  size="sm"
+                                  className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                                >
+                                  <PlusCircle className="h-3 w-3" />
+                                  {addingSubcategory ? "Adding..." : "Add Subcategory"}
+                                </Button>
+                              </form>
+                            </div>
+
+                            {/* Existing Subcategories */}
+                            <div>
+                              <h4 className="text-sm font-semibold mb-3 text-[#f2cdcd]">Existing Subcategories</h4>
+                              {(() => {
+                                const currentCategory = firestoreCategories.find(c => c.id === selectedCategoryForSubcategories.id) as Category | undefined;
+                                const subcategories = currentCategory?.subcategories || [];
+                                const sortedSubcategories = [...subcategories].sort((a, b) => {
+                                  const orderA = a.order ?? Infinity;
+                                  const orderB = b.order ?? Infinity;
+                                  return orderA - orderB;
+                                });
+
+                                if (sortedSubcategories.length === 0) {
+                                  return (
+                                    <p className="text-[hsl(222,15%,60%)] text-center py-4 text-sm">
+                                      No subcategories found. Add your first subcategory!
+                                    </p>
+                                  );
+                                }
+
+                                return (
+                                  <div className="overflow-x-auto">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
+                                          <TableHead className="py-2 px-3 text-left text-xs">Name</TableHead>
+                                          <TableHead className="py-2 px-3 text-left text-xs">SRC Link</TableHead>
+                                          <TableHead className="py-2 px-3 text-center text-xs">Actions</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {sortedSubcategories.map((subcategory, index) => (
+                                          <TableRow key={subcategory.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-sm">
+                                            <TableCell className="py-2 px-3 font-medium text-sm">
+                                              {editingSubcategory?.id === subcategory.id ? (
+                                                <Input
+                                                  value={editingSubcategoryName}
+                                                  onChange={(e) => setEditingSubcategoryName(e.target.value)}
+                                                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-8 text-sm"
+                                                  autoFocus
+                                                />
+                                              ) : (
+                                                subcategory.name
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="py-2 px-3 text-xs text-[hsl(222,15%,60%)]">
+                                              {subcategory.srcVariableId && subcategory.srcValueId ? (
+                                                <span className="text-green-400">Linked to SRC</span>
+                                              ) : (
+                                                <span className="text-[hsl(222,15%,50%)]">—</span>
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="py-2 px-3 text-center space-x-1">
+                                              {editingSubcategory?.id === subcategory.id ? (
+                                                <>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleSaveEditSubcategory}
+                                                    disabled={updatingSubcategory}
+                                                    className="text-green-500 hover:bg-green-900/20 h-7"
+                                                  >
+                                                    Save
+                                                  </Button>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleCancelEditSubcategory}
+                                                    disabled={updatingSubcategory}
+                                                    className="text-gray-500 hover:bg-gray-900/20 h-7"
+                                                  >
+                                                    Cancel
+                                                  </Button>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleMoveSubcategoryUp(subcategory.id)}
+                                                    disabled={reorderingSubcategory === subcategory.id || index === 0}
+                                                    className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                                                    title="Move up"
+                                                  >
+                                                    <ArrowUp className="h-3 w-3" />
+                                                  </Button>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleMoveSubcategoryDown(subcategory.id)}
+                                                    disabled={reorderingSubcategory === subcategory.id || index === sortedSubcategories.length - 1}
+                                                    className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                                                    title="Move down"
+                                                  >
+                                                    <ArrowDown className="h-3 w-3" />
+                                                  </Button>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleStartEditSubcategory(subcategory)}
+                                                    className="text-blue-500 hover:bg-blue-900/20 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                                                  >
+                                                    <Edit2 className="h-3 w-3" />
+                                                  </Button>
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleDeleteSubcategory(subcategory.id)}
+                                                    className="text-red-500 hover:bg-red-900/20 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                                                  >
+                                                    <Trash2 className="h-3 w-3" />
+                                                  </Button>
+                                                </>
+                                              )}
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </>
+                        )}
+
+                        {!selectedCategoryForSubcategories && (
+                          <div className="text-center py-8">
+                            <p className="text-[hsl(222,15%,60%)] text-sm">
+                              Select a category above to manage its subcategories.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                ) : (
+                  // For non-regular categories, just show the regular category management
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="text-base font-semibold mb-3">Add New Category</h3>
+                      <form onSubmit={handleAddCategory} className="space-y-3">
+                        <div>
+                          <Label htmlFor="categoryName" className="text-sm">Category Name</Label>
+                          <Input
+                            id="categoryName"
+                            type="text"
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            placeholder="e.g., 100% Glitchless"
+                            required
+                            className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-9 text-sm"
+                          />
+                        </div>
+                        <Button 
+                          type="submit" 
+                          disabled={addingCategory}
+                          size="sm"
+                          className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-bold flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                        >
+                          <PlusCircle className="h-3 w-3" />
+                          {addingCategory ? "Adding..." : "Add Category"}
+                        </Button>
+                      </form>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-semibold mb-3">Existing Categories</h3>
+                      {firestoreCategories.length === 0 ? (
+                        <p className="text-[hsl(222,15%,60%)] text-center py-4 text-sm">No categories found. Add your first category!</p>
+                      ) : (
+                        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
+                                <TableHead className="py-2 px-3 text-left text-xs">Name</TableHead>
+                                <TableHead className="py-2 px-3 text-center text-xs">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {firestoreCategories.map((category, index) => (
+                                <TableRow key={category.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-sm">
+                                  <TableCell className="py-2 px-3 font-medium text-sm">
+                                    {editingCategory?.id === category.id ? (
+                                      <Input
+                                        value={editingCategoryName}
+                                        onChange={(e) => setEditingCategoryName(e.target.value)}
+                                        className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] h-8 text-sm"
+                                        autoFocus
+                                      />
+                                    ) : (
+                                      category.name
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="py-2 px-3 text-center space-x-1">
+                                    {editingCategory?.id === category.id ? (
+                                      <>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={handleSaveEditCategory}
+                                          disabled={updatingCategory}
+                                          className="text-green-500 hover:bg-green-900/20"
+                                        >
+                                          Save
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={handleCancelEditCategory}
+                                          disabled={updatingCategory}
+                                          className="text-gray-500 hover:bg-gray-900/20"
+                                        >
+                                          Cancel
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleMoveCategoryUp(category.id)}
+                                          disabled={reorderingCategory === category.id || index === 0}
+                                          className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                                          title="Move up"
+                                        >
+                                          <ArrowUp className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleMoveCategoryDown(category.id)}
+                                          disabled={reorderingCategory === category.id || index === firestoreCategories.length - 1}
+                                          className="text-purple-500 hover:bg-purple-900/20 disabled:opacity-50 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                                          title="Move down"
+                                        >
+                                          <ArrowDown className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleStartEditCategory(category)}
+                                          className="text-blue-500 hover:bg-blue-900/20 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                                        >
+                                          <Edit2 className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleDeleteCategory(category.id)}
+                                          className="text-red-500 hover:bg-red-900/20 h-7 w-7 p-0 transition-all duration-200 hover:scale-110"
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </CardContent>
