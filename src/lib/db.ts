@@ -151,9 +151,10 @@ export const getLeaderboardEntries = async (
   runType?: 'solo' | 'co-op',
   includeObsolete?: boolean,
   leaderboardType?: 'regular' | 'individual-level' | 'community-golds',
-  levelId?: string
+  levelId?: string,
+  subcategoryId?: string
 ): Promise<LeaderboardEntry[]> => {
-  return getLeaderboardEntriesFirestore(categoryId, platformId, runType, includeObsolete, leaderboardType, levelId);
+  return getLeaderboardEntriesFirestore(categoryId, platformId, runType, includeObsolete, leaderboardType, levelId, subcategoryId);
 };
 export const getLeaderboardEntryById = getLeaderboardEntryByIdFirestore;
 export const addLeaderboardEntry = addLeaderboardEntryFirestore;
@@ -192,7 +193,9 @@ export const getCategoriesFromFirestore = async (leaderboardType?: 'regular' | '
 export const addCategory = async (name: string, leaderboardType?: 'regular' | 'individual-level' | 'community-golds'): Promise<string | null> => {
   return addCategoryFirestore(name, leaderboardType);
 };
-export const updateCategory = updateCategoryFirestore;
+export const updateCategory = async (id: string, name: string, subcategories?: Array<{ id: string; name: string; order?: number; srcVariableId?: string; srcValueId?: string }>): Promise<boolean> => {
+  return updateCategoryFirestore(id, name, subcategories);
+};
 export const deleteCategory = deleteCategoryFirestore;
 export const moveCategoryUp = moveCategoryUpFirestore;
 export const moveCategoryDown = moveCategoryDownFirestore;

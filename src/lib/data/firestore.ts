@@ -120,7 +120,8 @@ export const getLeaderboardEntriesFirestore = async (
   runType?: 'solo' | 'co-op',
   includeObsolete?: boolean,
   leaderboardType?: 'regular' | 'individual-level' | 'community-golds',
-  levelId?: string
+  levelId?: string,
+  subcategoryId?: string
 ): Promise<LeaderboardEntry[]> => {
   if (!db) return [];
   
@@ -162,6 +163,10 @@ export const getLeaderboardEntriesFirestore = async (
       if (runType && (runType === "solo" || runType === "co-op")) {
         constraintList.push(where("runType", "==", runType));
       }
+      
+      // Add subcategory filter (only for regular leaderboard type)
+      // Note: We filter client-side for subcategory to handle "all" and undefined cases
+      // Firestore queries don't support OR conditions easily, so we'll filter after fetching
     };
 
     // Add shared filters to query
@@ -219,6 +224,23 @@ export const getLeaderboardEntriesFirestore = async (
         }
         if (!entry.category || !entry.platform) {
           return false;
+        }
+        
+        // Filter by subcategory (client-side, only for regular leaderboard type)
+        if (leaderboardType === 'regular' && subcategoryId && subcategoryId !== 'all') {
+          // If subcategoryId is specified and not "all", filter to that subcategory
+          // Also include runs without a subcategory (undefined/null) in the "all" view
+          if (subcategoryId === '__none__') {
+            // Show only runs without subcategory
+            if (entry.subcategory && entry.subcategory.trim() !== '') {
+              return false;
+            }
+          } else {
+            // Show only runs with this specific subcategory
+            if (!entry.subcategory || entry.subcategory !== subcategoryId) {
+              return false;
+            }
+          }
         }
         
         // Check if category is disabled for this level (for ILs and Community Golds)
@@ -2525,7 +2547,7 @@ export const addCategoryFirestore = async (name: string, leaderboardType?: 'regu
   }
 };
 
-export const updateCategoryFirestore = async (id: string, name: string): Promise<boolean> => {
+export const updateCategoryFirestore = async (id: string, name: string, subcategories?: Array<{ id: string; name: string; order?: number; srcVariableId?: string; srcValueId?: string }>): Promise<boolean> => {
   if (!db) return false;
   try {
     const trimmedName = name.trim();
@@ -2543,25 +2565,37 @@ export const updateCategoryFirestore = async (id: string, name: string): Promise
     const currentData = categoryDoc.data();
     const currentName = currentData?.name?.trim() || "";
     
-    if (currentName.toLowerCase() === trimmedName.toLowerCase()) {
-      return true;
-    }
+    const updateData: UpdateData<DocumentData> = {};
+    let needsUpdate = false;
     
-    const q = query(collection(db, "categories"));
-    const existingSnapshot = await getDocs(q);
-    const conflictingCategory = existingSnapshot.docs.find(
-      d => {
-        const otherId = d.id;
-        const otherName = d.data().name?.trim() || "";
-        return otherId !== id && otherName.toLowerCase() === trimmedName.toLowerCase();
+    if (currentName.toLowerCase() !== trimmedName.toLowerCase()) {
+      const q = query(collection(db, "categories"));
+      const existingSnapshot = await getDocs(q);
+      const conflictingCategory = existingSnapshot.docs.find(
+        d => {
+          const otherId = d.id;
+          const otherName = d.data().name?.trim() || "";
+          return otherId !== id && otherName.toLowerCase() === trimmedName.toLowerCase();
+        }
+      );
+      
+      if (conflictingCategory) {
+        return false;
       }
-    );
-    
-    if (conflictingCategory) {
-      return false;
+      
+      updateData.name = trimmedName;
+      needsUpdate = true;
     }
     
-    await updateDoc(categoryDocRef, { name: trimmedName });
+    // Update subcategories if provided
+    if (subcategories !== undefined) {
+      updateData.subcategories = subcategories;
+      needsUpdate = true;
+    }
+    
+    if (needsUpdate) {
+      await updateDoc(categoryDocRef, updateData);
+    }
     return true;
   } catch (error) {
     return false;
@@ -2899,20 +2933,17 @@ export const getUnclaimedRunsBySRCUsernameFirestore = async (srcUsername: string
       const { normalizeSRCUsername } = await import("@/lib/speedruncom");
       const normalizedSrcUsername = normalizeSRCUsername(srcUsername);
       
-      // Filter runs where playerName matches SRC username OR srcPlayerName matches
+      // Filter runs where srcPlayerName or srcPlayer2Name matches SRC username
+      // Only match by SRC username, not display name
       const matchingRuns = allRuns.filter(run => {
         if (!run.importedFromSRC) return false;
         
-        const runPlayerName = (run.playerName || "").trim().toLowerCase();
-        const runPlayer2Name = (run.player2Name || "").trim().toLowerCase();
         // Use the same normalization function as import and claiming for consistency
         const runSRCPlayerName = normalizeSRCUsername(run.srcPlayerName);
         const runSRCPlayer2Name = normalizeSRCUsername(run.srcPlayer2Name);
         
-        // Match by SRC username (preferred for imported runs) or display name (case-insensitive)
-        const nameMatches = runPlayerName === normalizedSrcUsername || 
-                          (runPlayer2Name && runPlayer2Name === normalizedSrcUsername) ||
-                          runSRCPlayerName === normalizedSrcUsername ||
+        // Match by SRC username only
+        const nameMatches = runSRCPlayerName === normalizedSrcUsername ||
                           (runSRCPlayer2Name && runSRCPlayer2Name === normalizedSrcUsername);
         
         if (nameMatches) {
@@ -2940,7 +2971,7 @@ export const getUnclaimedRunsBySRCUsernameFirestore = async (srcUsername: string
 
 /**
  * Claim a run for a user
- * Overhauled system: Only allows claiming unclaimed runs that match user's display name or SRC username
+ * Only allows claiming runs imported from Speedrun.com that match user's SRC username
  * For co-op runs, both players can claim their portion
  */
 export const claimRunFirestore = async (runId: string, userId: string): Promise<boolean> => {
@@ -2962,10 +2993,14 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
       return false;
     }
     
+    // Only allow claiming runs imported from Speedrun.com
+    if (!runData.importedFromSRC) {
+      throw new Error("Cannot claim run: Only runs imported from Speedrun.com can be claimed. Manual runs are automatically assigned to the submitting user.");
+    }
+    
     // Import normalizeSRCUsername for consistent normalization
     const { normalizeSRCUsername } = await import("@/lib/speedruncom");
     
-    const normalizedUserDisplayName = player.displayName ? player.displayName.trim().toLowerCase() : "";
     const normalizedUserSRCUsername = normalizeSRCUsername(player.srcUsername);
     const normalizedRunPlayerName = (runData.playerName || "").trim().toLowerCase();
     const normalizedRunPlayer2Name = (runData.player2Name || "").trim().toLowerCase();
@@ -2985,107 +3020,93 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
     let actualSRCPlayerName = normalizedRunSRCPlayerName;
     let actualSRCPlayer2Name = normalizedRunSRCPlayer2Name;
     
-    // For imported runs, prioritize SRC username matching
-    if (runData.importedFromSRC) {
-      if (!normalizedUserSRCUsername) {
-        throw new Error("Cannot claim imported run: You need to set your Speedrun.com username in Settings. Go to Settings > Profile Information and enter your exact Speedrun.com username.");
+    // SRC username is required for claiming imported runs
+    if (!normalizedUserSRCUsername) {
+      throw new Error("Cannot claim imported run: You need to set your Speedrun.com username in Settings. Go to Settings > Profile Information and enter your exact Speedrun.com username.");
+    }
+    
+    // If srcPlayerName is "Unknown" or empty but srcPlayerId exists, fetch from SRC API
+    // Use the same fetchPlayerById function and normalization as during import
+    if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && runData.srcPlayerId) {
+      try {
+        console.log(`[claimRun] Fetching player name for srcPlayerId: ${runData.srcPlayerId}`);
+        const { fetchPlayerById } = await import("@/lib/speedruncom");
+        const fetchedName = await fetchPlayerById(runData.srcPlayerId);
+        if (fetchedName) {
+          // Use the same normalization function as import for consistency
+          actualSRCPlayerName = normalizeSRCUsername(fetchedName);
+          console.log(`[claimRun] Fetched player name: ${fetchedName} (normalized: ${actualSRCPlayerName})`);
+        } else {
+          console.warn(`[claimRun] fetchPlayerById returned null/empty for srcPlayerId: ${runData.srcPlayerId}`);
+        }
+      } catch (error) {
+        console.error(`[claimRun] Error fetching player name from SRC API for srcPlayerId ${runData.srcPlayerId}:`, error);
+        // Continue with "Unknown" - will fail validation below with helpful error
       }
-      
-      // If srcPlayerName is "Unknown" or empty but srcPlayerId exists, fetch from SRC API
-      // Use the same fetchPlayerById function and normalization as during import
+    }
+    
+    // Fallback: If srcPlayerName is "Unknown" but playerName might have the actual SRC username
+    // This can happen if the run was imported and playerName was set correctly but srcPlayerName wasn't
+    // Use the same normalization function for consistency
+    if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && runData.playerName && 
+        normalizeSRCUsername(runData.playerName) !== "unknown" && 
+        normalizeSRCUsername(runData.playerName) === normalizedUserSRCUsername) {
+      console.log(`[claimRun] Using playerName as fallback SRC username: ${runData.playerName}`);
+      actualSRCPlayerName = normalizeSRCUsername(runData.playerName);
+    }
+    
+    if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && !runData.srcPlayerId) {
+      console.warn(`[claimRun] Run ${runId} has "Unknown" player name but no srcPlayerId. Run data:`, {
+        srcPlayerName: runData.srcPlayerName,
+        srcPlayerId: runData.srcPlayerId,
+        playerName: runData.playerName,
+        importedFromSRC: runData.importedFromSRC
+      });
+    }
+    
+    if ((!actualSRCPlayer2Name || actualSRCPlayer2Name === "unknown") && runData.srcPlayer2Id) {
+      try {
+        console.log(`[claimRun] Fetching player2 name for srcPlayer2Id: ${runData.srcPlayer2Id}`);
+        const { fetchPlayerById } = await import("@/lib/speedruncom");
+        const fetchedName = await fetchPlayerById(runData.srcPlayer2Id);
+        if (fetchedName) {
+          // Use the same normalization function as import for consistency
+          actualSRCPlayer2Name = normalizeSRCUsername(fetchedName);
+          console.log(`[claimRun] Fetched player2 name: ${fetchedName} (normalized: ${actualSRCPlayer2Name})`);
+        } else {
+          console.warn(`[claimRun] fetchPlayerById returned null/empty for srcPlayer2Id: ${runData.srcPlayer2Id}`);
+        }
+      } catch (error) {
+        console.error(`[claimRun] Error fetching player2 name from SRC API for srcPlayer2Id ${runData.srcPlayer2Id}:`, error);
+      }
+    }
+    
+    // Fallback: If srcPlayer2Name is "Unknown" but player2Name might have the actual SRC username
+    // Use the same normalization function for consistency
+    if ((!actualSRCPlayer2Name || actualSRCPlayer2Name === "unknown") && runData.player2Name && 
+        normalizeSRCUsername(runData.player2Name) !== "unknown" && 
+        normalizeSRCUsername(runData.player2Name) === normalizedUserSRCUsername) {
+      console.log(`[claimRun] Using player2Name as fallback SRC username: ${runData.player2Name}`);
+      actualSRCPlayer2Name = normalizeSRCUsername(runData.player2Name);
+    }
+    
+    const srcNameMatches = actualSRCPlayerName === normalizedUserSRCUsername ||
+                          (actualSRCPlayer2Name && actualSRCPlayer2Name === normalizedUserSRCUsername);
+    
+    if (!srcNameMatches) {
+      // If we couldn't fetch the name and srcPlayerId exists, provide more helpful error
       if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && runData.srcPlayerId) {
-        try {
-          console.log(`[claimRun] Fetching player name for srcPlayerId: ${runData.srcPlayerId}`);
-          const { fetchPlayerById } = await import("@/lib/speedruncom");
-          const fetchedName = await fetchPlayerById(runData.srcPlayerId);
-          if (fetchedName) {
-            // Use the same normalization function as import for consistency
-            actualSRCPlayerName = normalizeSRCUsername(fetchedName);
-            console.log(`[claimRun] Fetched player name: ${fetchedName} (normalized: ${actualSRCPlayerName})`);
-          } else {
-            console.warn(`[claimRun] fetchPlayerById returned null/empty for srcPlayerId: ${runData.srcPlayerId}`);
-          }
-        } catch (error) {
-          console.error(`[claimRun] Error fetching player name from SRC API for srcPlayerId ${runData.srcPlayerId}:`, error);
-          // Continue with "Unknown" - will fail validation below with helpful error
-        }
+        throw new Error(`Cannot claim run: Your Speedrun.com username "${player.srcUsername}" does not match this run's player. The run's player name could not be fetched from Speedrun.com (ID: ${runData.srcPlayerId}). Please contact an admin or try again later.`);
       }
       
-      // Fallback: If srcPlayerName is "Unknown" but playerName might have the actual SRC username
-      // This can happen if the run was imported and playerName was set correctly but srcPlayerName wasn't
-      // Use the same normalization function for consistency
-      if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && runData.playerName && 
-          normalizeSRCUsername(runData.playerName) !== "unknown" && 
-          normalizeSRCUsername(runData.playerName) === normalizedUserSRCUsername) {
-        console.log(`[claimRun] Using playerName as fallback SRC username: ${runData.playerName}`);
-        actualSRCPlayerName = normalizeSRCUsername(runData.playerName);
-      }
-      
+      // If srcPlayerId doesn't exist, the run might have been imported incorrectly
       if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && !runData.srcPlayerId) {
-        console.warn(`[claimRun] Run ${runId} has "Unknown" player name but no srcPlayerId. Run data:`, {
-          srcPlayerName: runData.srcPlayerName,
-          srcPlayerId: runData.srcPlayerId,
-          playerName: runData.playerName,
-          importedFromSRC: runData.importedFromSRC
-        });
+        throw new Error(`Cannot claim run: This run was imported from Speedrun.com but is missing player information. The run shows player name "Unknown" and has no player ID. Please contact an admin to fix this run.`);
       }
       
-      if ((!actualSRCPlayer2Name || actualSRCPlayer2Name === "unknown") && runData.srcPlayer2Id) {
-        try {
-          console.log(`[claimRun] Fetching player2 name for srcPlayer2Id: ${runData.srcPlayer2Id}`);
-          const { fetchPlayerById } = await import("@/lib/speedruncom");
-          const fetchedName = await fetchPlayerById(runData.srcPlayer2Id);
-          if (fetchedName) {
-            // Use the same normalization function as import for consistency
-            actualSRCPlayer2Name = normalizeSRCUsername(fetchedName);
-            console.log(`[claimRun] Fetched player2 name: ${fetchedName} (normalized: ${actualSRCPlayer2Name})`);
-          } else {
-            console.warn(`[claimRun] fetchPlayerById returned null/empty for srcPlayer2Id: ${runData.srcPlayer2Id}`);
-          }
-        } catch (error) {
-          console.error(`[claimRun] Error fetching player2 name from SRC API for srcPlayer2Id ${runData.srcPlayer2Id}:`, error);
-        }
-      }
-      
-      // Fallback: If srcPlayer2Name is "Unknown" but player2Name might have the actual SRC username
-      // Use the same normalization function for consistency
-      if ((!actualSRCPlayer2Name || actualSRCPlayer2Name === "unknown") && runData.player2Name && 
-          normalizeSRCUsername(runData.player2Name) !== "unknown" && 
-          normalizeSRCUsername(runData.player2Name) === normalizedUserSRCUsername) {
-        console.log(`[claimRun] Using player2Name as fallback SRC username: ${runData.player2Name}`);
-        actualSRCPlayer2Name = normalizeSRCUsername(runData.player2Name);
-      }
-      
-      const srcNameMatches = actualSRCPlayerName === normalizedUserSRCUsername ||
-                            (actualSRCPlayer2Name && actualSRCPlayer2Name === normalizedUserSRCUsername);
-      
-      if (!srcNameMatches) {
-        // If we couldn't fetch the name and srcPlayerId exists, provide more helpful error
-        if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && runData.srcPlayerId) {
-          throw new Error(`Cannot claim run: Your Speedrun.com username "${player.srcUsername}" does not match this run's player. The run's player name could not be fetched from Speedrun.com (ID: ${runData.srcPlayerId}). Please contact an admin or try again later.`);
-        }
-        
-        // If srcPlayerId doesn't exist, the run might have been imported incorrectly
-        if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && !runData.srcPlayerId) {
-          throw new Error(`Cannot claim run: This run was imported from Speedrun.com but is missing player information. The run shows player name "Unknown" and has no player ID. Please contact an admin to fix this run.`);
-        }
-        
-        const displayName1 = actualSRCPlayerName && actualSRCPlayerName !== "unknown" ? actualSRCPlayerName : (runData.srcPlayerName || 'Unknown');
-        const displayName2 = actualSRCPlayer2Name && actualSRCPlayer2Name !== "unknown" ? actualSRCPlayer2Name : (runData.srcPlayer2Name || 'Unknown');
-        throw new Error(`Cannot claim run: Your Speedrun.com username "${player.srcUsername}" does not match this run's player name "${displayName1 || displayName2 || 'Unknown'}". Make sure your SRC username in Settings matches exactly (case-sensitive).`);
-      }
-    } else {
-      // For non-imported runs, check display name matching
-      if (!normalizedUserDisplayName) {
-        throw new Error("Cannot claim run: You need to set your display name in Settings.");
-      }
-      
-      const nameMatches = normalizedRunPlayerName === normalizedUserDisplayName ||
-                         (normalizedRunPlayer2Name && normalizedRunPlayer2Name === normalizedUserDisplayName);
-      
-      if (!nameMatches) {
-        throw new Error(`Cannot claim run: Your display name "${player.displayName}" does not match this run's player name "${runData.playerName || runData.player2Name || 'Unknown'}".`);
-      }
+      const displayName1 = actualSRCPlayerName && actualSRCPlayerName !== "unknown" ? actualSRCPlayerName : (runData.srcPlayerName || 'Unknown');
+      const displayName2 = actualSRCPlayer2Name && actualSRCPlayer2Name !== "unknown" ? actualSRCPlayer2Name : (runData.srcPlayer2Name || 'Unknown');
+      throw new Error(`Cannot claim run: Your Speedrun.com username "${player.srcUsername}" does not match this run's player name "${displayName1 || displayName2 || 'Unknown'}". Make sure your SRC username in Settings matches exactly (case-sensitive).`);
     }
     
     const oldPlayerId = runData.playerId;
@@ -3094,23 +3115,19 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
     // Determine if this is a co-op run and which player is claiming
     const isCoOp = runData.runType === 'co-op';
     
-    // For imported runs, use the actual SRC player names (fetched if needed)
+    // Use the actual SRC player names (fetched if needed)
     let checkSRCPlayerName = normalizedRunSRCPlayerName;
     let checkSRCPlayer2Name = normalizedRunSRCPlayer2Name;
-    if (runData.importedFromSRC) {
-      // Use the actual names we fetched (or original if they were valid)
-      if (actualSRCPlayerName && actualSRCPlayerName !== "unknown") {
-        checkSRCPlayerName = actualSRCPlayerName;
-      }
-      if (actualSRCPlayer2Name && actualSRCPlayer2Name !== "unknown") {
-        checkSRCPlayer2Name = actualSRCPlayer2Name;
-      }
+    // Use the actual names we fetched (or original if they were valid)
+    if (actualSRCPlayerName && actualSRCPlayerName !== "unknown") {
+      checkSRCPlayerName = actualSRCPlayerName;
+    }
+    if (actualSRCPlayer2Name && actualSRCPlayer2Name !== "unknown") {
+      checkSRCPlayer2Name = actualSRCPlayer2Name;
     }
     
-    const isPlayer1 = normalizedRunPlayerName === normalizedUserDisplayName || 
-                     (runData.importedFromSRC && checkSRCPlayerName === normalizedUserSRCUsername);
-    const isPlayer2 = normalizedRunPlayer2Name === normalizedUserDisplayName || 
-                     (runData.importedFromSRC && checkSRCPlayer2Name === normalizedUserSRCUsername);
+    const isPlayer1 = checkSRCPlayerName === normalizedUserSRCUsername;
+    const isPlayer2 = checkSRCPlayer2Name === normalizedUserSRCUsername;
     
     // Update the run with the new playerId(s) and player names
     const updateData: Partial<LeaderboardEntry> = {};
@@ -3124,17 +3141,19 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
       }
       if (isPlayer2) {
         updateData.player2Id = userId;
-        // For player2, we need to check if they have a profile
-        // If the run is being claimed by player2, update player2Name
-        if (normalizedRunPlayer2Name === normalizedUserDisplayName || 
-            (runData.importedFromSRC && normalizedRunSRCPlayer2Name === normalizedUserSRCUsername)) {
-          // Player2 is claiming - update player2Name to their displayName
-          updateData.player2Name = player.displayName;
-        } else {
-          // Player1 is claiming for both, need to find player2's profile
-          const player2Profile = await getPlayerByDisplayNameFirestore(runData.player2Name || "");
-          if (player2Profile) {
-            updateData.player2Name = player2Profile.displayName;
+        // Player2 is claiming - update player2Name to their displayName
+        updateData.player2Name = player.displayName;
+      } else if (isPlayer1) {
+        // Player1 is claiming, but player2 might exist - try to find player2's profile by SRC username
+        if (runData.srcPlayer2Name && runData.srcPlayer2Name.trim() !== '') {
+          // Try to find player2 by matching their SRC username
+          const allPlayers = await getDocs(collection(db, "players"));
+          const player2Match = allPlayers.docs.find(doc => {
+            const p = doc.data();
+            return normalizeSRCUsername(p.srcUsername) === checkSRCPlayer2Name;
+          });
+          if (player2Match) {
+            updateData.player2Name = player2Match.data().displayName;
           }
         }
       }

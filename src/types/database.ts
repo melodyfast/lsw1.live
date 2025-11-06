@@ -30,6 +30,8 @@ export interface LeaderboardEntry {
   srcPlayer2Id?: string; // Speedrun.com player2 ID (for co-op runs claiming)
   srcPlayerName?: string; // Speedrun.com player name/username (for matching and claiming)
   srcPlayer2Name?: string; // Speedrun.com player2 name/username (for co-op runs claiming)
+  subcategory?: string; // Subcategory ID for this run (only for regular leaderboard type)
+  srcSubcategory?: string; // Original SRC variable value for display when ID mapping fails
 }
 
 export interface Player {
@@ -52,11 +54,20 @@ export interface Player {
   srcUsername?: string; // Speedrun.com username for claiming imported runs
 }
 
+export interface Subcategory {
+  id: string;
+  name: string;
+  order?: number; // Order for displaying subcategories (lower numbers appear first)
+  srcVariableId?: string; // SRC variable ID if imported from SRC
+  srcValueId?: string; // SRC value ID if imported from SRC
+}
+
 export interface Category {
   id: string;
   name: string;
   order?: number; // Order for displaying categories (lower numbers appear first)
   leaderboardType?: 'regular' | 'individual-level' | 'community-golds'; // Type of leaderboard this category belongs to
+  subcategories?: Subcategory[]; // Subcategories for this category (only for regular leaderboard type)
 }
 
 export interface Level {

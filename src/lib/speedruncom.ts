@@ -251,6 +251,19 @@ export async function fetchCategories(gameId: string): Promise<SRCCategory[]> {
 }
 
 /**
+ * Fetch variables for a specific category
+ */
+export async function fetchCategoryVariables(categoryId: string): Promise<SRCCategory['variables']> {
+  try {
+    const data = await fetchSRCAPI<{ data: SRCCategory }>(`/categories/${categoryId}?embed=variables`);
+    return data.data?.variables || undefined;
+  } catch (error) {
+    console.error(`Error fetching variables for category ${categoryId}:`, error);
+    return undefined;
+  }
+}
+
+/**
  * Fetch all levels for a game
  */
 export async function fetchLevels(gameId: string): Promise<SRCLevel[]> {
@@ -757,6 +770,49 @@ export async function mapSRCRunToLeaderboardEntry(
   // === Extract Video URL ===
   const videoUrl = run.videos?.links?.[0]?.uri || undefined;
   
+  // === Extract Subcategory from SRC Variables ===
+  // Only extract subcategories for regular (full game) runs
+  let subcategoryId: string | undefined;
+  let srcSubcategory: string | undefined;
+  
+  if (leaderboardType === 'regular' && run.values && Object.keys(run.values).length > 0) {
+    // Get the first variable value (most categories have one main variable like "Glitchless", "No Major Glitches", etc.)
+    // The values object maps variable ID -> value ID
+    const variableEntries = Object.entries(run.values);
+    if (variableEntries.length > 0) {
+      const [variableId, valueId] = variableEntries[0];
+      
+      // Try to get the variable name from embedded category data
+      let variableName: string | undefined;
+      let valueLabel: string | undefined;
+      
+      if (typeof run.category === 'object' && run.category?.data) {
+        const categoryData = run.category.data as SRCCategory;
+        const variable = categoryData.variables?.data?.find(v => v.id === variableId);
+        if (variable) {
+          variableName = variable.name;
+          valueLabel = variable.values?.values?.[valueId]?.label;
+        }
+      } else if (embeddedData?.category) {
+        const variable = embeddedData.category.variables?.data?.find(v => v.id === variableId);
+        if (variable) {
+          variableName = variable.name;
+          valueLabel = variable.values?.values?.[valueId]?.label;
+        }
+      }
+      
+      // Store the SRC subcategory name for display
+      if (valueLabel) {
+        srcSubcategory = valueLabel;
+      } else if (variableName) {
+        srcSubcategory = variableName;
+      }
+      
+      // Note: subcategoryId will be set later during import when we create/map subcategories
+      // For now, we just store the SRC value for reference
+    }
+  }
+  
   // === Build Result ===
   return {
     playerId: defaultPlayerId,
@@ -783,5 +839,8 @@ export async function mapSRCRunToLeaderboardEntry(
     srcPlayer2Id: srcPlayer2Id || undefined,
     srcPlayerName: player1Name.trim() || undefined,
     srcPlayer2Name: runType === 'co-op' && player2Name ? player2Name.trim() : undefined,
+    // Store subcategory info
+    subcategory: subcategoryId,
+    srcSubcategory: srcSubcategory,
   };
 }

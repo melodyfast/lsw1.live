@@ -21,12 +21,14 @@ const Leaderboards = () => {
   const [selectedLevel, setSelectedLevel] = useState("");
   const [selectedPlatform, setSelectedPlatform] = useState("");
   const [selectedRunType, setSelectedRunType] = useState(runTypes[0]?.id || "");
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string>("all");
   const [showObsoleteRuns, setShowObsoleteRuns] = useState("false");
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [levelsLoading, setLevelsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [availableSubcategories, setAvailableSubcategories] = useState<Array<{ id: string; name: string }>>([]);
   const itemsPerPage = 25;
   const requestCounterRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -78,6 +80,40 @@ const Leaderboards = () => {
     fetchData();
   }, [leaderboardType]);
 
+  // Fetch subcategories when category changes (only for regular leaderboard type)
+  useEffect(() => {
+    const fetchSubcategories = async () => {
+      if (leaderboardType === 'regular' && selectedCategory) {
+        try {
+          const categories = await getCategories('regular');
+          const category = categories.find(c => c.id === selectedCategory);
+          if (category && category.subcategories && category.subcategories.length > 0) {
+            // Sort subcategories by order
+            const sorted = [...category.subcategories].sort((a, b) => {
+              const orderA = a.order ?? Infinity;
+              const orderB = b.order ?? Infinity;
+              return orderA - orderB;
+            });
+            setAvailableSubcategories(sorted);
+            // Reset to "all" when category changes
+            setSelectedSubcategory("all");
+          } else {
+            setAvailableSubcategories([]);
+            setSelectedSubcategory("all");
+          }
+        } catch (error) {
+          setAvailableSubcategories([]);
+          setSelectedSubcategory("all");
+        }
+      } else {
+        setAvailableSubcategories([]);
+        setSelectedSubcategory("all");
+      }
+    };
+    
+    fetchSubcategories();
+  }, [selectedCategory, leaderboardType]);
+
   useEffect(() => {
     // Cancel previous request if it exists
     if (abortControllerRef.current) {
@@ -100,7 +136,8 @@ const Leaderboards = () => {
           selectedRunType as 'solo' | 'co-op',
           showObsoleteRuns === "true",
           leaderboardType,
-          (leaderboardType === 'individual-level' || leaderboardType === 'community-golds') ? selectedLevel : undefined
+          (leaderboardType === 'individual-level' || leaderboardType === 'community-golds') ? selectedLevel : undefined,
+          (leaderboardType === 'regular' && selectedSubcategory && selectedSubcategory !== 'all') ? selectedSubcategory : undefined
         );
         
         // Only update state if this is still the latest request
@@ -135,7 +172,7 @@ const Leaderboards = () => {
     return () => {
       abortController.abort();
     };
-  }, [selectedCategory, selectedPlatform, selectedRunType, selectedLevel, showObsoleteRuns, leaderboardType]);
+  }, [selectedCategory, selectedPlatform, selectedRunType, selectedLevel, showObsoleteRuns, leaderboardType, selectedSubcategory]);
   
   // Only refresh when page becomes visible AND enough time has passed
   useEffect(() => {
@@ -163,7 +200,8 @@ const Leaderboards = () => {
                   selectedRunType as 'solo' | 'co-op',
                   showObsoleteRuns === "true",
                   leaderboardType,
-                  (leaderboardType === 'individual-level' || leaderboardType === 'community-golds') ? selectedLevel : undefined
+                  (leaderboardType === 'individual-level' || leaderboardType === 'community-golds') ? selectedLevel : undefined,
+                  (leaderboardType === 'regular' && selectedSubcategory && selectedSubcategory !== 'all') ? selectedSubcategory : undefined
                 );
                 setLeaderboardData(data);
                 setCurrentPage(1);
@@ -182,7 +220,7 @@ const Leaderboards = () => {
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [selectedCategory, selectedPlatform, selectedRunType, selectedLevel, showObsoleteRuns, leaderboardType]);
+  }, [selectedCategory, selectedPlatform, selectedRunType, selectedLevel, showObsoleteRuns, leaderboardType, selectedSubcategory]);
 
   return (
     <div className="min-h-screen bg-[#1e1e2e] text-ctp-text py-4 sm:py-6 overflow-x-hidden">
@@ -249,22 +287,50 @@ const Leaderboards = () => {
               }
               
               return filteredCategories.length > 0 ? (
-                <div className="mb-6 animate-slide-up">
-                  <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide" style={{ minWidth: 'max-content' }}>
-                      {filteredCategories.map((category, index) => (
-                        <TabsTrigger 
-                          key={category.id} 
-                          value={category.id} 
-                          className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap"
-                          style={{ animationDelay: `${index * 50}ms` }}
-                        >
-                          {category.name}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                  </Tabs>
-                </div>
+                <>
+                  <div className="mb-6 animate-slide-up">
+                    <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide" style={{ minWidth: 'max-content' }}>
+                        {filteredCategories.map((category, index) => (
+                          <TabsTrigger 
+                            key={category.id} 
+                            value={category.id} 
+                            className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap"
+                            style={{ animationDelay: `${index * 50}ms` }}
+                          >
+                            {category.name}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </Tabs>
+                  </div>
+                  
+                  {/* Subcategory Tabs (only for regular leaderboard type) */}
+                  {leaderboardType === 'regular' && availableSubcategories.length > 0 && (
+                    <div className="mb-6 animate-slide-up">
+                      <Tabs value={selectedSubcategory} onValueChange={setSelectedSubcategory}>
+                        <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide" style={{ minWidth: 'max-content' }}>
+                          <TabsTrigger 
+                            value="all" 
+                            className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#cba6f7]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap"
+                          >
+                            All
+                          </TabsTrigger>
+                          {availableSubcategories.map((subcategory, index) => (
+                            <TabsTrigger 
+                              key={subcategory.id} 
+                              value={subcategory.id} 
+                              className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#cba6f7]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap"
+                              style={{ animationDelay: `${(index + 1) * 50}ms` }}
+                            >
+                              {subcategory.name}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                      </Tabs>
+                    </div>
+                  )}
+                </>
               ) : (
                 availableCategories.length > 0 && (
                   <div className="mb-6 p-4 bg-ctp-surface0 rounded-lg border border-ctp-surface1">

@@ -21,12 +21,14 @@ const SubmitRun = () => {
   const [availableCategories, setAvailableCategories] = useState<{ id: string; name: string }[]>([]);
   const [availableLevels, setAvailableLevels] = useState<{ id: string; name: string }[]>([]);
   const [availablePlatforms, setAvailablePlatforms] = useState<{ id: string; name: string }[]>([]);
+  const [availableSubcategories, setAvailableSubcategories] = useState<Array<{ id: string; name: string }>>([]);
   const [leaderboardType, setLeaderboardType] = useState<'regular' | 'individual-level' | 'community-golds'>('regular');
   
   const [formData, setFormData] = useState({
     playerName: currentUser?.displayName || "",
     player2Name: "", // New state for player2Name
     category: "",
+    subcategory: "", // Subcategory for regular runs
     level: "", // Level for ILs and Community Golds
     platform: "",
     runType: "",
@@ -72,6 +74,38 @@ const SubmitRun = () => {
     
     fetchData();
   }, [leaderboardType]);
+
+  // Fetch subcategories when category changes (only for regular leaderboard type)
+  useEffect(() => {
+    const fetchSubcategories = async () => {
+      if (leaderboardType === 'regular' && formData.category) {
+        try {
+          const categories = await getCategories('regular');
+          const category = categories.find(c => c.id === formData.category);
+          if (category && category.subcategories && category.subcategories.length > 0) {
+            // Sort subcategories by order
+            const sorted = [...category.subcategories].sort((a, b) => {
+              const orderA = a.order ?? Infinity;
+              const orderB = b.order ?? Infinity;
+              return orderA - orderB;
+            });
+            setAvailableSubcategories(sorted);
+          } else {
+            setAvailableSubcategories([]);
+            setFormData(prev => ({ ...prev, subcategory: "" }));
+          }
+        } catch (error) {
+          setAvailableSubcategories([]);
+          setFormData(prev => ({ ...prev, subcategory: "" }));
+        }
+      } else {
+        setAvailableSubcategories([]);
+        setFormData(prev => ({ ...prev, subcategory: "" }));
+      }
+    };
+    
+    fetchSubcategories();
+  }, [formData.category, leaderboardType]);
 
   // Update playerName when currentUser loads (if field is still empty)
   useEffect(() => {
@@ -202,6 +236,11 @@ const SubmitRun = () => {
       // Add level for ILs and Community Golds
       if (formData.level && (leaderboardType === 'individual-level' || leaderboardType === 'community-golds')) {
         entry.level = formData.level;
+      }
+      
+      // Add subcategory for regular runs
+      if (leaderboardType === 'regular' && formData.subcategory && formData.subcategory.trim()) {
+        entry.subcategory = formData.subcategory.trim();
       }
       
       // Only include player2Name for co-op runs with a valid value
@@ -443,6 +482,37 @@ const SubmitRun = () => {
                         Select the full game category this Community Gold applies to
                       </p>
                     )}
+                  </div>
+                )}
+
+                {/* Subcategory Selection (only for regular leaderboard type) */}
+                {leaderboardType === 'regular' && availableSubcategories.length > 0 && (
+                  <div>
+                    <Label className="text-sm font-semibold mb-2 block flex items-center gap-2">
+                      <Trophy className="h-3.5 w-3.5 text-[#cba6f7]" />
+                      Subcategory
+                    </Label>
+                    <Select 
+                      value={formData.subcategory || ""} 
+                      onValueChange={(value) => handleSelectChange("subcategory", value)}
+                    >
+                      <SelectTrigger className="bg-gradient-to-br from-[hsl(240,21%,18%)] to-[hsl(240,21%,16%)] border-[hsl(235,13%,30%)] h-10 text-sm hover:border-[#cba6f7] hover:bg-gradient-to-br hover:from-[hsl(240,21%,20%)] hover:to-[hsl(240,21%,18%)] transition-all duration-300">
+                        <SelectValue placeholder="Select subcategory (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="" className="text-sm">
+                          None
+                        </SelectItem>
+                        {availableSubcategories.map((subcategory) => (
+                          <SelectItem key={subcategory.id} value={subcategory.id} className="text-sm">
+                            {subcategory.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-[hsl(222,15%,60%)] mt-1">
+                      Optional: Select a subcategory for this run (e.g., Glitchless, No Major Glitches)
+                    </p>
                   </div>
                 )}
 

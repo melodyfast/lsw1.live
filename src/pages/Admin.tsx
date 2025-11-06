@@ -775,6 +775,98 @@ const Admin = () => {
     }
   };
 
+  const handleSaveImportedRun = async () => {
+    if (!editingImportedRun || savingImportedRun) return;
+    
+    // Validate required fields
+    const finalForm = {
+      playerName: editingImportedRunForm.playerName ?? editingImportedRun.playerName,
+      player2Name: editingImportedRunForm.player2Name ?? editingImportedRun.player2Name,
+      category: editingImportedRunForm.category ?? editingImportedRun.category,
+      subcategory: editingImportedRunForm.subcategory ?? editingImportedRun.subcategory,
+      platform: editingImportedRunForm.platform ?? editingImportedRun.platform,
+      runType: editingImportedRunForm.runType ?? editingImportedRun.runType,
+      leaderboardType: editingImportedRunForm.leaderboardType ?? editingImportedRun.leaderboardType,
+      level: editingImportedRunForm.level ?? editingImportedRun.level,
+      time: editingImportedRunForm.time ?? editingImportedRun.time,
+      date: editingImportedRunForm.date ?? editingImportedRun.date,
+      videoUrl: editingImportedRunForm.videoUrl ?? editingImportedRun.videoUrl,
+      comment: editingImportedRunForm.comment ?? editingImportedRun.comment,
+    };
+    
+    if (!finalForm.playerName?.trim() || !finalForm.category?.trim() || !finalForm.platform?.trim() || !finalForm.time?.trim() || !finalForm.date?.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setSavingImportedRun(true);
+    try {
+      const updateData: Partial<LeaderboardEntry> = {
+        playerName: finalForm.playerName.trim(),
+        category: finalForm.category.trim(),
+        platform: finalForm.platform.trim(),
+        runType: finalForm.runType,
+        leaderboardType: finalForm.leaderboardType,
+        time: finalForm.time.trim(),
+        date: finalForm.date.trim(),
+      };
+
+      // Add optional fields
+      if (finalForm.player2Name && finalForm.player2Name.trim()) {
+        updateData.player2Name = finalForm.player2Name.trim();
+      } else if (finalForm.runType === 'co-op') {
+        updateData.player2Name = finalForm.player2Name?.trim() || '';
+      }
+      
+      if (finalForm.level && finalForm.level.trim()) {
+        updateData.level = finalForm.level.trim();
+      }
+      
+      // Add subcategory for regular runs
+      if (finalForm.leaderboardType === 'regular') {
+        if (finalForm.subcategory && finalForm.subcategory.trim()) {
+          updateData.subcategory = finalForm.subcategory.trim();
+        } else {
+          // Clear subcategory if none selected
+          updateData.subcategory = undefined;
+        }
+      }
+      
+      if (finalForm.videoUrl && finalForm.videoUrl.trim()) {
+        updateData.videoUrl = finalForm.videoUrl.trim();
+      }
+      
+      if (finalForm.comment && finalForm.comment.trim()) {
+        updateData.comment = finalForm.comment.trim();
+      }
+
+      const success = await updateLeaderboardEntry(editingImportedRun.id, updateData);
+      if (success) {
+        toast({
+          title: "Run Updated",
+          description: "The run has been saved successfully.",
+        });
+        await refreshAllRunData();
+        setEditingImportedRun(null);
+        setEditingImportedRunForm({});
+      } else {
+        throw new Error("Failed to update run");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save run.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingImportedRun(false);
+    }
+  };
+
   const handleImportFromSRC = async () => {
     if (importingRuns) return;
     
@@ -3488,6 +3580,31 @@ const Admin = () => {
                                     issues.push("Invalid/Missing Level");
                                   }
                                   
+                                  // Check subcategory validity (only for regular leaderboard type)
+                                  if (run.leaderboardType === 'regular' && run.category && categoryExists) {
+                                    const selectedCategory = firestoreCategories.find(c => c.id === run.category);
+                                    if (selectedCategory) {
+                                      const subcategories = selectedCategory.subcategories || [];
+                                      if (run.subcategory && run.subcategory.trim() !== '') {
+                                        // Run has a subcategory - check if it exists in the category's subcategories
+                                        const subcategoryExists = subcategories.some(s => s.id === run.subcategory);
+                                        if (!subcategoryExists) {
+                                          issues.push("Invalid Subcategory");
+                                        }
+                                      } else if (run.srcSubcategory && run.srcSubcategory.trim() !== '') {
+                                        // Run has SRC subcategory but no local subcategory ID - this is a mismatch
+                                        // Check if there's a matching subcategory by name
+                                        const matchingSubcategory = subcategories.find(s => 
+                                          s.name.toLowerCase().trim() === run.srcSubcategory.toLowerCase().trim()
+                                        );
+                                        if (!matchingSubcategory && subcategories.length > 0) {
+                                          // There are subcategories but none match the SRC subcategory
+                                          issues.push("Subcategory Mismatch");
+                                        }
+                                      }
+                                    }
+                                  }
+                                  
                                   return (
                                     <TableRow key={run.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-md">
                                       <TableCell className="py-3 px-4 font-medium">
@@ -4073,6 +4190,32 @@ const Admin = () => {
                                 issues.push("Missing Player 2");
                               }
                               
+                              // Check subcategory validity (only for regular leaderboard type)
+                              if (run.leaderboardType === 'regular' && run.category) {
+                                const allCategories = [...importedRunsCategories, ...firestoreCategories];
+                                const selectedCategory = allCategories.find(c => c.id === run.category);
+                                if (selectedCategory) {
+                                  const subcategories = selectedCategory.subcategories || [];
+                                  if (run.subcategory && run.subcategory.trim() !== '') {
+                                    // Run has a subcategory - check if it exists in the category's subcategories
+                                    const subcategoryExists = subcategories.some(s => s.id === run.subcategory);
+                                    if (!subcategoryExists) {
+                                      issues.push("Invalid Subcategory");
+                                    }
+                                  } else if (run.srcSubcategory && run.srcSubcategory.trim() !== '') {
+                                    // Run has SRC subcategory but no local subcategory ID - this is a mismatch
+                                    // Check if there's a matching subcategory by name
+                                    const matchingSubcategory = subcategories.find(s => 
+                                      s.name.toLowerCase().trim() === run.srcSubcategory.toLowerCase().trim()
+                                    );
+                                    if (!matchingSubcategory && subcategories.length > 0) {
+                                      // There are subcategories but none match the SRC subcategory
+                                      issues.push("Subcategory Mismatch");
+                                    }
+                                  }
+                                }
+                              }
+                              
                               return (
                           <TableRow key={run.id} className={`border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-md ${issues.length > 0 ? 'bg-yellow-900/10' : ''}`}>
                             <TableCell className="py-3 px-4 font-medium">
@@ -4288,6 +4431,7 @@ const Admin = () => {
                                       playerName: run.playerName,
                                       player2Name: run.player2Name,
                                       category: run.category,
+                                      subcategory: run.subcategory,
                                       platform: run.platform,
                                       level: run.level,
                                       runType: run.runType,
@@ -4722,6 +4866,39 @@ const Admin = () => {
                     )}
                   </div>
                 </div>
+                {/* Subcategory selector (only for regular leaderboard type) */}
+                {editingImportedRun.leaderboardType === 'regular' && (() => {
+                  const selectedCategoryId = editingImportedRunForm.category ?? editingImportedRun.category;
+                  const selectedCategory = firestoreCategories.find(c => c.id === selectedCategoryId);
+                  const subcategories = selectedCategory?.subcategories || [];
+                  const sortedSubcategories = [...subcategories].sort((a, b) => {
+                    const orderA = a.order ?? Infinity;
+                    const orderB = b.order ?? Infinity;
+                    return orderA - orderB;
+                  });
+                  
+                  return sortedSubcategories.length > 0 ? (
+                    <div>
+                      <Label htmlFor="edit-subcategory">Subcategory</Label>
+                      <Select
+                        value={editingImportedRunForm.subcategory ?? editingImportedRun.subcategory ?? ""}
+                        onValueChange={(value) => setEditingImportedRunForm({ ...editingImportedRunForm, subcategory: value || undefined })}
+                      >
+                        <SelectTrigger className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+                          <SelectValue placeholder="Select a subcategory (optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {sortedSubcategories.map((subcategory) => (
+                            <SelectItem key={subcategory.id} value={subcategory.id}>
+                              {subcategory.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null;
+                })()}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="edit-runType">Run Type <span className="text-red-500">*</span></Label>
@@ -4849,6 +5026,7 @@ const Admin = () => {
                     playerName: editingImportedRunForm.playerName ?? editingImportedRun.playerName,
                     player2Name: editingImportedRunForm.player2Name ?? editingImportedRun.player2Name,
                     category: editingImportedRunForm.category ?? editingImportedRun.category,
+                    subcategory: editingImportedRunForm.subcategory ?? editingImportedRun.subcategory,
                     platform: editingImportedRunForm.platform ?? editingImportedRun.platform,
                     runType: editingImportedRunForm.runType ?? editingImportedRun.runType,
                     leaderboardType: editingImportedRunForm.leaderboardType ?? editingImportedRun.leaderboardType,
@@ -4900,6 +5078,16 @@ const Admin = () => {
                     
                     if (finalForm.comment && finalForm.comment.trim()) {
                       updateData.comment = finalForm.comment.trim();
+                    }
+                    
+                    // Add subcategory for regular runs
+                    if (finalForm.leaderboardType === 'regular') {
+                      if (finalForm.subcategory && finalForm.subcategory.trim()) {
+                        updateData.subcategory = finalForm.subcategory.trim();
+                      } else {
+                        // Clear subcategory if none selected
+                        updateData.subcategory = undefined;
+                      }
                     }
 
                     const success = await updateLeaderboardEntry(editingImportedRun.id, updateData);
