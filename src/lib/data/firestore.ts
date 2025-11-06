@@ -10,6 +10,7 @@ import {
   normalizeLevelId,
 } from "@/lib/dataValidation";
 import { logger } from "@/lib/logger";
+import { fetchPlayerById } from "@/lib/speedruncom";
 
 /**
  * Helper function to calculate ranks for a group of runs
@@ -66,16 +67,43 @@ async function calculateRanksForGroup(
     }
   }
   
+  // Filter to best time per player (matching leaderboard display logic)
+  // Group by player(s) and keep only the fastest run per player combination
+  const playerBestRuns = new Map<string, LeaderboardEntry>();
+  
+  for (const run of nonObsoleteRuns) {
+    // Create a key for grouping (player(s), category, platform, runType, leaderboardType, level)
+    // For co-op runs, include both players in the key
+    const playerId = run.playerId || run.playerName || "";
+    const player2Id = run.runType === 'co-op' ? (run.player2Name || "") : "";
+    const groupKey = `${playerId}_${player2Id}_${run.category}_${run.platform}_${run.runType || 'solo'}_${run.leaderboardType || 'regular'}_${run.level || ''}`;
+    
+    const existing = playerBestRuns.get(groupKey);
+    if (!existing) {
+      playerBestRuns.set(groupKey, run);
+    } else {
+      // Compare times - keep the faster one
+      const existingTime = parseTimeToSeconds(existing.time) || Infinity;
+      const currentTime = parseTimeToSeconds(run.time) || Infinity;
+      if (currentTime < existingTime) {
+        playerBestRuns.set(groupKey, run);
+      }
+    }
+  }
+  
+  // Get the best runs per player
+  const bestRuns = Array.from(playerBestRuns.values());
+  
   // Sort by time
-  nonObsoleteRuns.sort((a, b) => {
+  bestRuns.sort((a, b) => {
     const timeA = parseTimeToSeconds(a.time);
     const timeB = parseTimeToSeconds(b.time);
     return timeA - timeB;
   });
   
-  // Create rank map (1-based)
+  // Create rank map (1-based) - only rank the best run per player
   const rankMap = new Map<string, number>();
-  nonObsoleteRuns.forEach((run, index) => {
+  bestRuns.forEach((run, index) => {
     rankMap.set(run.id, index + 1);
   });
   
@@ -1113,7 +1141,7 @@ export const getPlayerRunsFirestore = async (playerId: string): Promise<Leaderbo
       playerDisplayName = player.displayName.trim();
     }
     
-    // Fetch runs by playerId
+    // Fetch runs by playerId (as player1)
     const q = query(
       collection(db, "leaderboardEntries"),
       where("playerId", "==", playerId),
@@ -1125,6 +1153,25 @@ export const getPlayerRunsFirestore = async (playerId: string): Promise<Leaderbo
     entries = querySnapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
       .filter(entry => !entry.isObsolete);
+    
+    // Also fetch co-op runs where this player is player2 (via player2Id)
+    const coOpQuery = query(
+      collection(db, "leaderboardEntries"),
+      where("player2Id", "==", playerId),
+      where("verified", "==", true),
+      where("runType", "==", "co-op"),
+      firestoreLimit(200)
+    );
+    
+    const coOpSnapshot = await getDocs(coOpQuery);
+    const coOpEntries = coOpSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
+      .filter(entry => !entry.isObsolete);
+    
+    // Add co-op runs where player is player2 (avoid duplicates)
+    const entryIds = new Set(entries.map(e => e.id));
+    const additionalCoOpRuns = coOpEntries.filter(r => !entryIds.has(r.id));
+    entries = [...entries, ...additionalCoOpRuns];
     
     // Also find runs by display name matching (case-insensitive)
     // This handles cases where runs haven't been auto-linked yet
@@ -1147,19 +1194,22 @@ export const getPlayerRunsFirestore = async (playerId: string): Promise<Leaderbo
           const runPlayerName = (run.playerName || "").trim().toLowerCase();
           const runPlayer2Name = (run.player2Name || "").trim().toLowerCase();
           
-          // Match if playerName matches (case-insensitive)
+          // Match if playerName or player2Name matches (case-insensitive)
           const nameMatches = runPlayerName === normalizedDisplayName ||
                              (runPlayer2Name && runPlayer2Name === normalizedDisplayName);
           if (!nameMatches) return false;
           
           // Include if unclaimed (empty/null playerId) or already linked to this player
+          // For co-op runs, also check player2Id
           const currentPlayerId = run.playerId || "";
-          return !currentPlayerId || currentPlayerId === playerId;
+          const currentPlayer2Id = run.player2Id || "";
+          return (!currentPlayerId || currentPlayerId === playerId) && 
+                 (!currentPlayer2Id || currentPlayer2Id === playerId || currentPlayerId === playerId);
         });
       
       // Add runs by display name (avoid duplicates)
-      const entryIds = new Set(entries.map(e => e.id));
-      const additionalRuns = runsByDisplayName.filter(r => !entryIds.has(r.id));
+      const allEntryIds = new Set(entries.map(e => e.id));
+      const additionalRuns = runsByDisplayName.filter(r => !allEntryIds.has(r.id));
       entries = [...entries, ...additionalRuns];
     }
 
@@ -3029,17 +3079,47 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
       throw new Error("Cannot claim run: This run is already claimed by another user.");
     }
     
+    // Initialize actual SRC player names (will be fetched if needed)
+    let actualSRCPlayerName = normalizedRunSRCPlayerName;
+    let actualSRCPlayer2Name = normalizedRunSRCPlayer2Name;
+    
     // For imported runs, prioritize SRC username matching
     if (runData.importedFromSRC) {
       if (!normalizedUserSRCUsername) {
         throw new Error("Cannot claim imported run: You need to set your Speedrun.com username in Settings. Go to Settings > Profile Information and enter your exact Speedrun.com username.");
       }
       
-      const srcNameMatches = normalizedRunSRCPlayerName === normalizedUserSRCUsername ||
-                            (normalizedRunSRCPlayer2Name && normalizedRunSRCPlayer2Name === normalizedUserSRCUsername);
+      // If srcPlayerName is "Unknown" or empty but srcPlayerId exists, fetch from SRC API
+      
+      if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && runData.srcPlayerId) {
+        try {
+          const fetchedName = await fetchPlayerById(runData.srcPlayerId);
+          if (fetchedName) {
+            actualSRCPlayerName = fetchedName.trim().toLowerCase();
+          }
+        } catch (error) {
+          console.error("Error fetching player name from SRC API:", error);
+        }
+      }
+      
+      if ((!actualSRCPlayer2Name || actualSRCPlayer2Name === "unknown") && runData.srcPlayer2Id) {
+        try {
+          const fetchedName = await fetchPlayerById(runData.srcPlayer2Id);
+          if (fetchedName) {
+            actualSRCPlayer2Name = fetchedName.trim().toLowerCase();
+          }
+        } catch (error) {
+          console.error("Error fetching player2 name from SRC API:", error);
+        }
+      }
+      
+      const srcNameMatches = actualSRCPlayerName === normalizedUserSRCUsername ||
+                            (actualSRCPlayer2Name && actualSRCPlayer2Name === normalizedUserSRCUsername);
       
       if (!srcNameMatches) {
-        throw new Error(`Cannot claim run: Your Speedrun.com username "${player.srcUsername}" does not match this run's player name "${runData.srcPlayerName || runData.srcPlayer2Name || 'Unknown'}". Make sure your SRC username in Settings matches exactly (case-sensitive).`);
+        const displayName1 = actualSRCPlayerName && actualSRCPlayerName !== "unknown" ? actualSRCPlayerName : (runData.srcPlayerName || 'Unknown');
+        const displayName2 = actualSRCPlayer2Name && actualSRCPlayer2Name !== "unknown" ? actualSRCPlayer2Name : (runData.srcPlayer2Name || 'Unknown');
+        throw new Error(`Cannot claim run: Your Speedrun.com username "${player.srcUsername}" does not match this run's player name "${displayName1 || displayName2 || 'Unknown'}". Make sure your SRC username in Settings matches exactly (case-sensitive).`);
       }
     } else {
       // For non-imported runs, check display name matching
@@ -3060,10 +3140,24 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
     
     // Determine if this is a co-op run and which player is claiming
     const isCoOp = runData.runType === 'co-op';
+    
+    // For imported runs, use the actual SRC player names (fetched if needed)
+    let checkSRCPlayerName = normalizedRunSRCPlayerName;
+    let checkSRCPlayer2Name = normalizedRunSRCPlayer2Name;
+    if (runData.importedFromSRC) {
+      // Use the actual names we fetched (or original if they were valid)
+      if (actualSRCPlayerName && actualSRCPlayerName !== "unknown") {
+        checkSRCPlayerName = actualSRCPlayerName;
+      }
+      if (actualSRCPlayer2Name && actualSRCPlayer2Name !== "unknown") {
+        checkSRCPlayer2Name = actualSRCPlayer2Name;
+      }
+    }
+    
     const isPlayer1 = normalizedRunPlayerName === normalizedUserDisplayName || 
-                     (runData.importedFromSRC && normalizedRunSRCPlayerName === normalizedUserSRCUsername);
+                     (runData.importedFromSRC && checkSRCPlayerName === normalizedUserSRCUsername);
     const isPlayer2 = normalizedRunPlayer2Name === normalizedUserDisplayName || 
-                     (runData.importedFromSRC && normalizedRunSRCPlayer2Name === normalizedUserSRCUsername);
+                     (runData.importedFromSRC && checkSRCPlayer2Name === normalizedUserSRCUsername);
     
     // Update the run with the new playerId(s) and player names
     const updateData: Partial<LeaderboardEntry> = {};
