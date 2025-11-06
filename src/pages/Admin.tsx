@@ -93,7 +93,6 @@ const Admin = () => {
   const [importedRunsLevel, setImportedRunsLevel] = useState("__all__"); // "__all__" = All Levels
   const [importedRunsRunType, setImportedRunsRunType] = useState<"__all__" | "solo" | "co-op">("__all__"); // "__all__" = All Run Types
   const [importedRunsCategories, setImportedRunsCategories] = useState<{ id: string; name: string }[]>([]);
-  const [unmatchedPlayers, setUnmatchedPlayers] = useState<Map<string, { player1?: string; player2?: string; player1Matched?: boolean; player2Matched?: boolean }>>(new Map()); // Map of runId to player match status
   const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
   const [pageLoading, setLoading] = useState(true);
   const [newDownload, setNewDownload] = useState({
@@ -445,9 +444,9 @@ const Admin = () => {
         getImportedSRCRuns(),
         getVerifiedRunsWithInvalidData()
       ]);
-      // Include all unverified runs (both imported and manually submitted)
-      // Imported runs will appear in both Unverified Runs and Imported Runs tabs
-      setUnverifiedRuns(unverifiedData);
+      // Only include manually submitted runs in unverified runs tab
+      // Imported runs stay in their own tab unless they're edited and ready for verification
+      setUnverifiedRuns(unverifiedData.filter(run => !run.importedFromSRC));
       setImportedSRCRuns(importedData);
       setVerifiedRunsWithInvalidData(invalidVerifiedData);
     } catch (error) {
@@ -478,69 +477,15 @@ const Admin = () => {
   const fetchUnverifiedRuns = async () => {
     try {
       const data = await getUnverifiedLeaderboardEntries();
-      // Include all unverified runs (both imported and manually submitted)
-      setUnverifiedRuns(data);
+      // Only include manually submitted runs in unverified runs tab
+      // Imported runs stay in their own tab
+      setUnverifiedRuns(data.filter(run => !run.importedFromSRC));
       setUnverifiedPage(1); // Reset to first page when data changes
       
       try {
         const importedData = await getImportedSRCRuns();
         setImportedSRCRuns(importedData);
         setImportedPage(1); // Reset to first page when data changes
-        
-        // Check for matched/unmatched players in imported runs (only check unverified runs)
-        const unmatchedMap = new Map<string, { player1?: string; player2?: string; player1Matched?: boolean; player2Matched?: boolean }>();
-        for (const run of importedData) {
-          // Only check unverified imported runs
-          if (!run.verified && run.importedFromSRC) {
-            const playerStatus: { player1?: string; player2?: string; player1Matched?: boolean; player2Matched?: boolean } = {};
-            
-            // Check player1 - always set status if player name exists
-            if (run.playerName && run.playerName.trim()) {
-              try {
-                const player1 = await getPlayerByDisplayName(run.playerName);
-                playerStatus.player1Matched = !!player1;
-                if (!player1) {
-                  playerStatus.player1 = run.playerName;
-                }
-              } catch (error) {
-                console.error(`Error checking player1 ${run.playerName}:`, error);
-                playerStatus.player1Matched = false;
-                playerStatus.player1 = run.playerName;
-              }
-            }
-            
-            // Check player2 - always set status if player name exists
-            if (run.player2Name && run.player2Name.trim()) {
-              try {
-                const player2 = await getPlayerByDisplayName(run.player2Name);
-                playerStatus.player2Matched = !!player2;
-                if (!player2) {
-                  playerStatus.player2 = run.player2Name;
-                }
-              } catch (error) {
-                console.error(`Error checking player2 ${run.player2Name}:`, error);
-                playerStatus.player2Matched = false;
-                playerStatus.player2 = run.player2Name;
-              }
-            }
-            
-            // Store status for all runs (both matched and unmatched)
-            // Always store if we have at least one player to check
-            if (run.playerName || run.player2Name) {
-              unmatchedMap.set(run.id, playerStatus);
-              // Debug: log the status for this run
-              if (run.playerName && playerStatus.player1Matched === undefined) {
-                console.warn(`[Admin] Player1 match status undefined for run ${run.id}, player: ${run.playerName}`);
-              }
-              if (run.player2Name && playerStatus.player2Matched === undefined) {
-                console.warn(`[Admin] Player2 match status undefined for run ${run.id}, player: ${run.player2Name}`);
-              }
-            }
-          }
-        }
-        console.log(`[Admin] Player matching complete. Checked ${unmatchedMap.size} runs.`);
-        console.log(`[Admin] Sample entries:`, Array.from(unmatchedMap.entries()).slice(0, 3));
-        setUnmatchedPlayers(unmatchedMap);
       } catch (importError) {
         console.error("Error fetching imported runs:", importError);
         toast({
@@ -957,13 +902,23 @@ const Admin = () => {
       if (success) {
         toast({
           title: "Run Updated",
-          description: "The run has been updated successfully. You can now verify it from the Unverified Runs tab.",
+          description: "The run has been updated successfully.",
         });
+        // Update the local state instead of full refresh to avoid breaking the UI
+        setImportedSRCRuns(prev => prev.map(run => 
+          run.id === editingImportedRun.id 
+            ? { ...run, ...updateData }
+            : run
+        ));
+        // Also update unverified runs if this run is there
+        setUnverifiedRuns(prev => prev.map(run => 
+          run.id === editingImportedRun.id 
+            ? { ...run, ...updateData }
+            : run
+        ));
         // Close dialog and reset form
         setEditingImportedRun(null);
         setEditingImportedRunForm({});
-        // Refresh all run lists
-        await refreshAllRunData();
       } else {
         throw new Error("Failed to update run");
       }
@@ -2677,11 +2632,6 @@ const Admin = () => {
                           </TableHeader>
                           <TableBody>
                             {unverifiedImported.slice((importedPage - 1) * itemsPerPage, importedPage * itemsPerPage).map((run) => {
-                              const unmatched = unmatchedPlayers.get(run.id);
-                              // Debug: log if we have a run with players but no match status (rarely, to avoid spam)
-                              if ((run.playerName || run.player2Name) && !unmatched && Math.random() < 0.01) {
-                                console.log(`[Admin] Run ${run.id} has players but no match status. Player1: ${run.playerName}, Player2: ${run.player2Name}, unmatchedPlayers size: ${unmatchedPlayers.size}`);
-                              }
                               return (
                           <TableRow key={run.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200 hover:shadow-md">
                             <TableCell className="py-3 px-4 font-medium">
@@ -2689,61 +2639,11 @@ const Admin = () => {
                                 <div className="flex flex-col gap-1">
                                   <div className="flex items-center gap-1">
                                     <span style={{ color: run.nameColor || 'inherit' }}>{run.playerName}</span>
-                                    {(() => {
-                                      if (!unmatched) {
-                                        // No match data yet - show loading indicator
-                                        return run.playerName && run.playerName.trim() ? (
-                                          <div className="h-4 w-4 flex-shrink-0 border border-gray-500 rounded animate-pulse" title="Checking player match status..." />
-                                        ) : null;
-                                      }
-                                      // Show checkmark if matched
-                                      if (unmatched.player1Matched === true) {
-                                        return (
-                                          <div title={`Player "${run.playerName}" found on site`} className="flex-shrink-0">
-                                            <CheckCircle className="h-4 w-4 text-green-500" />
-                                          </div>
-                                        );
-                                      }
-                                      // Show warning if not matched
-                                      if (unmatched.player1Matched === false) {
-                                        return (
-                                          <div title={`Player "${run.playerName}" not found on site`} className="flex-shrink-0">
-                                            <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                                          </div>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
                                   </div>
                                   {run.player2Name && (
                                     <div className="flex items-center gap-1">
                                       <span className="text-muted-foreground"> & </span>
                                       <span style={{ color: run.player2Color || 'inherit' }}>{run.player2Name}</span>
-                                      {(() => {
-                                        if (!unmatched) {
-                                          // No match data yet - show loading indicator
-                                          return run.player2Name && run.player2Name.trim() ? (
-                                            <div className="h-4 w-4 flex-shrink-0 border border-gray-500 rounded animate-pulse" title="Checking player match status..." />
-                                          ) : null;
-                                        }
-                                        // Show checkmark if matched
-                                        if (unmatched.player2Matched === true) {
-                                          return (
-                                            <div title={`Player "${run.player2Name}" found on site`} className="flex-shrink-0">
-                                              <CheckCircle className="h-4 w-4 text-green-500" />
-                                            </div>
-                                          );
-                                        }
-                                        // Show warning if not matched
-                                        if (unmatched.player2Matched === false) {
-                                          return (
-                                            <div title={`Player "${run.player2Name}" not found on site`} className="flex-shrink-0">
-                                              <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                                            </div>
-                                          );
-                                        }
-                                        return null;
-                                      })()}
                                     </div>
                                   )}
                                 </div>
@@ -3211,7 +3111,7 @@ const Admin = () => {
                 </div>
               </div>
             )}
-            <DialogFooter>
+            <DialogFooter className="flex gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -3228,6 +3128,99 @@ const Admin = () => {
                 className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-bold"
               >
                 {savingImportedRun ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button
+                onClick={async () => {
+                  // Verify the run immediately after saving
+                  if (!editingImportedRun) return;
+                  
+                  // Validate required fields first
+                  const finalForm = {
+                    playerName: editingImportedRunForm.playerName ?? editingImportedRun.playerName,
+                    player2Name: editingImportedRunForm.player2Name ?? editingImportedRun.player2Name,
+                    category: editingImportedRunForm.category ?? editingImportedRun.category,
+                    platform: editingImportedRunForm.platform ?? editingImportedRun.platform,
+                    runType: editingImportedRunForm.runType ?? editingImportedRun.runType,
+                    leaderboardType: editingImportedRunForm.leaderboardType ?? editingImportedRun.leaderboardType,
+                    level: editingImportedRunForm.level ?? editingImportedRun.level,
+                    time: editingImportedRunForm.time ?? editingImportedRun.time,
+                    date: editingImportedRunForm.date ?? editingImportedRun.date,
+                    videoUrl: editingImportedRunForm.videoUrl ?? editingImportedRun.videoUrl,
+                    comment: editingImportedRunForm.comment ?? editingImportedRun.comment,
+                  };
+                  
+                  // Quick validation
+                  if (!finalForm.playerName?.trim() || !finalForm.category?.trim() || !finalForm.platform?.trim() || !finalForm.time?.trim() || !finalForm.date?.trim()) {
+                    toast({
+                      title: "Missing Information",
+                      description: "Please fill in all required fields before verifying.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  
+                  setSavingImportedRun(true);
+                  try {
+                    const updateData: Partial<LeaderboardEntry> = {
+                      playerName: finalForm.playerName.trim(),
+                      category: finalForm.category.trim(),
+                      platform: finalForm.platform.trim(),
+                      runType: finalForm.runType,
+                      leaderboardType: finalForm.leaderboardType,
+                      time: finalForm.time.trim(),
+                      date: finalForm.date.trim(),
+                      verified: true, // Verify immediately
+                      verifiedBy: currentUser?.uid || currentUser?.displayName || "Admin",
+                    };
+
+                    // Add optional fields
+                    if (finalForm.player2Name && finalForm.player2Name.trim()) {
+                      updateData.player2Name = finalForm.player2Name.trim();
+                    } else if (finalForm.runType === 'co-op') {
+                      updateData.player2Name = finalForm.player2Name?.trim() || '';
+                    }
+                    
+                    if (finalForm.level && finalForm.level.trim()) {
+                      updateData.level = finalForm.level.trim();
+                    }
+                    
+                    if (finalForm.videoUrl && finalForm.videoUrl.trim()) {
+                      updateData.videoUrl = finalForm.videoUrl.trim();
+                    }
+                    
+                    if (finalForm.comment && finalForm.comment.trim()) {
+                      updateData.comment = finalForm.comment.trim();
+                    }
+
+                    const success = await updateLeaderboardEntry(editingImportedRun.id, updateData);
+                    if (success) {
+                      toast({
+                        title: "Run Verified",
+                        description: "The run has been saved and verified successfully.",
+                      });
+                      // Update local state - remove from imported runs since it's now verified
+                      setImportedSRCRuns(prev => prev.filter(run => run.id !== editingImportedRun.id));
+                      setUnverifiedRuns(prev => prev.filter(run => run.id !== editingImportedRun.id));
+                      // Close dialog and reset form
+                      setEditingImportedRun(null);
+                      setEditingImportedRunForm({});
+                    } else {
+                      throw new Error("Failed to verify run");
+                    }
+                  } catch (error: any) {
+                    toast({
+                      title: "Error",
+                      description: error.message || "Failed to verify imported run.",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setSavingImportedRun(false);
+                  }
+                }}
+                disabled={savingImportedRun}
+                className="bg-gradient-to-r from-[#a6e3a1] to-[#94e2d5] hover:from-[#94e2d5] hover:to-[#a6e3a1] text-[hsl(240,21%,15%)] font-bold"
+              >
+                {savingImportedRun ? "Verifying..." : "Save & Verify"}
               </Button>
             </DialogFooter>
           </DialogContent>
