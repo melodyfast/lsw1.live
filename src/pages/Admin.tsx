@@ -2214,31 +2214,7 @@ const Admin = () => {
                         </TabsList>
                       </Tabs>
                       
-                      {unverifiedImported.length === 0 ? (
-                        <div className="space-y-4">
-                          <p className="text-[hsl(222,15%,60%)] text-center py-8">
-                            {importedSRCRuns.length === 0 
-                              ? "No imported runs found. Import runs from speedrun.com to get started."
-                              : "No imported runs awaiting verification for the selected filters."}
-                          </p>
-                          {importedSRCRuns.length > 0 && (
-                            <div className="text-xs text-[hsl(222,15%,50%)] text-center space-y-1">
-                              <div>
-                                Total imported runs in database: {importedSRCRuns.length} | 
-                                Unverified: {baseUnverified.length}
-                              </div>
-                              <div>
-                                Current filter: {importedRunsLeaderboardType} | 
-                                Category: {importedRunsCategory === '__all__' ? 'All' : importedRunsCategory} | 
-                                Platform: {importedRunsPlatform === '__all__' ? 'All' : importedRunsPlatform} |
-                                {importedRunsLeaderboardType === 'individual-level' && ` Level: ${importedRunsLevel === '__all__' ? 'All' : importedRunsLevel}`}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <>
-                      {/* Filters */}
+                      {/* Filters - Always show so users can adjust when results are empty */}
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                         <div>
                           <Label htmlFor="imported-category-filter" className="text-[hsl(222,15%,60%)] mb-2 block">Category</Label>
@@ -2309,6 +2285,32 @@ const Admin = () => {
                           </div>
                         )}
                       </div>
+
+                      {unverifiedImported.length === 0 ? (
+                        <div className="space-y-4">
+                          <p className="text-[hsl(222,15%,60%)] text-center py-8">
+                            {importedSRCRuns.length === 0 
+                              ? "No imported runs found. Import runs from speedrun.com to get started."
+                              : "No imported runs awaiting verification for the selected filters."}
+                          </p>
+                          {importedSRCRuns.length > 0 && (
+                            <div className="text-xs text-[hsl(222,15%,50%)] text-center space-y-1">
+                              <div>
+                                Total imported runs in database: {importedSRCRuns.length} | 
+                                Unverified: {baseUnverified.length}
+                              </div>
+                              <div>
+                                Current filter: {importedRunsLeaderboardType} | 
+                                Category: {importedRunsCategory === '__all__' ? 'All' : importedRunsCategory} | 
+                                Platform: {importedRunsPlatform === '__all__' ? 'All' : importedRunsPlatform} |
+                                {importedRunsLeaderboardType === 'individual-level' && ` Level: ${importedRunsLevel === '__all__' ? 'All' : importedRunsLevel}`}
+                              </div>
+                              <p className="text-[hsl(222,15%,60%)] mt-2">Adjust the filters above to see different runs.</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <>
 
                       <div className="overflow-x-auto">
                         <Table>

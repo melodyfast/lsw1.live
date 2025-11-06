@@ -167,20 +167,42 @@ export async function importSRCRuns(
     // Get game ID
     const gameId = await getLSWGameId();
     if (!gameId) {
-      throw new Error("Could not find LEGO Star Wars game on speedrun.com");
+      result.errors.push("Could not find LEGO Star Wars game on speedrun.com");
+      return result;
     }
 
     // Fetch runs from SRC
-    const srcRuns = await fetchRunsNotOnLeaderboards(gameId);
+    let srcRuns: SRCRun[];
+    try {
+      srcRuns = await fetchRunsNotOnLeaderboards(gameId);
+    } catch (error) {
+      result.errors.push(`Failed to fetch runs from speedrun.com: ${error instanceof Error ? error.message : String(error)}`);
+      return result;
+    }
+    
     if (srcRuns.length === 0) {
+      result.errors.push("No runs found to import from speedrun.com");
       return result;
     }
 
     // Create mappings
-    const mappings = await createSRCMappings();
+    let mappings;
+    try {
+      mappings = await createSRCMappings();
+    } catch (error) {
+      result.errors.push(`Failed to create mappings: ${error instanceof Error ? error.message : String(error)}`);
+      return result;
+    }
 
     // Get existing runs for duplicate checking
-    const existingRuns = await getAllRunsForDuplicateCheck();
+    let existingRuns;
+    try {
+      existingRuns = await getAllRunsForDuplicateCheck();
+    } catch (error) {
+      result.errors.push(`Failed to fetch existing runs: ${error instanceof Error ? error.message : String(error)}`);
+      return result;
+    }
+    
     const existingSRCRunIds = new Set(
       existingRuns.filter(r => r.srcRunId).map(r => r.srcRunId!)
     );
@@ -221,26 +243,31 @@ export async function importSRCRuns(
           mappings.platformNameMapping
         );
 
-        // Extract SRC data for validation (mapping already done in mapSRCRunToLeaderboardEntry)
-        const srcData = extractSRCData(srcRun);
-
-        // Basic validation - must have category and platform (either mapped or SRC name)
-        if (!mappedRun.category && !srcData.srcCategoryName) {
+        // Basic validation - must have category and platform (either mapped ID or SRC name)
+        // mappedRun already has srcCategoryName, srcPlatformName, srcLevelName set
+        const hasCategory = (mappedRun.category && mappedRun.category.trim() !== '') || !!mappedRun.srcCategoryName;
+        const hasPlatform = (mappedRun.platform && mappedRun.platform.trim() !== '') || !!mappedRun.srcPlatformName;
+        
+        if (!hasCategory) {
           result.skipped++;
-          result.errors.push(`Run ${srcRun.id}: missing category`);
+          result.errors.push(`Run ${srcRun.id}: missing category (SRC category: ${mappedRun.srcCategoryName || 'unknown'})`);
           onProgress?.({ total: srcRuns.length, imported: result.imported, skipped: result.skipped });
           continue;
         }
-        if (!mappedRun.platform && !srcData.srcPlatformName) {
+        if (!hasPlatform) {
           result.skipped++;
-          result.errors.push(`Run ${srcRun.id}: missing platform`);
+          result.errors.push(`Run ${srcRun.id}: missing platform (SRC platform: ${mappedRun.srcPlatformName || 'unknown'})`);
           onProgress?.({ total: srcRuns.length, imported: result.imported, skipped: result.skipped });
           continue;
         }
         
-        // If mapping failed, ensure we have at least empty strings (not undefined)
-        if (!mappedRun.category) mappedRun.category = '';
-        if (!mappedRun.platform) mappedRun.platform = '';
+        // If mapping failed, ensure we have at least empty strings (not undefined) for required fields
+        if (!mappedRun.category || mappedRun.category.trim() === '') {
+          mappedRun.category = '';
+        }
+        if (!mappedRun.platform || mappedRun.platform.trim() === '') {
+          mappedRun.platform = '';
+        }
 
         // Normalize player names
         mappedRun.playerName = (mappedRun.playerName || 'Unknown').trim();
@@ -301,8 +328,10 @@ export async function importSRCRuns(
 
     return result;
   } catch (error) {
-    result.errors.push(error instanceof Error ? error.message : String(error));
-    throw error;
+    // Catch any unexpected errors and return them in the result instead of throwing
+    result.errors.push(`Unexpected error: ${error instanceof Error ? error.message : String(error)}`);
+    console.error("Import error:", error);
+    return result;
   }
 }
 
