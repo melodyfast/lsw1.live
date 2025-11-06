@@ -364,9 +364,9 @@ export function mapSRCRunToLeaderboardEntry(
   const srcLevelId = extractId(run.level);
   const ourLevelId = srcLevelId ? (levelMapping.get(srcLevelId) || srcLevelId) : undefined;
   
-  // Ensure category and platform are strings
-  ourCategoryId = String(ourCategoryId || '');
-  ourPlatformId = String(ourPlatformId || '');
+  // Ensure category and platform are strings (normalize to empty string if null/undefined)
+  ourCategoryId = ourCategoryId ? String(ourCategoryId).trim() : '';
+  ourPlatformId = ourPlatformId ? String(ourPlatformId).trim() : '';
   
   // Determine leaderboard type
   let leaderboardType: 'regular' | 'individual-level' | 'community-golds' = 'regular';

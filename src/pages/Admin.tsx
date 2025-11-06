@@ -69,6 +69,7 @@ import { LeaderboardEntry, DownloadEntry } from "@/types/database";
 import { useNavigate } from "react-router-dom";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { formatTime } from "@/lib/utils";
+import { getCategoryName, getPlatformName, getLevelName, normalizeCategoryId, normalizePlatformId, normalizeLevelId } from "@/lib/dataValidation";
 
 const Admin = () => {
   const { currentUser, loading: authLoading } = useAuth();
@@ -284,6 +285,7 @@ const Admin = () => {
       setFirestoreCategories(categoriesData);
       setHasFetchedData(true);
     } catch (error) {
+      console.error("Error in fetchAllData:", error);
       toast({
         title: "Error",
         description: "Failed to load data.",
@@ -329,7 +331,6 @@ const Admin = () => {
       
       try {
         const importedData = await getImportedSRCRuns();
-        console.log(`Fetched ${importedData.length} imported runs`);
         setImportedSRCRuns(importedData);
         setImportedPage(1); // Reset to first page when data changes
         
@@ -2326,11 +2327,11 @@ const Admin = () => {
                           )}
                         </TableCell>
                         <TableCell className="py-3 px-4">{
-                          firestoreCategories.find(c => c.id === String(run.category || ''))?.name || String(run.category || 'Unknown')
+                          getCategoryName(run.category, firestoreCategories)
                         }</TableCell>
-                        <TableCell className="py-3 px-4 font-mono">{formatTime(run.time)}</TableCell>
+                        <TableCell className="py-3 px-4 font-mono">{formatTime(run.time || '00:00:00')}</TableCell>
                         <TableCell className="py-3 px-4">{
-                          firestorePlatforms.find(p => p.id === String(run.platform || ''))?.name || String(run.platform || 'Unknown')
+                          getPlatformName(run.platform, firestorePlatforms)
                         }</TableCell>
                         <TableCell className="py-3 px-4">{run.runType.charAt(0).toUpperCase() + run.runType.slice(1)}</TableCell>
                         <TableCell className="py-3 px-4">
@@ -2422,21 +2423,21 @@ const Admin = () => {
                   // Apply category filter
                   if (importedRunsCategory) {
                     unverifiedImported = unverifiedImported.filter(run => 
-                      String(run.category || '') === importedRunsCategory
+                      normalizeCategoryId(run.category) === importedRunsCategory
                     );
                   }
                   
                   // Apply platform filter
                   if (importedRunsPlatform) {
                     unverifiedImported = unverifiedImported.filter(run => 
-                      String(run.platform || '') === importedRunsPlatform
+                      normalizePlatformId(run.platform) === importedRunsPlatform
                     );
                   }
                   
                   // Apply level filter for ILs
                   if (importedRunsLeaderboardType === 'individual-level' && importedRunsLevel) {
                     unverifiedImported = unverifiedImported.filter(run => 
-                      String(run.level || '') === importedRunsLevel
+                      normalizeLevelId(run.level) === importedRunsLevel
                     );
                   }
                   
@@ -2571,19 +2572,16 @@ const Admin = () => {
                               </div>
                             </TableCell>
                             <TableCell className="py-3 px-4">{
-                              importedRunsCategories.find(c => c.id === String(run.category || ''))?.name || 
-                              firestoreCategories.find(c => c.id === String(run.category || ''))?.name || 
-                              String(run.category || 'Unknown')
+                              getCategoryName(run.category, [...importedRunsCategories, ...firestoreCategories])
                             }</TableCell>
                             {importedRunsLeaderboardType === 'individual-level' && (
                               <TableCell className="py-3 px-4">{
-                                availableLevels.find(l => l.id === String(run.level || ''))?.name || 
-                                String(run.level || 'Unknown')
+                                getLevelName(run.level, availableLevels)
                               }</TableCell>
                             )}
-                            <TableCell className="py-3 px-4 font-mono">{formatTime(run.time)}</TableCell>
+                            <TableCell className="py-3 px-4 font-mono">{formatTime(run.time || '00:00:00')}</TableCell>
                             <TableCell className="py-3 px-4">{
-                              firestorePlatforms.find(p => p.id === String(run.platform || ''))?.name || String(run.platform || 'Unknown')
+                              getPlatformName(run.platform, firestorePlatforms)
                             }</TableCell>
                             <TableCell className="py-3 px-4">{run.runType.charAt(0).toUpperCase() + run.runType.slice(1)}</TableCell>
                             <TableCell className="py-3 px-4">

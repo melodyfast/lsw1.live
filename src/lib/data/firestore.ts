@@ -2,6 +2,7 @@ import { db } from "@/lib/firebase";
 import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, query, where, orderBy, limit as firestoreLimit, deleteField, writeBatch, getDocsFromCache, getDocsFromServer } from "firebase/firestore";
 import { Player, LeaderboardEntry, DownloadEntry, Category, Platform, Level } from "@/types/database";
 import { calculatePoints, parseTimeToSeconds } from "@/lib/utils";
+import { normalizeLeaderboardEntry, validateLeaderboardEntry } from "@/lib/dataValidation";
 
 /**
  * Helper function to calculate ranks for a group of runs
@@ -246,39 +247,48 @@ export const getLeaderboardEntriesFirestore = async (
 export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry, 'id' | 'rank' | 'isObsolete'> & { verified?: boolean }): Promise<string | null> => {
   if (!db) return null;
   try {
+    // Normalize and validate the entry
+    const normalized = normalizeLeaderboardEntry(entry);
+    const validation = validateLeaderboardEntry(normalized);
+    
+    if (!validation.valid) {
+      console.error("Validation failed for leaderboard entry:", validation.errors);
+      throw new Error(`Invalid entry data: ${validation.errors.join(', ')}`);
+    }
+    
     const newDocRef = doc(collection(db, "leaderboardEntries"));
     const newEntry: any = { 
       id: newDocRef.id, 
-      playerId: entry.playerId,
-      playerName: entry.playerName,
-      category: entry.category,
-      platform: entry.platform,
-      runType: entry.runType,
-      leaderboardType: entry.leaderboardType || 'regular', // Default to 'regular' if not specified
-      time: entry.time,
-      date: entry.date || new Date().toISOString().split('T')[0],
-      verified: entry.verified ?? false, 
+      playerId: normalized.playerId || entry.playerId,
+      playerName: normalized.playerName,
+      category: normalized.category,
+      platform: normalized.platform,
+      runType: normalized.runType || 'solo',
+      leaderboardType: normalized.leaderboardType || 'regular',
+      time: normalized.time,
+      date: normalized.date,
+      verified: normalized.verified ?? false, 
       isObsolete: false,
     };
     
     // Only include optional fields if they have values
-    if (entry.player2Name) {
-      newEntry.player2Name = entry.player2Name;
+    if (normalized.player2Name) {
+      newEntry.player2Name = normalized.player2Name;
     }
-    if (entry.level) {
-      newEntry.level = entry.level;
+    if (normalized.level) {
+      newEntry.level = normalized.level;
     }
-    if (entry.videoUrl) {
-      newEntry.videoUrl = entry.videoUrl;
+    if (normalized.videoUrl) {
+      newEntry.videoUrl = normalized.videoUrl;
     }
-    if (entry.comment) {
-      newEntry.comment = entry.comment;
+    if (normalized.comment) {
+      newEntry.comment = normalized.comment;
     }
-    if (entry.importedFromSRC) {
-      newEntry.importedFromSRC = entry.importedFromSRC;
+    if (normalized.importedFromSRC !== undefined) {
+      newEntry.importedFromSRC = normalized.importedFromSRC;
     }
-    if (entry.srcRunId) {
-      newEntry.srcRunId = entry.srcRunId;
+    if (normalized.srcRunId) {
+      newEntry.srcRunId = normalized.srcRunId;
     }
     
     await setDoc(newDocRef, newEntry);
@@ -2923,7 +2933,10 @@ export const checkSRCRunExistsFirestore = async (srcRunId: string): Promise<bool
  * Get all runs that were imported from speedrun.com
  */
 export const getImportedSRCRunsFirestore = async (): Promise<LeaderboardEntry[]> => {
-  if (!db) return [];
+  if (!db) {
+    console.error("getImportedSRCRunsFirestore: db not initialized");
+    return [];
+  }
   try {
     // Query by both verified and importedFromSRC to match Firestore security rules
     // Admins can read unverified entries, so we filter by verified == false
@@ -2933,6 +2946,7 @@ export const getImportedSRCRunsFirestore = async (): Promise<LeaderboardEntry[]>
       where("importedFromSRC", "==", true),
       firestoreLimit(500)
     );
+    
     const querySnapshot = await getDocs(q);
     const entries = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
     
@@ -2972,6 +2986,21 @@ export const getImportedSRCRunsFirestore = async (): Promise<LeaderboardEntry[]>
     return enrichedEntries;
   } catch (error) {
     console.error("Error fetching imported SRC runs:", error);
+    // Try alternative query without verified filter as fallback
+    try {
+      const altQ = query(
+        collection(db, "leaderboardEntries"),
+        where("importedFromSRC", "==", true),
+        firestoreLimit(500)
+      );
+      const altSnapshot = await getDocs(altQ);
+      const altEntries = altSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
+        .filter(e => !e.verified);
+      return altEntries;
+    } catch (altError) {
+      console.error("Alternative query also failed:", altError);
+    }
     return [];
   }
 };

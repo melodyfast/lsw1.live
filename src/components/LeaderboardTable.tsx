@@ -38,7 +38,9 @@ export function LeaderboardTable({ data, platforms = [], categories = [] }: Lead
         </TableHeader>
         <TableBody>
           {data.map((entry, index) => {
-            const platformName = platforms.find(p => p.id === entry.platform)?.name || entry.platform;
+            // Normalize platform ID to string for lookup
+            const platformId = String(entry.platform || '');
+            const platformName = platforms.find(p => String(p.id) === platformId)?.name || platformId;
             
             return (
             <TableRow 

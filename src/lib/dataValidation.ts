@@ -1,0 +1,210 @@
+import { LeaderboardEntry } from "@/types/database";
+
+/**
+ * Normalize category ID to string
+ */
+export function normalizeCategoryId(category: string | undefined | null): string {
+  if (!category) return "";
+  return String(category).trim();
+}
+
+/**
+ * Normalize platform ID to string
+ */
+export function normalizePlatformId(platform: string | undefined | null): string {
+  if (!platform) return "";
+  return String(platform).trim();
+}
+
+/**
+ * Normalize level ID to string
+ */
+export function normalizeLevelId(level: string | undefined | null): string | undefined {
+  if (!level) return undefined;
+  const normalized = String(level).trim();
+  return normalized || undefined;
+}
+
+/**
+ * Normalize player name to string
+ */
+export function normalizePlayerName(name: string | undefined | null): string {
+  if (!name) return "Unknown";
+  const normalized = String(name).trim();
+  return normalized || "Unknown";
+}
+
+/**
+ * Normalize time string format
+ */
+export function normalizeTime(time: string | undefined | null): string {
+  if (!time) return "00:00:00";
+  const normalized = String(time).trim();
+  // Validate format (HH:MM:SS or H:MM:SS)
+  if (/^\d{1,2}:\d{2}:\d{2}$/.test(normalized)) {
+    return normalized;
+  }
+  return "00:00:00";
+}
+
+/**
+ * Normalize date string format (YYYY-MM-DD)
+ */
+export function normalizeDate(date: string | undefined | null): string {
+  if (!date) return new Date().toISOString().split('T')[0];
+  const normalized = String(date).trim();
+  // Extract date part from ISO string if needed
+  if (normalized.includes('T')) {
+    return normalized.split('T')[0];
+  }
+  // Validate format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return normalized;
+  }
+  return new Date().toISOString().split('T')[0];
+}
+
+/**
+ * Normalize leaderboard type
+ */
+export function normalizeLeaderboardType(
+  type: 'regular' | 'individual-level' | 'community-golds' | string | undefined | null
+): 'regular' | 'individual-level' | 'community-golds' {
+  if (!type) return 'regular';
+  const normalized = String(type).toLowerCase().trim();
+  if (normalized === 'individual-level' || normalized === 'individuallevel') {
+    return 'individual-level';
+  }
+  if (normalized === 'community-golds' || normalized === 'communitygolds') {
+    return 'community-golds';
+  }
+  return 'regular';
+}
+
+/**
+ * Normalize run type
+ */
+export function normalizeRunType(type: 'solo' | 'co-op' | string | undefined | null): 'solo' | 'co-op' {
+  if (!type) return 'solo';
+  const normalized = String(type).toLowerCase().trim();
+  if (normalized === 'co-op' || normalized === 'coop' || normalized === 'co-op') {
+    return 'co-op';
+  }
+  return 'solo';
+}
+
+/**
+ * Validate and normalize a leaderboard entry
+ */
+export function normalizeLeaderboardEntry(entry: Partial<LeaderboardEntry>): Partial<LeaderboardEntry> {
+  return {
+    ...entry,
+    playerName: normalizePlayerName(entry.playerName),
+    player2Name: entry.player2Name ? normalizePlayerName(entry.player2Name) : undefined,
+    category: normalizeCategoryId(entry.category),
+    platform: normalizePlatformId(entry.platform),
+    level: normalizeLevelId(entry.level),
+    time: normalizeTime(entry.time),
+    date: normalizeDate(entry.date),
+    runType: normalizeRunType(entry.runType),
+    leaderboardType: normalizeLeaderboardType(entry.leaderboardType),
+    verified: Boolean(entry.verified),
+    importedFromSRC: entry.importedFromSRC !== undefined ? Boolean(entry.importedFromSRC) : undefined,
+  };
+}
+
+/**
+ * Get category name from ID, with fallback
+ */
+export function getCategoryName(
+  categoryId: string | undefined | null,
+  categories: Array<{ id: string; name: string }>
+): string {
+  const normalizedId = normalizeCategoryId(categoryId);
+  if (!normalizedId) return "Unknown Category";
+  const category = categories.find(c => c.id === normalizedId);
+  return category?.name || normalizedId;
+}
+
+/**
+ * Get platform name from ID, with fallback
+ */
+export function getPlatformName(
+  platformId: string | undefined | null,
+  platforms: Array<{ id: string; name: string }>
+): string {
+  const normalizedId = normalizePlatformId(platformId);
+  if (!normalizedId) return "Unknown Platform";
+  const platform = platforms.find(p => p.id === normalizedId);
+  return platform?.name || normalizedId;
+}
+
+/**
+ * Get level name from ID, with fallback
+ */
+export function getLevelName(
+  levelId: string | undefined | null,
+  levels: Array<{ id: string; name: string }>
+): string {
+  const normalizedId = normalizeLevelId(levelId);
+  if (!normalizedId) return "Unknown Level";
+  const level = levels.find(l => l.id === normalizedId);
+  return level?.name || normalizedId;
+}
+
+/**
+ * Validate that a leaderboard entry has required fields
+ */
+export function validateLeaderboardEntry(entry: Partial<LeaderboardEntry>): {
+  valid: boolean;
+  errors: string[];
+} {
+  const errors: string[] = [];
+  
+  if (!entry.playerName || entry.playerName.trim() === "") {
+    errors.push("Player name is required");
+  }
+  
+  if (!entry.category || entry.category.trim() === "") {
+    errors.push("Category is required");
+  }
+  
+  if (!entry.platform || entry.platform.trim() === "") {
+    errors.push("Platform is required");
+  }
+  
+  if (!entry.time || entry.time.trim() === "") {
+    errors.push("Time is required");
+  }
+  
+  if (!entry.date || entry.date.trim() === "") {
+    errors.push("Date is required");
+  }
+  
+  if (entry.runType && entry.runType !== 'solo' && entry.runType !== 'co-op') {
+    errors.push("Run type must be 'solo' or 'co-op'");
+  }
+  
+  if (entry.leaderboardType && 
+      entry.leaderboardType !== 'regular' && 
+      entry.leaderboardType !== 'individual-level' && 
+      entry.leaderboardType !== 'community-golds') {
+    errors.push("Leaderboard type must be 'regular', 'individual-level', or 'community-golds'");
+  }
+  
+  // Validate time format
+  if (entry.time && !/^\d{1,2}:\d{2}:\d{2}$/.test(entry.time)) {
+    errors.push("Time must be in format HH:MM:SS");
+  }
+  
+  // Validate date format
+  if (entry.date && !/^\d{4}-\d{2}-\d{2}$/.test(entry.date)) {
+    errors.push("Date must be in format YYYY-MM-DD");
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
