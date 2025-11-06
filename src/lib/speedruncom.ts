@@ -299,13 +299,36 @@ export async function fetchPlatformById(platformId: string): Promise<string | nu
  */
 export async function fetchPlayerById(playerId: string): Promise<string | null> {
   try {
-    const data = await fetchSRCAPI<{ data: SRCPlayer }>(`/users/${playerId}`);
-    if (data.data) {
-      return data.data.names?.international || null;
+    const endpoint = `/users/${playerId}`;
+    const data = await fetchSRCAPI<{ data: SRCPlayer }>(endpoint);
+    
+    if (!data || !data.data) {
+      console.warn(`[fetchPlayerById] No data returned for player ${playerId}`);
+      return null;
     }
-    return null;
-  } catch (error) {
-    console.error(`Error fetching player ${playerId}:`, error);
+    
+    const player = data.data;
+    const name = player.names?.international || null;
+    
+    if (!name) {
+      console.warn(`[fetchPlayerById] Player ${playerId} has no names.international:`, {
+        player,
+        names: player.names,
+        hasNames: !!player.names,
+      });
+    }
+    
+    return name;
+  } catch (error: any) {
+    // Log more details about the error
+    const errorMessage = error?.message || String(error);
+    const errorStatus = error?.status || error?.statusCode || 'unknown';
+    console.error(`[fetchPlayerById] Error fetching player ${playerId}:`, {
+      error: errorMessage,
+      status: errorStatus,
+      endpoint: `/users/${playerId}`,
+      fullError: error,
+    });
     return null;
   }
 }
@@ -356,10 +379,26 @@ export async function getPlayerNameAsync(
   player: SRCRun['players'][0],
   playerIdToNameCache?: Map<string, string>
 ): Promise<string> {
-  if (!player) return "Unknown";
+  if (!player) {
+    console.warn("[getPlayerNameAsync] No player data provided");
+    return "Unknown";
+  }
   
-  // Check if it's a guest player (rel: "guest") - these have name field directly
-  if (player.rel === "guest" || player.name) {
+  // Log player structure for debugging (first few calls only)
+  const debugLog = playerIdToNameCache && playerIdToNameCache.size < 3;
+  if (debugLog) {
+    console.log("[getPlayerNameAsync] Player data:", {
+      rel: player.rel,
+      id: player.id,
+      name: player.name,
+      hasData: !!player.data,
+      dataNames: player.data?.names,
+      dataName: player.data?.name,
+    });
+  }
+  
+  // Guest players (rel: "guest") have name field directly
+  if (player.rel === "guest") {
     if (player.name && typeof player.name === 'string' && player.name.trim()) {
       return String(player.name).trim();
     }
@@ -367,35 +406,71 @@ export async function getPlayerNameAsync(
     return "Guest Player";
   }
   
+  // If player has direct name field (sometimes present even for registered users)
+  if (player.name && typeof player.name === 'string' && player.name.trim()) {
+    return String(player.name).trim();
+  }
+  
   // Try synchronous extraction first (handles embedded data)
   const syncName = getPlayerName(player);
   if (syncName && syncName !== "") {
+    if (debugLog) {
+      console.log(`[getPlayerNameAsync] Found name from sync extraction: "${syncName}"`);
+    }
     return syncName;
   }
   
   // For registered users, if we have an ID but no name, fetch from API
-  // Check both explicit rel === "user" and presence of ID
-  if (player.id) {
+  // Registered users have rel: "user" or just an ID without rel
+  // Extract player ID - could be in player.id or player.data.id
+  let playerId: string | undefined;
+  if (player.id && typeof player.id === 'string' && player.id.trim()) {
+    playerId = player.id.trim();
+  } else if (player.data?.id && typeof player.data.id === 'string' && player.data.id.trim()) {
+    playerId = player.data.id.trim();
+  }
+  
+  if (playerId) {
     // Check cache first
-    if (playerIdToNameCache?.has(player.id)) {
-      const cachedName = playerIdToNameCache.get(player.id)!;
-      if (cachedName) return cachedName;
+    if (playerIdToNameCache?.has(playerId)) {
+      const cachedName = playerIdToNameCache.get(playerId)!;
+      if (cachedName && cachedName.trim()) {
+        if (debugLog) {
+          console.log(`[getPlayerNameAsync] Found cached name for ${playerId}: "${cachedName}"`);
+        }
+        return cachedName;
+      }
     }
     
     // Fetch from API
+    if (debugLog) {
+      console.log(`[getPlayerNameAsync] Fetching player ${playerId} from SRC API...`);
+    }
     try {
-      const name = await fetchPlayerById(player.id);
+      const name = await fetchPlayerById(playerId);
       if (name && name.trim()) {
         // Cache it
-        playerIdToNameCache?.set(player.id, name);
+        playerIdToNameCache?.set(playerId, name);
+        if (debugLog) {
+          console.log(`[getPlayerNameAsync] Successfully fetched name for ${playerId}: "${name}"`);
+        }
         return name;
+      } else {
+        if (debugLog) {
+          console.warn(`[getPlayerNameAsync] fetchPlayerById returned null/empty for ${playerId}`);
+        }
       }
     } catch (error) {
-      console.error(`Failed to fetch player ${player.id}:`, error);
+      console.error(`[getPlayerNameAsync] Failed to fetch player ${playerId}:`, error);
     }
     
     // Last resort: return placeholder with ID (better than "Unknown")
-    return `Player ${player.id}`;
+    return `Player ${playerId}`;
+  }
+  
+  // If we have no ID and no name, log it for debugging
+  if (debugLog) {
+    console.warn("[getPlayerNameAsync] No player ID or name found:", player);
   }
   
   return "Unknown";
@@ -551,6 +626,21 @@ export async function mapSRCRunToLeaderboardEntry(
   // === Extract Players ===
   const players = run.players || [];
   
+  // Log first few runs for debugging
+  const debugLog = run.id && run.id.length < 20;
+  if (debugLog) {
+    console.log(`[mapSRCRunToLeaderboardEntry] Run ${run.id} players:`, {
+      playersCount: players.length,
+      players: players.map(p => ({
+        rel: p.rel,
+        id: p.id,
+        name: p.name,
+        hasData: !!p.data,
+        dataNames: p.data?.names,
+      })),
+    });
+  }
+  
   // Determine run type based on player count
   const runType: 'solo' | 'co-op' = players.length > 1 ? 'co-op' : 'solo';
   
@@ -563,6 +653,14 @@ export async function mapSRCRunToLeaderboardEntry(
     // For co-op runs, always set player2Name even if it's "Unknown"
     // This ensures the run passes validation
     player2Name = fetchedPlayer2Name || "Unknown";
+  }
+  
+  if (debugLog) {
+    console.log(`[mapSRCRunToLeaderboardEntry] Run ${run.id} extracted names:`, {
+      player1Name,
+      player2Name,
+      runType,
+    });
   }
   
   // Ensure we have valid names - but don't clear player2Name for co-op runs
