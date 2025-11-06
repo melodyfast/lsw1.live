@@ -58,6 +58,8 @@ service cloud.firestore {
       // Admins can read unverified entries
       allow read: if resource.data.verified != true && isAdmin();
       // Admins can update/delete any entry
+      // NOTE: Admin must have a player document with isAdmin: true set
+      // If you're getting permission errors, ensure your player document exists and has isAdmin: true
       allow update, delete: if isAdmin();
       // Users can update their own entries (before verification)
       allow update: if isOwner(resource.data.playerId) && 

@@ -3207,24 +3207,47 @@ const Admin = () => {
                           try {
                             let deleted = 0;
                             let errors = 0;
+                            const errorMessages: string[] = [];
+                            
                             for (const run of unassignedRuns) {
                               try {
-                                await deleteLeaderboardEntry(run.id);
-                                deleted++;
-                              } catch (error) {
+                                const success = await deleteLeaderboardEntry(run.id);
+                                if (success) {
+                                  deleted++;
+                                } else {
+                                  errors++;
+                                  errorMessages.push(`Failed to delete run ${run.id}`);
+                                }
+                              } catch (error: any) {
                                 errors++;
+                                const errorMsg = error?.message || String(error);
+                                errorMessages.push(`Run ${run.id}: ${errorMsg}`);
                                 console.error(`Error deleting run ${run.id}:`, error);
                               }
                             }
-                            toast({
-                              title: "Unassigned Runs Deleted",
-                              description: `Deleted ${deleted} runs${errors > 0 ? `, ${errors} errors occurred` : ''}.`,
-                            });
+                            
+                            if (errors > 0 && errorMessages.length > 0) {
+                              // Show first few error messages
+                              const preview = errorMessages.slice(0, 3).join('; ');
+                              const remaining = errorMessages.length - 3;
+                              toast({
+                                title: "Unassigned Runs Deleted (with errors)",
+                                description: `Deleted ${deleted} runs, ${errors} error(s) occurred.${remaining > 0 ? ` (Showing first 3, check console for all)` : ''} ${preview}`,
+                                variant: errors === unassignedRuns.length ? "destructive" : "default",
+                              });
+                            } else {
+                              toast({
+                                title: "Unassigned Runs Deleted",
+                                description: `Successfully deleted ${deleted} runs.`,
+                              });
+                            }
+                            
                             await fetchUnassignedRuns();
                           } catch (error: any) {
+                            console.error("Error in delete all:", error);
                             toast({
                               title: "Error",
-                              description: error.message || "Failed to delete unassigned runs.",
+                              description: error.message || "Failed to delete unassigned runs. Ensure your admin account has isAdmin: true set in your player document.",
                               variant: "destructive",
                             });
                           }
@@ -3357,16 +3380,21 @@ const Admin = () => {
                                     onClick={async () => {
                                       if (!window.confirm(`Delete this unassigned run permanently? This action cannot be undone.`)) return;
                                       try {
-                                        await deleteLeaderboardEntry(run.id);
-                                        toast({
-                                          title: "Run Deleted",
-                                          description: "The unassigned run has been deleted.",
-                                        });
-                                        await fetchUnassignedRuns();
+                                        const success = await deleteLeaderboardEntry(run.id);
+                                        if (success) {
+                                          toast({
+                                            title: "Run Deleted",
+                                            description: "The unassigned run has been deleted.",
+                                          });
+                                          await fetchUnassignedRuns();
+                                        } else {
+                                          throw new Error("Failed to delete run. Check console for details.");
+                                        }
                                       } catch (error: any) {
+                                        console.error("Delete error:", error);
                                         toast({
-                                          title: "Error",
-                                          description: error.message || "Failed to delete run.",
+                                          title: "Error Deleting Run",
+                                          description: error.message || "Failed to delete run. Ensure your admin account has isAdmin: true set in your player document.",
                                           variant: "destructive",
                                         });
                                       }

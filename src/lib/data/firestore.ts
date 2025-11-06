@@ -2226,9 +2226,23 @@ export const deleteLeaderboardEntryFirestore = async (runId: string): Promise<bo
     }
     
     return true;
-  } catch (error) {
+  } catch (error: any) {
+    // Provide more detailed error information
+    const errorMessage = error?.message || String(error);
+    const errorCode = error?.code || 'unknown';
+    
+    // Check if it's a permission error
+    if (errorCode === 'permission-denied' || errorMessage.includes('permission')) {
+      console.error("Error deleting leaderboard entry: Permission denied. Ensure your player document exists and has isAdmin: true set.", {
+        runId,
+        errorCode,
+        errorMessage
+      });
+      throw new Error("Permission denied. Please ensure your admin account has a player document with isAdmin: true set. You can set this in the Admin panel under 'Manage Admin Status'.");
+    }
+    
     console.error("Error deleting leaderboard entry:", error);
-    return false;
+    throw error; // Re-throw to let caller handle it
   }
 };
 
