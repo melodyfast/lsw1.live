@@ -88,6 +88,11 @@ function extractPlatformFromRun(run: SRCRun): { id: string; name: string } | nul
  * Only fetches platforms that are actually used in the runs being imported
  */
 export async function createSRCMappings(srcRuns: SRCRun[]): Promise<SRCMappings> {
+  // Validate input
+  if (!Array.isArray(srcRuns)) {
+    throw new Error("srcRuns must be an array");
+  }
+
   const gameId = await getLSWGameId();
   if (!gameId) {
     throw new Error("Could not find LEGO Star Wars game on speedrun.com");
@@ -102,10 +107,23 @@ export async function createSRCMappings(srcRuns: SRCRun[]): Promise<SRCMappings>
     fetchSRCLevels(gameId),
   ]);
 
+  // Ensure all results are arrays
+  const safeSrcCategories = Array.isArray(srcCategories) ? srcCategories : [];
+  const safeSrcLevels = Array.isArray(srcLevels) ? srcLevels : [];
+  const safeOurCategories = Array.isArray(ourCategories) ? ourCategories : [];
+  const safeOurPlatforms = Array.isArray(ourPlatforms) ? ourPlatforms : [];
+  const safeOurLevels = Array.isArray(ourLevels) ? ourLevels : [];
+
   // Extract unique platform IDs/names from runs (only LSW1 platforms)
   const uniquePlatforms = new Map<string, { id: string; name: string }>();
   
-  for (const run of srcRuns) {
+  // Safely iterate through runs
+  const safeSrcRuns = Array.isArray(srcRuns) ? srcRuns : [];
+  for (const run of safeSrcRuns) {
+    if (!run || typeof run !== 'object') {
+      console.warn("[createSRCMappings] Skipping invalid run:", run);
+      continue;
+    }
     const platformData = extractPlatformFromRun(run);
     if (platformData && platformData.id) {
       // If we already have this platform ID, skip
@@ -124,20 +142,21 @@ export async function createSRCMappings(srcRuns: SRCRun[]): Promise<SRCMappings>
   }
 
   // Fetch platform names for any platforms we only have IDs for
-  const platformFetchPromises = Array.from(uniquePlatforms.values())
-    .filter(p => !p.name && p.id)
-    .map(async (platform) => {
-      try {
-        const name = await fetchPlatformById(platform.id);
-        if (name) {
-          uniquePlatforms.set(platform.id, { id: platform.id, name });
-        }
-      } catch (error) {
-        console.warn(`[SRC Mapping] Failed to fetch platform ${platform.id}:`, error);
+  const platformsToFetch = Array.from(uniquePlatforms.values()).filter(p => !p.name && p.id);
+  const platformFetchPromises = platformsToFetch.map(async (platform) => {
+    try {
+      const name = await fetchPlatformById(platform.id);
+      if (name) {
+        uniquePlatforms.set(platform.id, { id: platform.id, name });
       }
-    });
+    } catch (error) {
+      console.warn(`[SRC Mapping] Failed to fetch platform ${platform.id}:`, error);
+    }
+  });
 
-  await Promise.all(platformFetchPromises);
+  if (platformFetchPromises.length > 0) {
+    await Promise.all(platformFetchPromises);
+  }
 
   // Initialize mappings
   const categoryMapping = new Map<string, string>();
@@ -153,14 +172,14 @@ export async function createSRCMappings(srcRuns: SRCRun[]): Promise<SRCMappings>
   const normalize = (str: string) => str.toLowerCase().trim();
 
   // Map categories
-  for (const srcCat of srcCategories) {
-    if (!srcCat.name) continue;
+  for (const srcCat of safeSrcCategories) {
+    if (!srcCat || !srcCat.name || !srcCat.id) continue;
     
     // Store SRC ID -> name mapping
     srcCategoryIdToName.set(srcCat.id, srcCat.name);
     
     // Find matching local category
-    const ourCat = ourCategories.find(c => normalize(c.name) === normalize(srcCat.name));
+    const ourCat = safeOurCategories.find(c => c && normalize(c.name) === normalize(srcCat.name));
     if (ourCat) {
       categoryMapping.set(srcCat.id, ourCat.id);
       categoryNameMapping.set(normalize(srcCat.name), ourCat.id);
@@ -169,7 +188,7 @@ export async function createSRCMappings(srcRuns: SRCRun[]): Promise<SRCMappings>
 
   // Map platforms (only those used in LSW1 runs)
   for (const [platformId, platformData] of uniquePlatforms) {
-    const platformName = platformData.name;
+    const platformName = platformData?.name;
     if (!platformName) {
       console.warn(`[SRC Mapping] Platform ${platformId} has no name`);
       continue;
@@ -179,7 +198,7 @@ export async function createSRCMappings(srcRuns: SRCRun[]): Promise<SRCMappings>
     srcPlatformIdToName.set(platformId, platformName);
     
     // Find matching local platform
-    const ourPlatform = ourPlatforms.find(p => normalize(p.name) === normalize(platformName));
+    const ourPlatform = safeOurPlatforms.find(p => p && normalize(p.name) === normalize(platformName));
     if (ourPlatform) {
       platformMapping.set(platformId, ourPlatform.id);
       platformNameMapping.set(normalize(platformName), ourPlatform.id);
@@ -191,7 +210,9 @@ export async function createSRCMappings(srcRuns: SRCRun[]): Promise<SRCMappings>
   console.log(`[SRC Mapping] Created ${srcPlatformIdToName.size} platform ID->name mappings (from ${srcRuns.length} LSW1 runs)`);
 
   // Map levels
-  for (const srcLevel of srcLevels) {
+  for (const srcLevel of safeSrcLevels) {
+    if (!srcLevel || !srcLevel.id) continue;
+    
     const levelName = srcLevel.name || srcLevel.names?.international || '';
     if (!levelName) continue;
     
@@ -199,7 +220,7 @@ export async function createSRCMappings(srcRuns: SRCRun[]): Promise<SRCMappings>
     srcLevelIdToName.set(srcLevel.id, levelName);
     
     // Find matching local level
-    const ourLevel = ourLevels.find(l => normalize(l.name) === normalize(levelName));
+    const ourLevel = safeOurLevels.find(l => l && normalize(l.name) === normalize(levelName));
     if (ourLevel) {
       levelMapping.set(srcLevel.id, ourLevel.id);
     }
