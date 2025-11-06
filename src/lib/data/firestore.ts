@@ -2,7 +2,13 @@ import { db } from "@/lib/firebase";
 import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, query, where, orderBy, limit as firestoreLimit, deleteField, writeBatch, getDocsFromCache, getDocsFromServer } from "firebase/firestore";
 import { Player, LeaderboardEntry, DownloadEntry, Category, Platform, Level } from "@/types/database";
 import { calculatePoints, parseTimeToSeconds } from "@/lib/utils";
-import { normalizeLeaderboardEntry, validateLeaderboardEntry } from "@/lib/dataValidation";
+import { 
+  normalizeLeaderboardEntry, 
+  validateLeaderboardEntry,
+  normalizeCategoryId,
+  normalizePlatformId,
+  normalizeLevelId,
+} from "@/lib/dataValidation";
 
 /**
  * Helper function to calculate ranks for a group of runs
@@ -75,6 +81,10 @@ async function calculateRanksForGroup(
   return rankMap;
 }
 
+/**
+ * Get leaderboard entries with optimized Firestore queries and SRC integration
+ * Uses proper indexing and data validation utilities
+ */
 export const getLeaderboardEntriesFirestore = async (
   categoryId?: string,
   platformId?: string,
@@ -86,24 +96,35 @@ export const getLeaderboardEntriesFirestore = async (
   if (!db) return [];
   
   try {
+    // Normalize inputs using data validation utilities
+    const normalizedCategoryId = categoryId && categoryId !== "all" ? normalizeCategoryId(categoryId) : undefined;
+    const normalizedPlatformId = platformId && platformId !== "all" ? normalizePlatformId(platformId) : undefined;
+    const normalizedLevelId = levelId && levelId !== "all" ? normalizeLevelId(levelId) : undefined;
+    
     // Build query constraints dynamically based on filters
+    // Order matters: verified first, then leaderboardType, then other filters
     const constraints: any[] = [
       where("verified", "==", true),
     ];
 
-    // Add leaderboardType filter - use where clause for non-regular types
+    // Add leaderboardType filter for non-regular types (required for composite indexes)
     if (leaderboardType && leaderboardType !== 'regular') {
       constraints.push(where("leaderboardType", "==", leaderboardType));
     }
 
-    // Add category filter
-    if (categoryId && categoryId !== "all") {
-      constraints.push(where("category", "==", categoryId));
+    // Add level filter for ILs and Community Golds (must come after leaderboardType for index)
+    if (normalizedLevelId && (leaderboardType === 'individual-level' || leaderboardType === 'community-golds')) {
+      constraints.push(where("level", "==", normalizedLevelId));
+    }
+
+    // Add category filter (must come after leaderboardType/level for composite indexes)
+    if (normalizedCategoryId) {
+      constraints.push(where("category", "==", normalizedCategoryId));
     }
 
     // Add platform filter
-    if (platformId && platformId !== "all") {
-      constraints.push(where("platform", "==", platformId));
+    if (normalizedPlatformId) {
+      constraints.push(where("platform", "==", normalizedPlatformId));
     }
 
     // Add runType filter
@@ -111,63 +132,72 @@ export const getLeaderboardEntriesFirestore = async (
       constraints.push(where("runType", "==", runType));
     }
 
-    // Add level filter for ILs and Community Golds
-    if (levelId && levelId !== "all") {
-      constraints.push(where("level", "==", levelId));
-    }
-
-    // Add isObsolete filter if not including obsolete runs
-    // Note: Firestore doesn't support filtering by isObsolete == false directly
-    // We'll fetch all and filter client-side, but use index for better performance
-    constraints.push(firestoreLimit(200));
+    // Fetch more entries to account for filtering obsolete runs client-side
+    // Also fetch more if we need to sort properly
+    const fetchLimit = 500;
+    constraints.push(firestoreLimit(fetchLimit));
     
     const q = query(collection(db, "leaderboardEntries"), ...constraints);
     const querySnapshot = await getDocs(q);
     
-    // Process entries - ensure isObsolete is properly set (default to false if undefined)
+    // Normalize and validate entries
     let entries: LeaderboardEntry[] = querySnapshot.docs
       .map(doc => {
         const data = doc.data();
-        return { 
+        // Normalize the entry data
+        const normalized = normalizeLeaderboardEntry({ 
           id: doc.id, 
-          ...data,
-          isObsolete: data.isObsolete === true // Explicitly set to false if not true
+          ...data 
+        } as LeaderboardEntry);
+        // Ensure id is always present
+        return {
+          ...normalized,
+          id: doc.id,
         } as LeaderboardEntry;
       })
       .filter(entry => {
+        // Validate entry
+        const validation = validateLeaderboardEntry(entry);
+        if (!validation.valid) {
+          return false;
+        }
+        
         // Filter obsolete entries if not including them
-        // Treat undefined/null as false (non-obsolete)
-        if (!includeObsolete && entry.isObsolete === true) return false;
+        if (!includeObsolete && entry.isObsolete === true) {
+          return false;
+        }
         
         // Filter out non-regular entries when querying for regular leaderboard type
         if (!leaderboardType || leaderboardType === 'regular') {
           const entryLeaderboardType = entry.leaderboardType || 'regular';
-          if (entryLeaderboardType !== 'regular') return false;
+          if (entryLeaderboardType !== 'regular') {
+            return false;
+          }
+        }
+        
+        // Additional validation: ensure required fields exist
+        if (!entry.category || !entry.platform || !entry.time || !entry.runType) {
+          return false;
         }
         
         return true;
       });
 
     // Sort by time in ascending order (fastest times first)
-    // Separate obsolete and non-obsolete runs for proper ranking
-    const nonObsoleteEntries = entries.filter(e => !e.isObsolete || e.isObsolete === undefined);
-    const obsoleteEntries = entries.filter(e => e.isObsolete === true);
-    
-    // Sort both groups
+    // Use parseTimeToSeconds utility for consistent time parsing
     const sortByTime = (entries: LeaderboardEntry[]) => {
-      return entries.map(entry => {
-        const parts = entry.time.split(':').map(Number);
-        let totalSeconds = 0;
-        if (parts.length === 3) {
-          totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-        } else if (parts.length === 2) {
-          totalSeconds = parts[0] * 60 + parts[1];
-        } else {
-          totalSeconds = Infinity;
-        }
-        return { entry, totalSeconds };
-      }).sort((a, b) => a.totalSeconds - b.totalSeconds).map(item => item.entry);
+      return entries
+        .map(entry => ({
+          entry,
+          totalSeconds: parseTimeToSeconds(entry.time) || Infinity
+        }))
+        .sort((a, b) => a.totalSeconds - b.totalSeconds)
+        .map(item => item.entry);
     };
+    
+    // Separate obsolete and non-obsolete runs for proper ranking
+    const nonObsoleteEntries = entries.filter(e => !e.isObsolete);
+    const obsoleteEntries = entries.filter(e => e.isObsolete === true);
     
     const sortedNonObsolete = sortByTime(nonObsoleteEntries);
     const sortedObsolete = sortByTime(obsoleteEntries);
@@ -182,14 +212,16 @@ export const getLeaderboardEntriesFirestore = async (
       entry.rank = sortedNonObsolete.length + index + 1;
     });
     
-    // Combine: non-obsolete first, then obsolete, limit to 100
-    entries = [...sortedNonObsolete, ...sortedObsolete].slice(0, 100);
+    // Combine: non-obsolete first, then obsolete, limit to 200 for display
+    entries = [...sortedNonObsolete, ...sortedObsolete].slice(0, 200);
 
     // Batch fetch all unique player IDs to avoid N+1 queries
     const playerIds = new Set<string>();
     const player2Names = new Set<string>();
     entries.forEach(entry => {
-      playerIds.add(entry.playerId);
+      if (entry.playerId && entry.playerId !== "imported") {
+        playerIds.add(entry.playerId);
+      }
       if (entry.player2Name && entry.runType === 'co-op') {
         player2Names.add(entry.player2Name.trim().toLowerCase());
       }
@@ -211,8 +243,20 @@ export const getLeaderboardEntriesFirestore = async (
       });
     }
 
-    // Enrich entries with player data from the map
+    // Fetch categories, platforms, and levels for SRC name fallback
+    const [categoriesSnapshot, platformsSnapshot, levelsSnapshot] = await Promise.all([
+      getDocs(collection(db, "categories")),
+      getDocs(collection(db, "platforms")),
+      getDocs(collection(db, "levels"))
+    ]);
+    
+    const categories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
+    const platforms = platformsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Platform));
+    const levels = levelsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Level));
+
+    // Enrich entries with player data and SRC fallback names
     const enrichedEntries = entries.map(entry => {
+      // Enrich player data
       const player = playerMap.get(entry.playerId);
       if (player) {
         if (player.displayName) {
@@ -223,8 +267,13 @@ export const getLeaderboardEntriesFirestore = async (
         }
       }
       
+      // For imported runs without a matched player, keep the original playerName
+      if (entry.playerId === "imported" && entry.playerName) {
+        // Keep the SRC player name as-is
+      }
+      
       // For co-op runs, look up player2
-        if (entry.player2Name && entry.runType === 'co-op') {
+      if (entry.player2Name && entry.runType === 'co-op') {
         const player2 = playerMap.get(entry.player2Name.trim().toLowerCase());
         if (player2) {
           entry.player2Name = player2.displayName || entry.player2Name;
@@ -233,6 +282,10 @@ export const getLeaderboardEntriesFirestore = async (
           }
         }
       }
+      
+      // Ensure category, platform, and level names are available (for display)
+      // The data validation utilities will handle SRC fallback names
+      // These are already stored in the entry, so we just need to ensure they're preserved
       
       return entry;
     });
@@ -2923,6 +2976,7 @@ export const deleteDownloadCategoryFirestore = async (categoryId: string): Promi
 
 /**
  * Check if a run with the same srcRunId already exists
+ * Uses indexed query for srcRunId
  */
 export const checkSRCRunExistsFirestore = async (srcRunId: string): Promise<boolean> => {
   if (!db) return false;
@@ -2941,94 +2995,78 @@ export const checkSRCRunExistsFirestore = async (srcRunId: string): Promise<bool
 };
 
 /**
+ * Get all existing srcRunIds for duplicate checking
+ * More efficient than fetching all runs
+ */
+export const getExistingSRCRunIdsFirestore = async (): Promise<Set<string>> => {
+  if (!db) return new Set();
+  try {
+    const q = query(
+      collection(db, "leaderboardEntries"),
+      where("srcRunId", "!=", ""),
+      firestoreLimit(5000)
+    );
+    const querySnapshot = await getDocs(q);
+    const srcRunIds = new Set<string>();
+    querySnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      if (data.srcRunId) {
+        srcRunIds.add(data.srcRunId);
+      }
+    });
+    return srcRunIds;
+  } catch (error) {
+    console.error("Error fetching existing SRC run IDs:", error);
+    return new Set();
+  }
+};
+
+/**
  * Get all runs that were imported from speedrun.com
+ * Uses optimized Firestore query with proper indexing
  */
 export const getImportedSRCRunsFirestore = async (): Promise<LeaderboardEntry[]> => {
-  if (!db) {
-    console.error("getImportedSRCRunsFirestore: db not initialized");
-    return [];
-  }
+  if (!db) return [];
+  
   try {
-    // Query by both verified and importedFromSRC to match Firestore security rules
-    // Admins can read unverified entries, so we filter by verified == false
+    // Query by verified and importedFromSRC (indexed query)
     const q = query(
       collection(db, "leaderboardEntries"),
       where("verified", "==", false),
       where("importedFromSRC", "==", true),
+      orderBy("date", "desc"),
       firestoreLimit(500)
     );
     
     const querySnapshot = await getDocs(q);
-    const entries = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
-    
-    // Enrich entries with player display names and colors
-    const enrichedEntries = await Promise.all(entries.map(async (entry) => {
-      try {
-        // Try to find player by display name if playerId is not a real UID
-        if (entry.playerId === "imported" || !entry.playerId) {
-          // Keep as is for imported runs
-        } else {
-          const player = await getPlayerByUidFirestore(entry.playerId);
-          if (player) {
-            if (player.displayName) {
-              entry.playerName = player.displayName;
-            }
-            if (player.nameColor) {
-              entry.nameColor = player.nameColor;
-            }
-          }
-        }
-        // For co-op runs, also fetch player2 display name and color
-        if (entry.player2Name && entry.runType === 'co-op') {
-          const player2 = await getPlayerByDisplayNameFirestore(entry.player2Name);
-          if (player2) {
-            entry.player2Name = player2.displayName;
-            if (player2.nameColor) {
-              entry.player2Color = player2.nameColor;
-            }
-          }
-        }
-      } catch (error) {
-        // Silent fail - continue without enrichment
-      }
-      return entry;
-    }));
-
-    return enrichedEntries;
+    return querySnapshot.docs.map(doc => ({ 
+      id: doc.id, 
+      ...doc.data() 
+    } as LeaderboardEntry));
   } catch (error) {
     console.error("Error fetching imported SRC runs:", error);
-    // Try alternative query without verified filter as fallback
-    try {
-      const altQ = query(
-        collection(db, "leaderboardEntries"),
-        where("importedFromSRC", "==", true),
-        firestoreLimit(500)
-      );
-      const altSnapshot = await getDocs(altQ);
-      const altEntries = altSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
-        .filter(e => !e.verified);
-      return altEntries;
-    } catch (altError) {
-      console.error("Alternative query also failed:", altError);
-    }
     return [];
   }
 };
 
 /**
  * Get all verified runs to check for duplicates when importing
+ * Only fetches verified runs for duplicate checking (more efficient)
  */
 export const getAllRunsForDuplicateCheckFirestore = async (): Promise<LeaderboardEntry[]> => {
   if (!db) return [];
   try {
-    // Get all runs (verified and unverified) to check for duplicates
+    // Only get verified runs for duplicate checking (unverified runs can be duplicates during import)
     const q = query(
       collection(db, "leaderboardEntries"),
+      where("verified", "==", true),
       firestoreLimit(5000)
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
+    return querySnapshot.docs.map(doc => ({ 
+      id: doc.id, 
+      ...doc.data() 
+    } as LeaderboardEntry));
   } catch (error) {
     console.error("Error fetching runs for duplicate check:", error);
     return [];
@@ -3098,6 +3136,7 @@ export const getVerifiedRunsWithInvalidDataFirestore = async (): Promise<Leaderb
 
 /**
  * Delete all imported runs from speedrun.com
+ * Uses optimized batch deletes with proper error handling
  */
 export const deleteAllImportedSRCRunsFirestore = async (): Promise<{ deleted: number; errors: string[] }> => {
   if (!db) return { deleted: 0, errors: ["Firestore not initialized"] };
@@ -3105,8 +3144,7 @@ export const deleteAllImportedSRCRunsFirestore = async (): Promise<{ deleted: nu
   const result = { deleted: 0, errors: [] as string[] };
   
   try {
-    // Query for unverified imported runs (matching the security rules)
-    // Admins can read unverified entries, so we query for verified == false
+    // Query for unverified imported runs (indexed query)
     const q = query(
       collection(db, "leaderboardEntries"),
       where("verified", "==", false),
@@ -3115,73 +3153,40 @@ export const deleteAllImportedSRCRunsFirestore = async (): Promise<{ deleted: nu
     );
     
     let hasMore = true;
-    let batchCount = 0;
     
     while (hasMore) {
-      let querySnapshot;
-      try {
-        querySnapshot = await getDocs(q);
-      } catch (queryError: any) {
-        // If query fails, try without the verified filter as fallback
-        console.warn("Query with verified filter failed, trying without filter:", queryError);
-        const fallbackQuery = query(
-          collection(db, "leaderboardEntries"),
-          where("importedFromSRC", "==", true),
-          firestoreLimit(500)
-        );
-        try {
-          querySnapshot = await getDocs(fallbackQuery);
-        } catch (fallbackError) {
-          result.errors.push(`Query error: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
-          break;
-        }
-      }
+      const querySnapshot = await getDocs(q);
       
       if (querySnapshot.empty) {
         hasMore = false;
         break;
       }
       
-      // Delete in batches
+      // Delete in batches (Firestore limit is 500 operations per batch)
       const batch = writeBatch(db);
       let batchSize = 0;
       
       querySnapshot.docs.forEach((docSnapshot) => {
-        batch.delete(docSnapshot.ref);
-        batchSize++;
+        if (batchSize < 500) {
+          batch.delete(docSnapshot.ref);
+          batchSize++;
+        }
       });
       
-      try {
-        await batch.commit();
-        result.deleted += batchSize;
-        console.log(`Deleted batch of ${batchSize} imported runs`);
-      } catch (batchError: any) {
-        const errorMsg = batchError instanceof Error ? batchError.message : String(batchError);
-        result.errors.push(`Failed to delete batch: ${errorMsg}`);
-        console.error(`Batch delete error:`, batchError);
-        
-        // If batch delete fails, try deleting individually
-        if (batchError.code === 'permission-denied' || errorMsg.includes('permission')) {
-          console.log("Batch delete failed due to permissions, trying individual deletes...");
-          for (const docSnapshot of querySnapshot.docs) {
-            try {
-              await deleteDoc(docSnapshot.ref);
-              result.deleted++;
-            } catch (individualError: any) {
-              result.errors.push(`Failed to delete ${docSnapshot.id}: ${individualError instanceof Error ? individualError.message : String(individualError)}`);
-            }
-          }
+      if (batchSize > 0) {
+        try {
+          await batch.commit();
+          result.deleted += batchSize;
+        } catch (batchError: any) {
+          const errorMsg = batchError instanceof Error ? batchError.message : String(batchError);
+          result.errors.push(`Failed to delete batch: ${errorMsg}`);
+          console.error(`Batch delete error:`, batchError);
         }
-      }
-      
-      if (querySnapshot.docs.length < 500) {
-        hasMore = false;
-      }
-      
-      batchCount++;
-      if (batchCount > 100) {
-        result.errors.push("Stopped after 100 batches to prevent infinite loop");
-        break;
+        
+        // Check if we've processed all documents
+        if (querySnapshot.docs.length < 500) {
+          hasMore = false;
+        }
       }
     }
     

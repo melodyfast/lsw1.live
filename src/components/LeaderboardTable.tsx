@@ -5,6 +5,7 @@ import { User, Users, ExternalLink, Trophy, Clock } from "lucide-react";
 import { LeaderboardEntry } from "@/types/database";
 import LegoStudIcon from "@/components/icons/LegoStudIcon";
 import { formatTime } from "@/lib/utils";
+import { getPlatformName } from "@/lib/dataValidation";
 
 interface LeaderboardTableProps {
   data: LeaderboardEntry[];
@@ -38,12 +39,12 @@ export function LeaderboardTable({ data, platforms = [], categories = [] }: Lead
         </TableHeader>
         <TableBody>
           {data.map((entry, index) => {
-            // Normalize platform ID to string for lookup
-            const platformId = String(entry.platform || '');
-            // Use mapped platform name, or SRC fallback name, or platform ID
-            const platformName = platforms.find(p => String(p.id) === platformId)?.name 
-              || entry.srcPlatformName 
-              || platformId;
+            // Use data validation utility for platform name with SRC fallback
+            const platformName = getPlatformName(
+              entry.platform,
+              platforms,
+              entry.srcPlatformName
+            );
             
             return (
             <TableRow 

@@ -56,15 +56,7 @@ import {
   getCategories,
   getVerifiedRunsWithInvalidData,
 } from "@/lib/db";
-import { 
-  getLSWGameId, 
-  fetchRunsNotOnLeaderboards, 
-  mapSRCRunToLeaderboardEntry,
-  fetchCategories as fetchSRCCategories,
-  fetchLevels as fetchSRCLevels,
-  fetchPlatforms as fetchSRCPlatforms,
-  type SRCRun,
-} from "@/lib/speedruncom";
+import { importSRCRuns, type ImportResult } from "@/lib/speedruncom/importService";
 import { useUploadThing } from "@/lib/uploadthing";
 import { LeaderboardEntry, DownloadEntry } from "@/types/database";
 import { useNavigate } from "react-router-dom";
@@ -500,386 +492,46 @@ const Admin = () => {
     setImportProgress({ total: 0, imported: 0, skipped: 0 });
     
     try {
-      // Get game ID
-      const gameId = await getLSWGameId();
-      if (!gameId) {
-        throw new Error("Could not find LEGO Star Wars game on speedrun.com");
-      }
-
-      // Fetch runs from speedrun.com
       toast({
-        title: "Fetching Runs",
+        title: "Starting Import",
         description: "Fetching runs from speedrun.com...",
       });
-      
-      const srcRuns = await fetchRunsNotOnLeaderboards(gameId);
-      setImportProgress(prev => ({ ...prev, total: srcRuns.length }));
 
-      if (srcRuns.length === 0) {
-        toast({
-          title: "No Runs Found",
-          description: "No runs found to import from speedrun.com.",
-        });
-        setImportingRuns(false);
-        return;
-      }
-
-      // Get existing runs to check for duplicates
-      const existingRuns = await getAllRunsForDuplicateCheck();
-      const existingSRCRunIds = new Set(
-        existingRuns.filter(r => r.srcRunId).map(r => r.srcRunId!)
-      );
-
-      // Create a set of existing runs for duplicate checking by run data
-      // Normalize player names for comparison
-      const normalizeName = (name: string) => name.trim().toLowerCase();
-      const existingRunKeys = new Set<string>();
-      // Only check verified runs for duplicates (unverified runs can be duplicates during import)
-      for (const run of existingRuns.filter(r => r.verified)) {
-        const key = `${normalizeName(run.playerName)}|${run.category}|${run.platform}|${run.runType}|${run.time}|${run.leaderboardType || 'regular'}|${run.level || ''}`;
-        existingRunKeys.add(key);
-        // For co-op runs, also add the swapped key
-        if (run.runType === 'co-op' && run.player2Name) {
-          const swappedKey = `${normalizeName(run.player2Name)}|${run.category}|${run.platform}|${run.runType}|${run.time}|${run.leaderboardType || 'regular'}|${run.level || ''}`;
-          existingRunKeys.add(swappedKey);
-        }
-      }
-
-      // Get mappings for categories, platforms, and levels
-      const [ourCategories, ourPlatforms, ourLevels, srcCategories, srcPlatforms, srcLevels] = await Promise.all([
-        getCategoriesFromFirestore(),
-        getPlatformsFromFirestore(),
-        getLevels(),
-        fetchSRCCategories(gameId),
-        fetchSRCPlatforms(),
-        fetchSRCLevels(gameId),
-      ]);
-
-      // Create mapping maps (by name, since IDs differ)
-      const categoryMapping = new Map<string, string>();
-      const platformMapping = new Map<string, string>();
-      const levelMapping = new Map<string, string>();
-
-      // Map SRC categories to our categories by name
-      for (const srcCat of srcCategories) {
-        const ourCat = ourCategories.find(c => 
-          c.name.toLowerCase() === srcCat.name.toLowerCase()
-        );
-        if (ourCat) {
-          categoryMapping.set(srcCat.id, ourCat.id);
-        }
-      }
-
-      // Map SRC platforms to our platforms by name
-      for (const srcPlatform of srcPlatforms) {
-        const ourPlatform = ourPlatforms.find(p => 
-          p.name.toLowerCase() === srcPlatform.name.toLowerCase()
-        );
-        if (ourPlatform) {
-          platformMapping.set(srcPlatform.id, ourPlatform.id);
-        }
-      }
-
-      // Map SRC levels to our levels by name
-      for (const srcLevel of srcLevels) {
-        const ourLevel = ourLevels.find(l => 
-          l.name.toLowerCase() === srcLevel.name.toLowerCase()
-        );
-        if (ourLevel) {
-          levelMapping.set(srcLevel.id, ourLevel.id);
-        }
-      }
-
-      // Also create reverse mappings for embedded data (by name)
-      const categoryNameMapping = new Map<string, string>(); // SRC category name -> our category ID
-      const platformNameMapping = new Map<string, string>(); // SRC platform name -> our platform ID
-      
-      for (const srcCat of srcCategories) {
-        const ourCat = ourCategories.find(c => 
-          c.name.toLowerCase() === srcCat.name.toLowerCase()
-        );
-        if (ourCat) {
-          categoryNameMapping.set(srcCat.name.toLowerCase(), ourCat.id);
-        }
-      }
-      
-      for (const srcPlatform of srcPlatforms) {
-        const ourPlatform = ourPlatforms.find(p => 
-          p.name.toLowerCase() === srcPlatform.name.toLowerCase()
-        );
-        if (ourPlatform) {
-          platformNameMapping.set(srcPlatform.name.toLowerCase(), ourPlatform.id);
-        }
-      }
-
-      let imported = 0;
-      let skipped = 0;
-      const unmatchedPlayersMap = new Map<string, { player1?: string; player2?: string }>();
-
-      // Import runs
-      for (const srcRun of srcRuns) {
-        // Skip if already imported by srcRunId
-        if (existingSRCRunIds.has(srcRun.id)) {
-          skipped++;
-          setImportProgress(prev => ({ ...prev, skipped: prev.skipped + 1 }));
-          continue;
-        }
-
-        try {
-          // Extract category and platform from embedded data or IDs
-          let srcCategoryId = typeof srcRun.category === 'string' ? srcRun.category : srcRun.category?.data?.id || '';
-          let srcCategoryName = typeof srcRun.category === 'string' ? '' : (srcRun.category?.data?.name || '');
-          
-          let srcPlatformId = '';
-          let srcPlatformName = '';
-          if (srcRun.system?.platform) {
-            if (typeof srcRun.system.platform === 'string') {
-              srcPlatformId = srcRun.system.platform;
-            } else {
-              srcPlatformId = srcRun.system.platform.data?.id || '';
-              srcPlatformName = srcRun.system.platform.data?.name || '';
-            }
-          }
-          
-          // Try to find our category ID - first by SRC ID, then by name
-          let ourCategoryId = categoryMapping.get(srcCategoryId);
-          if (!ourCategoryId && srcCategoryName) {
-            ourCategoryId = categoryNameMapping.get(srcCategoryName.toLowerCase());
-          }
-          if (!ourCategoryId) {
-            ourCategoryId = srcCategoryId; // Fallback to SRC ID if no mapping found
-          }
-          
-          // Try to find our platform ID - first by SRC ID, then by name
-          let ourPlatformId = platformMapping.get(srcPlatformId);
-          if (!ourPlatformId && srcPlatformName) {
-            ourPlatformId = platformNameMapping.get(srcPlatformName.toLowerCase());
-          }
-          if (!ourPlatformId) {
-            ourPlatformId = srcPlatformId; // Fallback to SRC ID if no mapping found
-          }
-
-          // Extract level info for mapping
-          let srcLevelId = '';
-          let srcLevelName = '';
-          if (srcRun.level) {
-            if (typeof srcRun.level === 'string') {
-              srcLevelId = srcRun.level;
-            } else {
-              srcLevelId = srcRun.level.data?.id || '';
-              srcLevelName = srcRun.level.data?.name || '';
-            }
-          }
-          
-          // Try to find our level ID - first by SRC ID, then by name
-          let ourLevelId = levelMapping.get(srcLevelId);
-          if (!ourLevelId && srcLevelName) {
-            // Try to find level by name
-            const ourLevel = ourLevels.find(l => 
-              l.name.toLowerCase() === srcLevelName.toLowerCase()
-            );
-            if (ourLevel) {
-              ourLevelId = ourLevel.id;
-            }
-          }
-          if (srcLevelId && !ourLevelId) {
-            ourLevelId = srcLevelId; // Fallback to SRC ID if no mapping found
-          }
-
-          // Map the run with corrected IDs and name mappings
-          const mappedRun = mapSRCRunToLeaderboardEntry(
-            srcRun,
-            undefined,
-            categoryMapping,
-            platformMapping,
-            levelMapping,
-            "imported",
-            categoryNameMapping,
-            platformNameMapping
-          );
-
-          // Override with correctly mapped IDs (preserve SRC names from mapping function)
-          mappedRun.category = ourCategoryId;
-          mappedRun.platform = ourPlatformId;
-          mappedRun.level = ourLevelId;
-          
-          // Ensure SRC names are preserved (they should already be set by mapSRCRunToLeaderboardEntry)
-          if (srcCategoryName && !mappedRun.srcCategoryName) {
-            mappedRun.srcCategoryName = srcCategoryName;
-          }
-          if (srcPlatformName && !mappedRun.srcPlatformName) {
-            mappedRun.srcPlatformName = srcPlatformName;
-          }
-          if (srcLevelName && !mappedRun.srcLevelName) {
-            mappedRun.srcLevelName = srcLevelName;
-          }
-
-          // Check if we have a valid category and platform
-          if (!mappedRun.category || !mappedRun.platform || mappedRun.category === '' || mappedRun.platform === '') {
-            console.log(`Skipping run ${srcRun.id}: missing category or platform. Category: ${mappedRun.category}, Platform: ${mappedRun.platform}`);
-            skipped++;
-            setImportProgress(prev => ({ ...prev, skipped: prev.skipped + 1 }));
-            continue;
-          }
-          
-          // Debug: Log extraction for first few runs
-          if (imported < 3) {
-            console.log(`Run ${srcRun.id}:`);
-            console.log(`  Players:`, JSON.stringify(srcRun.players, null, 2));
-            console.log(`  Extracted player1: "${mappedRun.playerName}", player2: "${mappedRun.player2Name}"`);
-            console.log(`  Category: ID="${mappedRun.category}", SRC Name="${mappedRun.srcCategoryName}"`);
-            console.log(`  Platform: ID="${mappedRun.platform}", SRC Name="${mappedRun.srcPlatformName}"`);
-            console.log(`  Level: ID="${mappedRun.level}", SRC Name="${mappedRun.srcLevelName}"`);
-          }
-          
-          // Ensure player names are strings and not empty
-          if (typeof mappedRun.playerName !== 'string' || !mappedRun.playerName || mappedRun.playerName.trim() === '') {
-            console.warn(`Run ${srcRun.id} has invalid player1 name:`, mappedRun.playerName);
-            mappedRun.playerName = String(mappedRun.playerName || 'Unknown').trim() || 'Unknown';
-          } else {
-            mappedRun.playerName = mappedRun.playerName.trim();
-          }
-          if (mappedRun.player2Name) {
-            if (typeof mappedRun.player2Name !== 'string' || mappedRun.player2Name.trim() === '') {
-              console.warn(`Run ${srcRun.id} has invalid player2 name:`, mappedRun.player2Name);
-              mappedRun.player2Name = undefined; // Remove invalid player2
-            } else {
-              mappedRun.player2Name = mappedRun.player2Name.trim();
-            }
-          }
-
-          // Check if a similar run already exists on the site
-          const player1Name = normalizeName(mappedRun.playerName || '');
-          const player2Name = mappedRun.player2Name ? normalizeName(mappedRun.player2Name) : '';
-          const runKey = `${player1Name}|${mappedRun.category}|${mappedRun.platform}|${mappedRun.runType}|${mappedRun.time}|${mappedRun.leaderboardType || 'regular'}|${mappedRun.level || ''}`;
-          
-          // Check for exact duplicate (only against verified runs)
-          if (existingRunKeys.has(runKey)) {
-            console.log(`Skipping run ${srcRun.id}: duplicate found (verified run exists)`);
-            skipped++;
-            setImportProgress(prev => ({ ...prev, skipped: prev.skipped + 1 }));
-            continue;
-          }
-
-          // Also check for co-op runs with swapped players
-          if (mappedRun.runType === 'co-op' && player2Name) {
-            const swappedKey = `${player2Name}|${mappedRun.category}|${mappedRun.platform}|${mappedRun.runType}|${mappedRun.time}|${mappedRun.leaderboardType || 'regular'}|${mappedRun.level || ''}`;
-            if (existingRunKeys.has(swappedKey)) {
-              console.log(`Skipping run ${srcRun.id}: duplicate found (verified co-op run exists with swapped players)`);
-              skipped++;
-              setImportProgress(prev => ({ ...prev, skipped: prev.skipped + 1 }));
-              continue;
-            }
-          }
-
-          // Check if player names match any players on the site
-          const player1Matched = await getPlayerByDisplayName(mappedRun.playerName || '');
-          const player2Matched = mappedRun.player2Name ? await getPlayerByDisplayName(mappedRun.player2Name) : null;
-          
-          // Track unmatched players
-          const unmatched: { player1?: string; player2?: string } = {};
-          if (!player1Matched) {
-            unmatched.player1 = mappedRun.playerName;
-          }
-          if (mappedRun.player2Name && !player2Matched) {
-            unmatched.player2 = mappedRun.player2Name;
-          }
-          
-          // Verify the run has importedFromSRC set
-          if (!mappedRun.importedFromSRC) {
-            console.warn(`Run ${srcRun.id} missing importedFromSRC flag, setting it now`);
-            mappedRun.importedFromSRC = true;
-          }
-          if (!mappedRun.srcRunId) {
-            mappedRun.srcRunId = srcRun.id;
-          }
-          
-          // Add the run
-          const addedRunId = await addLeaderboardEntry(mappedRun as any);
-          
-          if (!addedRunId) {
-            console.error(`Failed to add run ${srcRun.id} - no ID returned`);
-            skipped++;
-            setImportProgress(prev => ({ ...prev, skipped: prev.skipped + 1 }));
-            continue;
-          }
-          
-          console.log(`Successfully imported run ${srcRun.id} with ID ${addedRunId}`);
-          
-          // Store unmatched player info if any (use the run ID from the response)
-          if ((unmatched.player1 || unmatched.player2) && addedRunId) {
-            unmatchedPlayersMap.set(addedRunId, unmatched);
-          }
-          
-          imported++;
-          setImportProgress(prev => ({ ...prev, imported: prev.imported + 1 }));
-          
-          // Add to existing keys to prevent duplicates within the same import batch
-          existingRunKeys.add(runKey);
-        } catch (error) {
-          console.error(`Error importing run ${srcRun.id}:`, error);
-          skipped++;
-          setImportProgress(prev => ({ ...prev, skipped: prev.skipped + 1 }));
-        }
-      }
+      // Use the new import service
+      const result: ImportResult = await importSRCRuns((progress) => {
+        setImportProgress(progress);
+      });
 
       // Update unmatched players state
-      setUnmatchedPlayers(unmatchedPlayersMap);
+      setUnmatchedPlayers(result.unmatchedPlayers);
       
       // Show summary with unmatched player warnings
-      const unmatchedCount = unmatchedPlayersMap.size;
-      if (unmatchedCount > 0) {
+      const unmatchedCount = result.unmatchedPlayers.size;
+      if (result.errors.length > 0) {
+        toast({
+          title: "Import Complete with Errors",
+          description: `Imported ${result.imported} runs, skipped ${result.skipped} runs. ${result.errors.length} error(s) occurred.`,
+          variant: "destructive",
+        });
+      } else if (unmatchedCount > 0) {
         toast({
           title: "Import Complete",
-          description: `Imported ${imported} runs, skipped ${skipped} duplicates or invalid runs. ${unmatchedCount} run(s) have player names that don't match any players on the site.`,
+          description: `Imported ${result.imported} runs, skipped ${result.skipped} duplicates or invalid runs. ${unmatchedCount} run(s) have player names that don't match any players on the site.`,
           variant: "default",
         });
       } else {
         toast({
           title: "Import Complete",
-          description: `Imported ${imported} runs, skipped ${skipped} duplicates or invalid runs.`,
+          description: `Imported ${result.imported} runs, skipped ${result.skipped} duplicates or invalid runs.`,
         });
       }
 
-      // Refresh the runs list - wait a moment for Firestore to update and index
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Try fetching with retries in case Firestore needs more time
-      let retries = 3;
-      let fetched = false;
-      while (retries > 0 && !fetched) {
-        try {
-          await fetchUnverifiedRuns();
-          const checkData = await getImportedSRCRuns();
-          if (checkData.length >= imported) {
-            fetched = true;
-            console.log(`Successfully fetched ${checkData.length} imported runs after refresh`);
-          } else {
-            console.log(`Only fetched ${checkData.length} of ${imported} imported runs, retrying...`);
-            retries--;
-            if (retries > 0) {
-              await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-          }
-        } catch (error) {
-          console.error("Error refreshing runs:", error);
-          retries--;
-          if (retries > 0) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-        }
-      }
-      
-      if (!fetched) {
-        toast({
-          title: "Warning",
-          description: "Some imported runs may not appear immediately. Please refresh the page.",
-          variant: "default",
-        });
-      }
+      // Refresh the runs list
+      await refreshAllRunData();
     } catch (error: any) {
+      console.error("Error importing from SRC:", error);
       toast({
-        title: "Import Error",
+        title: "Import Failed",
         description: error.message || "Failed to import runs from speedrun.com.",
         variant: "destructive",
       });

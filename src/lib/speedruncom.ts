@@ -153,17 +153,18 @@ export async function getLSWGameId(): Promise<string | null> {
 /**
  * Fetch all runs for a game
  * This fetches runs with status "verified" that can be imported
+ * Uses pagination to fetch up to 500 runs (configurable limit)
  */
-export async function fetchRunsNotOnLeaderboards(gameId: string): Promise<SRCRun[]> {
+export async function fetchRunsNotOnLeaderboards(
+  gameId: string, 
+  limit: number = 500
+): Promise<SRCRun[]> {
   const allRuns: SRCRun[] = [];
   let offset = 0;
-  const max = 200;
-  let hasMore = true;
+  const max = 200; // SRC API max per request
   
   try {
-    while (hasMore) {
-      // Fetch runs that are verified
-      // We'll filter out ones that are already on our leaderboards later
+    while (allRuns.length < limit) {
       const response = await fetch(
         `${SPEEDRUNCOM_API_BASE}/runs?game=${gameId}&status=verified&orderby=submitted&direction=desc&max=${max}&offset=${offset}&embed=players,category,level,platform`
       );
@@ -174,52 +175,29 @@ export async function fetchRunsNotOnLeaderboards(gameId: string): Promise<SRCRun
       
       const data: SRCRunData = await response.json();
       
-      if (data.data && data.data.length > 0) {
-        allRuns.push(...data.data);
-        offset += data.data.length;
-        
-        if (data.data.length < max || !data.pagination) {
-          hasMore = false;
-        } else if (data.pagination && offset >= data.pagination.max) {
-          hasMore = false;
-        }
-      } else {
-        hasMore = false;
+      if (!data.data || data.data.length === 0) {
+        break;
       }
       
-      // Limit to prevent too many requests - we can adjust this
-      if (offset >= 500) {
+      allRuns.push(...data.data);
+      offset += data.data.length;
+      
+      // Check pagination limits
+      if (data.data.length < max) {
+        break;
+      }
+      if (data.pagination && offset >= data.pagination.max) {
         break;
       }
     }
     
-    return allRuns;
+    return allRuns.slice(0, limit);
   } catch (error) {
-    console.error("Error fetching runs:", error);
+    console.error("Error fetching runs from speedrun.com:", error);
     throw error;
   }
 }
 
-/**
- * Fetch runs for a specific category
- */
-export async function fetchRunsByCategory(gameId: string, categoryId: string): Promise<SRCRun[]> {
-  try {
-    const response = await fetch(
-      `${SPEEDRUNCOM_API_BASE}/runs?game=${gameId}&category=${categoryId}&status=verified&orderby=submitted&direction=desc&max=200&embed=players,category,level,platform`
-    );
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch runs: ${response.statusText}`);
-    }
-    
-    const data: SRCRunData = await response.json();
-    return data.data || [];
-  } catch (error) {
-    console.error("Error fetching runs by category:", error);
-    throw error;
-  }
-}
 
 /**
  * Fetch all categories for a game
