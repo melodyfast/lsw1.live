@@ -2902,38 +2902,24 @@ export const getUnclaimedRunsBySRCUsernameFirestore = async (srcUsername: string
   }
 };
 
+/**
+ * Get unclaimed runs by username (for claiming runs)
+ * Only returns verified runs - unverified runs must be verified first
+ */
 export const getUnclaimedRunsByUsernameFirestore = async (username: string, currentUserId?: string): Promise<LeaderboardEntry[]> => {
-  if (!db) return [];
+  if (!db || !username || !username.trim()) return [];
   try {
-    // Get ALL runs (verified and unverified, manual and imported)
-    // We need to check both verified and unverified runs to include:
-    // - Manually submitted unverified runs
-    // - Imported runs (both verified and unverified)
-    const queries = [
-      query(
-        collection(db, "leaderboardEntries"),
-        where("verified", "==", true),
-        firestoreLimit(500)
-      ),
-      query(
-        collection(db, "leaderboardEntries"),
-        where("verified", "==", false),
-        firestoreLimit(500)
-      )
-    ];
+    // Only get verified runs - unverified runs must be verified first
+    const q = query(
+      collection(db, "leaderboardEntries"),
+      where("verified", "==", true),
+      firestoreLimit(500)
+    );
     
-    const [verifiedSnapshot, unverifiedSnapshot] = await Promise.all([
-      getDocs(queries[0]),
-      getDocs(queries[1])
-    ]);
+    const verifiedSnapshot = await getDocs(q);
+    const allRuns = verifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
     
     const normalizedUsername = username.trim().toLowerCase();
-    
-    // Combine all runs
-    const allRuns = [
-      ...verifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry)),
-      ...unverifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
-    ];
     
     // Filter runs that match the username (as player1 or player2) and are truly unclaimed
     // IMPORTANT: For co-op runs, both players should see the run if it's unclaimed
