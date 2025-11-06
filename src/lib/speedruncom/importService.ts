@@ -268,6 +268,22 @@ export async function importSRCRuns(
         if (!player1Matched) unmatched.player1 = mappedRun.playerName;
         if (mappedRun.player2Name && !player2Matched) unmatched.player2 = mappedRun.player2Name;
 
+        // Log the mapped run before attempting to add (for first few runs)
+        if (result.imported + result.skipped < 3) {
+          console.log(`[Import] Attempting to add run ${srcRun.id}:`, {
+            category: mappedRun.category,
+            platform: mappedRun.platform,
+            srcCategoryName: mappedRun.srcCategoryName,
+            srcPlatformName: mappedRun.srcPlatformName,
+            importedFromSRC: mappedRun.importedFromSRC,
+            playerName: mappedRun.playerName,
+            time: mappedRun.time,
+            date: mappedRun.date,
+            leaderboardType: mappedRun.leaderboardType,
+            runType: mappedRun.runType,
+          });
+        }
+
         // Try to add the run
         try {
           const addedRunId = await addLeaderboardEntry(mappedRun as LeaderboardEntry);

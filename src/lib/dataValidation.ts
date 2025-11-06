@@ -110,10 +110,11 @@ export function normalizeLeaderboardEntry(entry: Partial<LeaderboardEntry>): Par
     leaderboardType: normalizeLeaderboardType(entry.leaderboardType),
     verified: Boolean(entry.verified),
     importedFromSRC: entry.importedFromSRC !== undefined ? Boolean(entry.importedFromSRC) : undefined,
-    // Preserve SRC fallback names (don't normalize them, just trim)
+    // Preserve SRC fallback names and srcRunId (don't normalize them, just trim)
     srcCategoryName: entry.srcCategoryName ? String(entry.srcCategoryName).trim() : undefined,
     srcPlatformName: entry.srcPlatformName ? String(entry.srcPlatformName).trim() : undefined,
     srcLevelName: entry.srcLevelName ? String(entry.srcLevelName).trim() : undefined,
+    srcRunId: entry.srcRunId ? String(entry.srcRunId).trim() : undefined,
   };
 }
 
@@ -199,16 +200,17 @@ export function validateLeaderboardEntry(entry: Partial<LeaderboardEntry>): {
   
   // Category validation: required unless this is an imported run with SRC category name
   const hasCategory = entry.category && entry.category.trim() !== "";
-  const hasSRCCategoryName = entry.importedFromSRC && entry.srcCategoryName && entry.srcCategoryName.trim() !== "";
+  const isImported = entry.importedFromSRC === true;
+  const hasSRCCategoryName = isImported && entry.srcCategoryName && entry.srcCategoryName.trim() !== "";
   if (!hasCategory && !hasSRCCategoryName) {
-    errors.push("Category is required");
+    errors.push(`Category is required (hasCategory: ${hasCategory}, isImported: ${isImported}, hasSRCCategoryName: ${hasSRCCategoryName})`);
   }
   
   // Platform validation: required unless this is an imported run with SRC platform name
   const hasPlatform = entry.platform && entry.platform.trim() !== "";
-  const hasSRCPlatformName = entry.importedFromSRC && entry.srcPlatformName && entry.srcPlatformName.trim() !== "";
+  const hasSRCPlatformName = isImported && entry.srcPlatformName && entry.srcPlatformName.trim() !== "";
   if (!hasPlatform && !hasSRCPlatformName) {
-    errors.push("Platform is required");
+    errors.push(`Platform is required (hasPlatform: ${hasPlatform}, isImported: ${isImported}, hasSRCPlatformName: ${hasSRCPlatformName})`);
   }
   
   if (!entry.time || entry.time.trim() === "") {

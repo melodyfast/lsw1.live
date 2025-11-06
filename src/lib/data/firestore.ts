@@ -300,12 +300,48 @@ export const getLeaderboardEntriesFirestore = async (
 export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry, 'id' | 'rank' | 'isObsolete'> & { verified?: boolean }): Promise<string | null> => {
   if (!db) return null;
   try {
+    // Log entry before normalization for debugging imported runs
+    if (entry.importedFromSRC) {
+      console.log("[addLeaderboardEntry] Before normalization:", {
+        category: entry.category,
+        platform: entry.platform,
+        srcCategoryName: entry.srcCategoryName,
+        srcPlatformName: entry.srcPlatformName,
+        importedFromSRC: entry.importedFromSRC,
+        playerName: entry.playerName,
+        time: entry.time,
+        date: entry.date,
+      });
+    }
+    
     // Normalize and validate the entry
     const normalized = normalizeLeaderboardEntry(entry);
+    
+    // Log normalized entry for debugging
+    if (entry.importedFromSRC) {
+      console.log("[addLeaderboardEntry] After normalization:", {
+        category: normalized.category,
+        platform: normalized.platform,
+        srcCategoryName: normalized.srcCategoryName,
+        srcPlatformName: normalized.srcPlatformName,
+        importedFromSRC: normalized.importedFromSRC,
+        playerName: normalized.playerName,
+        time: normalized.time,
+        date: normalized.date,
+      });
+    }
+    
     const validation = validateLeaderboardEntry(normalized);
     
     if (!validation.valid) {
-      console.error("Validation failed for leaderboard entry:", validation.errors);
+      console.error("Validation failed for leaderboard entry:", validation.errors, {
+        entry: normalized,
+        importedFromSRC: normalized.importedFromSRC,
+        hasCategory: normalized.category && normalized.category.trim() !== "",
+        hasPlatform: normalized.platform && normalized.platform.trim() !== "",
+        hasSRCCategory: normalized.srcCategoryName && normalized.srcCategoryName.trim() !== "",
+        hasSRCPlatform: normalized.srcPlatformName && normalized.srcPlatformName.trim() !== "",
+      });
       throw new Error(`Invalid entry data: ${validation.errors.join(', ')}`);
     }
     
@@ -344,18 +380,19 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
       newEntry.srcRunId = normalized.srcRunId;
     }
     // Save SRC fallback names for display when ID mapping fails
-    if (entry.srcCategoryName) {
-      newEntry.srcCategoryName = entry.srcCategoryName;
+    // Use normalized values (they preserve the SRC names)
+    if (normalized.srcCategoryName) {
+      newEntry.srcCategoryName = normalized.srcCategoryName;
     }
-    if (entry.srcPlatformName) {
-      newEntry.srcPlatformName = entry.srcPlatformName;
+    if (normalized.srcPlatformName) {
+      newEntry.srcPlatformName = normalized.srcPlatformName;
     }
-    if (entry.srcLevelName) {
-      newEntry.srcLevelName = entry.srcLevelName;
+    if (normalized.srcLevelName) {
+      newEntry.srcLevelName = normalized.srcLevelName;
     }
     
     await setDoc(newDocRef, newEntry);
-    console.log(`Saved entry with SRC names: category="${entry.srcCategoryName}", platform="${entry.srcPlatformName}", level="${entry.srcLevelName}"`);
+    console.log(`Saved entry with SRC names: category="${normalized.srcCategoryName}", platform="${normalized.srcPlatformName}", level="${normalized.srcLevelName}"`);
     return newDocRef.id;
   } catch (error: any) {
     console.error("Error adding leaderboard entry:", error);
