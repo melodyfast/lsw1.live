@@ -9,7 +9,6 @@ import {
   normalizePlatformId,
   normalizeLevelId,
 } from "@/lib/dataValidation";
-import { fetchPlayerById } from "@/lib/speedruncom";
 
 /**
  * Helper function to calculate ranks for a group of runs
