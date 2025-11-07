@@ -891,7 +891,6 @@ const Stats = () => {
                         </div>
                       </div>
                     </div>
-                  )}
                   
                   <ChartContainer config={chartConfig} className="h-[600px] w-full [&_.recharts-brush]:fill-[hsl(var(--muted))] [&_.recharts-brush]:stroke-[hsl(var(--border))] [&_.recharts-brush-slide]:fill-[hsl(var(--muted))] [&_.recharts-brush-traveller]:fill-[hsl(var(--muted))] [&_.recharts-brush-traveller]:stroke-[hsl(var(--border))]">
                     <LineChart 
