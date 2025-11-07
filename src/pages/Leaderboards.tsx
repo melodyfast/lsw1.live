@@ -497,7 +497,9 @@ const Leaderboards = () => {
                 <LeaderboardTable 
                   data={leaderboardData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)} 
                   platforms={availablePlatforms} 
-                  categories={availableCategories} 
+                  categories={availableCategories}
+                  levels={availableLevels}
+                  leaderboardType={leaderboardType}
                 />
                 {leaderboardData.length > itemsPerPage && (
                   <Pagination

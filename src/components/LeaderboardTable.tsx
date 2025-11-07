@@ -1,19 +1,23 @@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Link } from "react-router-dom";
-import { User, Users, ExternalLink, Trophy, Clock } from "lucide-react";
+import { User, Users, ExternalLink, Trophy, Clock, MapPin } from "lucide-react";
 import { LeaderboardEntry } from "@/types/database";
 import LegoStudIcon from "@/components/icons/LegoStudIcon";
 import { formatTime } from "@/lib/utils";
-import { getPlatformName } from "@/lib/dataValidation";
+import { getPlatformName, getLevelName } from "@/lib/dataValidation";
 
 interface LeaderboardTableProps {
   data: LeaderboardEntry[];
   platforms?: { id: string; name: string }[];
   categories?: { id: string; name: string }[];
+  levels?: { id: string; name: string }[];
+  leaderboardType?: 'regular' | 'individual-level' | 'community-golds';
 }
 
-export function LeaderboardTable({ data, platforms = [], categories = [] }: LeaderboardTableProps) {
+export function LeaderboardTable({ data, platforms = [], categories = [], levels = [], leaderboardType }: LeaderboardTableProps) {
+  // Determine if we should show level column (for IL and Community Golds)
+  const showLevelColumn = leaderboardType === 'individual-level' || leaderboardType === 'community-golds';
   if (data.length === 0) {
     return (
       <div className="text-center py-12">
@@ -30,6 +34,9 @@ export function LeaderboardTable({ data, platforms = [], categories = [] }: Lead
           <TableRow className="border-b-2 border-ctp-surface1/50 hover:bg-transparent bg-gradient-to-r from-ctp-surface0/30 to-ctp-surface1/20">
             <TableHead className="py-3 sm:py-4 px-2 sm:px-4 text-left text-xs sm:text-base font-bold text-ctp-text">Rank</TableHead>
             <TableHead className="py-3 sm:py-4 px-2 sm:px-4 text-left text-xs sm:text-base font-bold text-ctp-text min-w-[200px] sm:min-w-[280px] w-[20%]">Player</TableHead>
+            {showLevelColumn && (
+              <TableHead className="py-3 sm:py-4 px-2 sm:px-4 text-left text-xs sm:text-base font-bold text-ctp-text hidden md:table-cell">Level</TableHead>
+            )}
             <TableHead className="py-3 sm:py-4 px-2 sm:px-4 text-left text-xs sm:text-base font-bold text-ctp-text hidden sm:table-cell">Time</TableHead>
             <TableHead className="py-3 sm:py-4 px-2 sm:px-4 text-left text-xs sm:text-base font-bold text-ctp-text hidden md:table-cell">Date</TableHead>
             <TableHead className="py-3 sm:py-4 px-2 sm:px-4 text-left text-xs sm:text-base font-bold text-ctp-text hidden lg:table-cell">Platform</TableHead>
@@ -45,6 +52,11 @@ export function LeaderboardTable({ data, platforms = [], categories = [] }: Lead
               platforms,
               entry.srcPlatformName
             );
+            
+            // Get level name for IL/Community Gold runs
+            const levelName = showLevelColumn && entry.level
+              ? getLevelName(entry.level, levels, entry.srcLevelName)
+              : undefined;
             
             return (
             <TableRow 
@@ -143,6 +155,16 @@ export function LeaderboardTable({ data, platforms = [], categories = [] }: Lead
                   </div>
                 </div>
               </TableCell>
+              {showLevelColumn && (
+                <TableCell className="py-2 sm:py-3 px-2 sm:px-4 hidden md:table-cell relative z-10">
+                  <Link to={`/run/${entry.id}`} className="hover:text-[#cba6f7] transition-colors flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-ctp-overlay0" />
+                    <span className="text-xs sm:text-sm text-ctp-subtext1">
+                      {levelName || entry.srcLevelName || 'Unknown Level'}
+                    </span>
+                  </Link>
+                </TableCell>
+              )}
               <TableCell className="py-2 sm:py-3 px-2 sm:px-4 hidden sm:table-cell relative z-10">
                 <Link to={`/run/${entry.id}`} className="hover:text-[#cba6f7] transition-colors">
                   <p className="text-sm sm:text-base font-semibold text-ctp-text">

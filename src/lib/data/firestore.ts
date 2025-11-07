@@ -173,6 +173,11 @@ export const getLeaderboardEntriesFirestore = async (
     const fetchLimit = 500;
     addSharedFilters(constraints);
     constraints.push(firestoreLimit(fetchLimit));
+    // Fetch levels BEFORE filtering to check disabled categories
+    const levelsSnapshot = await getDocs(collection(db, "levels"));
+    const levels = levelsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Level));
+    const selectedLevelData = normalizedLevelId ? levels.find(l => l.id === normalizedLevelId) : undefined;
+    
     const querySnapshot = await getDocs(query(collection(db, "leaderboardEntries"), ...constraints));
     
     // Normalize and validate entries
@@ -403,19 +408,14 @@ export const getLeaderboardEntriesFirestore = async (
       });
     }
 
-    // Fetch categories, platforms, and levels for SRC name fallback and disabled category checking
-    const [categoriesSnapshot, platformsSnapshot, levelsSnapshot] = await Promise.all([
+    // Fetch categories and platforms for SRC name fallback (levels already fetched above)
+    const [categoriesSnapshot, platformsSnapshot] = await Promise.all([
       getDocs(collection(db, "categories")),
-      getDocs(collection(db, "platforms")),
-      getDocs(collection(db, "levels"))
+      getDocs(collection(db, "platforms"))
     ]);
     
     const categories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
     const platforms = platformsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Platform));
-    const levels = levelsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Level));
-    
-    // Get the level data if we're filtering by level (for checking disabled categories)
-    const selectedLevelData = normalizedLevelId ? levels.find(l => l.id === normalizedLevelId) : undefined;
 
     // Import helper functions for name resolution
     const { getCategoryName, getPlatformName, getLevelName } = await import("@/lib/dataValidation");

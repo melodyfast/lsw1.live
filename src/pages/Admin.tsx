@@ -80,6 +80,8 @@ import { getCategoryName, getPlatformName, getLevelName, normalizeCategoryId, no
 import { db } from "@/lib/firebase";
 import { collection, query, getDocs, limit as firestoreLimit } from "firebase/firestore";
 import { Player } from "@/types/database";
+import { prepareRunForVerification } from "@/lib/data/runFieldService";
+import { getLeaderboardEntryById } from "@/lib/db";
 
 const Admin = () => {
   const { currentUser, loading: authLoading } = useAuth();
@@ -326,8 +328,8 @@ const Admin = () => {
         subcategory: editingImportedRun.subcategory || "",
         platform: editingImportedRun.platform || "",
         level: editingImportedRun.level || "",
-        runType: editingImportedRun.runType || "",
-        leaderboardType: editingImportedRun.leaderboardType || "",
+        runType: editingImportedRun.runType || "solo",
+        leaderboardType: editingImportedRun.leaderboardType || "regular",
         time: editingImportedRun.time || "",
         date: editingImportedRun.date || "",
         videoUrl: editingImportedRun.videoUrl || "",
@@ -1150,63 +1152,21 @@ const Admin = () => {
   };
 
   // Helper function to autofill category, platform, and level for imported runs
-  const autofillRunFields = (run: LeaderboardEntry): { category: string; platform: string; level: string } => {
-    const runLeaderboardType = run.leaderboardType || 'regular';
-    let category = run.category || "";
-    let platform = run.platform || "";
-    let level = run.level || "";
+  // Uses centralized service to eliminate redundancy
+  const autofillRunFields = async (run: LeaderboardEntry) => {
+    // Get all categories (regular, IL, and community golds)
+    const allCategories = [
+      ...firestoreCategories,
+      ...(await getCategoriesFromFirestore('individual-level')),
+      ...(await getCategoriesFromFirestore('community-golds')),
+    ];
     
-    // Validate and fix category
-    if (category) {
-      const categoryObj = firestoreCategories.find(cat => cat.id === category);
-      if (categoryObj) {
-        const catType = (categoryObj as Category).leaderboardType || 'regular';
-        if (catType !== runLeaderboardType) {
-          // Category ID doesn't match the run's leaderboard type - clear it
-          category = "";
-        }
-      } else {
-        // Category ID not found - clear it
-        category = "";
-      }
-    }
-    
-    // Try to match category by SRC name if we don't have a valid category ID
-    if (!category && run.srcCategoryName) {
-      const matchingCategory = firestoreCategories.find(cat => {
-        const catType = (cat as Category).leaderboardType || 'regular';
-        return catType === runLeaderboardType && 
-               cat.name.toLowerCase().trim() === run.srcCategoryName!.toLowerCase().trim();
-      });
-      if (matchingCategory) {
-        category = matchingCategory.id;
-      }
-    }
-    
-    // Try to match platform by SRC name if we don't have a platform ID
-    if (!platform && run.srcPlatformName) {
-      const matchingPlatform = firestorePlatforms.find(p => 
-        p.name.toLowerCase().trim() === run.srcPlatformName!.toLowerCase().trim()
-      );
-      if (matchingPlatform) {
-        platform = matchingPlatform.id;
-      }
-    }
-    
-    // For regular (full game) runs, ensure level is always empty
-    if (runLeaderboardType === 'regular') {
-      level = "";
-    } else if ((runLeaderboardType === 'individual-level' || runLeaderboardType === 'community-golds') && !level && run.srcLevelName) {
-      // Try to match level by SRC name if we don't have a level ID (for ILs and Community Golds only)
-      const matchingLevel = availableLevels.find(l => 
-        l.name.toLowerCase().trim() === run.srcLevelName!.toLowerCase().trim()
-      );
-      if (matchingLevel) {
-        level = matchingLevel.id;
-      }
-    }
-    
-    return { category, platform, level };
+    return await prepareRunForVerification(
+      run,
+      getCategoriesFromFirestore,
+      getPlatformsFromFirestore,
+      getLevels
+    );
   };
 
   const handleBatchVerify = async () => {
@@ -1257,32 +1217,12 @@ const Admin = () => {
             continue;
           }
 
-          // Autofill category, platform, and level before verifying
-          const autofilled = autofillRunFields(run);
-          const updateData: Partial<LeaderboardEntry> = {};
-          
-          // Only update if values changed or were missing
-          if (autofilled.category && autofilled.category !== run.category) {
-            updateData.category = autofilled.category;
-          }
-          if (autofilled.platform && autofilled.platform !== run.platform) {
-            updateData.platform = autofilled.platform;
-          }
-          
-          // Handle level: only set for ILs/Community Golds, clear for regular runs
-          if (run.leaderboardType === 'regular') {
-            // For regular runs, ensure level is cleared if it exists
-            if (run.level && run.level.trim() !== '') {
-              updateData.level = "";
-            }
-          } else if ((run.leaderboardType === 'individual-level' || run.leaderboardType === 'community-golds') && 
-              autofilled.level && autofilled.level !== run.level) {
-            updateData.level = autofilled.level;
-          }
+          // Autofill category, platform, and level before verifying using centralized service
+          const autofillResult = await autofillRunFields(run);
           
           // Update run data if needed before verifying
-          if (Object.keys(updateData).length > 0) {
-            await updateLeaderboardEntry(run.id, updateData);
+          if (Object.keys(autofillResult.updates).length > 0) {
+            await updateLeaderboardEntry(run.id, autofillResult.updates);
           }
 
           // Verify the run
@@ -1411,32 +1351,12 @@ const Admin = () => {
             continue;
           }
 
-          // Autofill category, platform, and level before verifying
-          const autofilled = autofillRunFields(run);
-          const updateData: Partial<LeaderboardEntry> = {};
-          
-          // Only update if values changed or were missing
-          if (autofilled.category && autofilled.category !== run.category) {
-            updateData.category = autofilled.category;
-          }
-          if (autofilled.platform && autofilled.platform !== run.platform) {
-            updateData.platform = autofilled.platform;
-          }
-          
-          // Handle level: only set for ILs/Community Golds, clear for regular runs
-          if (run.leaderboardType === 'regular') {
-            // For regular runs, ensure level is cleared if it exists
-            if (run.level && run.level.trim() !== '') {
-              updateData.level = "";
-            }
-          } else if ((run.leaderboardType === 'individual-level' || run.leaderboardType === 'community-golds') && 
-              autofilled.level && autofilled.level !== run.level) {
-            updateData.level = autofilled.level;
-          }
+          // Autofill category, platform, and level before verifying using centralized service
+          const autofillResult = await autofillRunFields(run);
           
           // Update run data if needed before verifying
-          if (Object.keys(updateData).length > 0) {
-            await updateLeaderboardEntry(run.id, updateData);
+          if (Object.keys(autofillResult.updates).length > 0) {
+            await updateLeaderboardEntry(run.id, autofillResult.updates);
           }
 
           // Verify the run

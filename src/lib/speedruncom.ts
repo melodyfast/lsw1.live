@@ -194,8 +194,10 @@ export async function fetchRunsNotOnLeaderboards(
       // Embed platform in system field - SRC API embeds platform when requested
       let data: SRCRunData;
       try {
+        // Embed all necessary data: players, category (with variables), level, and platform
+        // This ensures we have category.type to properly identify per-level categories
         data = await fetchSRCAPI<SRCRunData>(
-          `/runs?game=${gameId}&status=verified&orderby=submitted&direction=desc&max=${max}&offset=${offset}&embed=players,category,level,platform`
+          `/runs?game=${gameId}&status=verified&orderby=submitted&direction=desc&max=${max}&offset=${offset}&embed=players,category.variables,level,platform`
         );
       } catch (error) {
         console.error(`[SRC API] Error fetching runs at offset ${offset}:`, error);
@@ -732,24 +734,45 @@ export async function mapSRCRunToLeaderboardEntry(
   
   // === Determine Leaderboard Type ===
   // SRC categories have type: "per-game" or "per-level"
-  let leaderboardType: 'regular' | 'individual-level' = 'regular';
+  // Per-level categories are Individual Level runs
+  // Per-game categories are Full Game runs
+  let leaderboardType: 'regular' | 'individual-level' | 'community-golds' = 'regular';
   
   let categoryType: "per-game" | "per-level" | undefined;
+  let categoryDataObj: SRCCategory | undefined;
+  
+  // Extract category type from embedded data
   if (typeof run.category === 'object' && run.category?.data) {
-    categoryType = (run.category.data as SRCCategory).type;
+    categoryDataObj = run.category.data as SRCCategory;
+    categoryType = categoryDataObj.type;
   } else if (embeddedData?.category) {
+    categoryDataObj = embeddedData.category;
     categoryType = embeddedData.category.type;
   }
   
   const hasLevel = levelData.id && levelData.id.trim() !== '';
+  const levelName = levelData.name || (levelData.id && srcLevelIdToName?.get(levelData.id));
   
+  // Determine leaderboard type based on category type and level presence
+  // Per-level categories are always IL runs
   if (categoryType === 'per-level') {
     leaderboardType = 'individual-level';
+    // Ensure we have level data for IL runs
+    if (!hasLevel && !levelName) {
+      console.warn(`[mapSRCRunToLeaderboardEntry] Per-level category run ${run.id} missing level data`);
+    }
   } else if (categoryType === 'per-game') {
     leaderboardType = 'regular';
-  } else if (hasLevel) {
+    // Per-game runs should not have levels (unless it's a community golds category)
+    // Community golds are identified separately by category name or other markers
+  } else if (hasLevel || levelName) {
+    // Fallback: if we have a level but category type is unknown, assume IL
+    // This handles edge cases where category type might not be embedded
     leaderboardType = 'individual-level';
   }
+  
+  // Note: Community Golds are typically identified by category name or special handling
+  // For now, we'll handle them as regular or individual-level based on category type
   
   // === Convert Time ===
   let time = "00:00:00";
