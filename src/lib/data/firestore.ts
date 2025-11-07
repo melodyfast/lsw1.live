@@ -830,9 +830,8 @@ export const createPlayerFirestore = async (player: Omit<Player, 'id'>): Promise
 };
 
 /**
- * Simplified auto-claim: Automatically assign runs to users based on SRC username matching
- * Finds all imported runs where srcPlayerName or srcPlayer2Name matches the user's SRC username
- * and assigns them to the user
+ * Ultra-simplified auto-claim: Just match SRC usernames directly from all leaderboard entries
+ * No complex normalization, just simple case-insensitive string matching
  */
 export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUsername: string): Promise<{ claimed: number; errors: string[] }> => {
   if (!db || !srcUsername || !srcUsername.trim()) {
@@ -840,8 +839,6 @@ export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUse
   }
   
   const result = { claimed: 0, errors: [] as string[] };
-  const { normalizeSRCUsername } = await import("@/lib/speedruncom");
-  const normalizedSrcUsername = normalizeSRCUsername(srcUsername);
   
   try {
     // Get player data
@@ -850,41 +847,53 @@ export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUse
       return result;
     }
     
-    // Get all verified runs (unverified runs will be claimed when verified)
-    let verifiedSnapshot;
+    // Simple case-insensitive matching function
+    const matches = (a: string | null | undefined, b: string): boolean => {
+      if (!a) return false;
+      return a.trim().toLowerCase() === b.trim().toLowerCase();
+    };
+    
+    const searchUsername = srcUsername.trim().toLowerCase();
+    
+    // Get ALL leaderboard entries (both verified and unverified)
+    // We'll process them all and match by SRC username
+    const allRuns: LeaderboardEntry[] = [];
+    
+    // Get verified runs
     try {
-      const verifiedQuery = query(
-        collection(db, "leaderboardEntries"), 
-        where("verified", "==", true), 
-        firestoreLimit(2000)
-      );
-      verifiedSnapshot = await getDocs(verifiedQuery);
+      const verifiedQuery = query(collection(db, "leaderboardEntries"), where("verified", "==", true), firestoreLimit(5000));
+      const verifiedSnapshot = await getDocs(verifiedQuery);
+      verifiedSnapshot.docs.forEach(doc => {
+        allRuns.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
+      });
     } catch (error) {
-      verifiedSnapshot = { docs: [] } as any;
+      // Continue
     }
     
-    const allRuns = verifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
+    // Get unverified runs too (they'll be claimed when verified)
+    try {
+      const unverifiedQuery = query(collection(db, "leaderboardEntries"), where("verified", "==", false), firestoreLimit(5000));
+      const unverifiedSnapshot = await getDocs(unverifiedQuery);
+      unverifiedSnapshot.docs.forEach(doc => {
+        allRuns.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
+      });
+    } catch (error) {
+      // Continue - non-admin users might not have permission
+    }
     
-    // Find imported runs where srcPlayerName or srcPlayer2Name matches
+    // Find runs where srcPlayerName or srcPlayer2Name matches (case-insensitive)
     const runsToClaim = allRuns.filter(run => {
+      // Must be imported from SRC
       if (!run.importedFromSRC) return false;
       
       // Must be unclaimed
-      const currentPlayerId = run.playerId || "";
-      if (currentPlayerId && currentPlayerId.trim() !== "") return false;
+      if (run.playerId && run.playerId.trim() !== "") return false;
       
-      // Check if srcPlayerName or srcPlayer2Name exist and match
-      const hasSrcPlayerName = run.srcPlayerName && run.srcPlayerName.trim() !== "";
-      const hasSrcPlayer2Name = run.srcPlayer2Name && run.srcPlayer2Name.trim() !== "";
+      // Simple direct string matching (case-insensitive)
+      const srcPlayer1 = run.srcPlayerName ? run.srcPlayerName.trim().toLowerCase() : "";
+      const srcPlayer2 = run.srcPlayer2Name ? run.srcPlayer2Name.trim().toLowerCase() : "";
       
-      if (!hasSrcPlayerName && !hasSrcPlayer2Name) return false;
-      
-      const runSRCPlayerName = hasSrcPlayerName ? normalizeSRCUsername(run.srcPlayerName) : "";
-      const runSRCPlayer2Name = hasSrcPlayer2Name ? normalizeSRCUsername(run.srcPlayer2Name) : "";
-      
-      // Match if either SRC player name matches
-      return (runSRCPlayerName && runSRCPlayerName === normalizedSrcUsername) || 
-             (runSRCPlayer2Name && runSRCPlayer2Name === normalizedSrcUsername);
+      return srcPlayer1 === searchUsername || srcPlayer2 === searchUsername;
     });
     
     if (runsToClaim.length === 0) {
@@ -901,16 +910,16 @@ export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUse
       const updateData: Partial<LeaderboardEntry> = {};
       
       // Determine which player slot to assign
-      const runSRCPlayerName = normalizeSRCUsername(run.srcPlayerName);
-      const runSRCPlayer2Name = normalizeSRCUsername(run.srcPlayer2Name);
+      const srcPlayer1 = run.srcPlayerName ? run.srcPlayerName.trim().toLowerCase() : "";
+      const srcPlayer2 = run.srcPlayer2Name ? run.srcPlayer2Name.trim().toLowerCase() : "";
       const isCoOp = run.runType === 'co-op';
       
-      if (runSRCPlayerName === normalizedSrcUsername) {
+      if (srcPlayer1 === searchUsername) {
         updateData.playerId = userId;
         updateData.playerName = player.displayName;
       }
       
-      if (runSRCPlayer2Name === normalizedSrcUsername && isCoOp) {
+      if (srcPlayer2 === searchUsername && isCoOp) {
         updateData.player2Id = userId;
         updateData.player2Name = player.displayName;
       }
@@ -2980,40 +2989,29 @@ export const getUnassignedRunsFirestore = async (limit: number = 500): Promise<L
 };
 
 /**
- * Simplified: Get unclaimed runs that match user's SRC username
- * Only returns verified imported runs where srcPlayerName or srcPlayer2Name matches
+ * Ultra-simplified: Get unclaimed runs that match user's SRC username
+ * Just does direct case-insensitive string matching on all leaderboard entries
  */
 export const getUnclaimedRunsBySRCUsernameFirestore = async (srcUsername: string, currentUserId?: string): Promise<LeaderboardEntry[]> => {
   if (!db || !srcUsername || !srcUsername.trim()) return [];
   try {
-    // Try to query with importedFromSRC filter first (requires composite index)
-    let verifiedSnapshot;
+    const searchUsername = srcUsername.trim().toLowerCase();
+    const allRuns: LeaderboardEntry[] = [];
+    
+    // Get verified runs
     try {
-      const qWithImported = query(
-        collection(db, "leaderboardEntries"),
-        where("verified", "==", true),
-        where("importedFromSRC", "==", true),
-        firestoreLimit(2000)
-      );
-      verifiedSnapshot = await getDocs(qWithImported);
-    } catch (error: any) {
-      // Fall back to querying all verified runs
-      const q = query(
-        collection(db, "leaderboardEntries"),
-        where("verified", "==", true),
-        firestoreLimit(2000)
-      );
-      verifiedSnapshot = await getDocs(q);
+      const verifiedQuery = query(collection(db, "leaderboardEntries"), where("verified", "==", true), firestoreLimit(5000));
+      const verifiedSnapshot = await getDocs(verifiedQuery);
+      verifiedSnapshot.docs.forEach(doc => {
+        allRuns.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
+      });
+    } catch (error) {
+      // Continue
     }
     
-    const allRuns = verifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
-    
-    // Normalize SRC username for matching
-    const { normalizeSRCUsername } = await import("@/lib/speedruncom");
-    const normalizedSrcUsername = normalizeSRCUsername(srcUsername);
-    
-    // Filter: imported runs, unclaimed, and SRC username matches
+    // Simple direct string matching (case-insensitive)
     const matchingRuns = allRuns.filter(run => {
+      // Must be imported from SRC
       if (!run.importedFromSRC) return false;
       
       // Must be unclaimed
@@ -3021,12 +3019,11 @@ export const getUnclaimedRunsBySRCUsernameFirestore = async (srcUsername: string
       if (playerId && playerId.trim() !== "") return false;
       if (currentUserId && playerId === currentUserId) return false;
       
-      // Check if srcPlayerName or srcPlayer2Name match
-      const runSRCPlayerName = normalizeSRCUsername(run.srcPlayerName);
-      const runSRCPlayer2Name = normalizeSRCUsername(run.srcPlayer2Name);
+      // Direct case-insensitive string matching
+      const srcPlayer1 = run.srcPlayerName ? run.srcPlayerName.trim().toLowerCase() : "";
+      const srcPlayer2 = run.srcPlayer2Name ? run.srcPlayer2Name.trim().toLowerCase() : "";
       
-      return (runSRCPlayerName && runSRCPlayerName === normalizedSrcUsername) ||
-             (runSRCPlayer2Name && runSRCPlayer2Name === normalizedSrcUsername);
+      return srcPlayer1 === searchUsername || srcPlayer2 === searchUsername;
     });
     
     return matchingRuns;
@@ -3036,9 +3033,8 @@ export const getUnclaimedRunsBySRCUsernameFirestore = async (srcUsername: string
 };
 
 /**
- * Simplified claim system: Assign a run to a user if their SRC username matches
- * Only works for imported runs from Speedrun.com
- * For co-op runs, assigns to the matching player slot (player1 or player2)
+ * Ultra-simplified claim: Just match SRC usernames directly (case-insensitive)
+ * No normalization, just simple string comparison
  */
 export const claimRunFirestore = async (runId: string, userId: string): Promise<boolean> => {
   if (!db) return false;
@@ -3069,22 +3065,17 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
     }
     
     // Check if run is already claimed
-    const isUnclaimed = !runData.playerId || runData.playerId.trim() === "";
-    if (!isUnclaimed) {
+    if (runData.playerId && runData.playerId.trim() !== "") {
       throw new Error("This run is already claimed.");
     }
     
-    // Normalize SRC usernames for comparison
-    const { normalizeSRCUsername } = await import("@/lib/speedruncom");
-    const normalizedUserSRCUsername = normalizeSRCUsername(player.srcUsername);
+    // Simple case-insensitive string matching
+    const userSRC = player.srcUsername.trim().toLowerCase();
+    const runSRC1 = runData.srcPlayerName ? runData.srcPlayerName.trim().toLowerCase() : "";
+    const runSRC2 = runData.srcPlayer2Name ? runData.srcPlayer2Name.trim().toLowerCase() : "";
     
-    // Get normalized SRC player names from the run
-    const normalizedRunSRCPlayerName = normalizeSRCUsername(runData.srcPlayerName);
-    const normalizedRunSRCPlayer2Name = normalizeSRCUsername(runData.srcPlayer2Name);
-    
-    // Check if user's SRC username matches either player
-    const matchesPlayer1 = normalizedRunSRCPlayerName && normalizedRunSRCPlayerName === normalizedUserSRCUsername;
-    const matchesPlayer2 = normalizedRunSRCPlayer2Name && normalizedRunSRCPlayer2Name === normalizedUserSRCUsername;
+    const matchesPlayer1 = runSRC1 === userSRC;
+    const matchesPlayer2 = runSRC2 === userSRC;
     
     if (!matchesPlayer1 && !matchesPlayer2) {
       throw new Error(`Your Speedrun.com username "${player.srcUsername}" does not match this run's player.`);
@@ -3128,7 +3119,6 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
     
     return true;
   } catch (error) {
-    
     // Re-throw errors so they can be displayed to the user
     if (error instanceof Error) {
       throw error;
