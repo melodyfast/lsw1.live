@@ -3,10 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Filter, User, Users, Trophy, Sparkles, TrendingUp, Star, Gem, Gamepad2, Link2 } from "lucide-react";
+import { Filter, User, Users, Trophy, Sparkles, TrendingUp, Star, Gem, Gamepad2 } from "lucide-react";
 import { LeaderboardTable } from "@/components/LeaderboardTable";
 import { Pagination } from "@/components/Pagination";
-import { getLeaderboardEntries, getCategories, getPlatforms, runTypes, getLevels, getCategoriesFromFirestore } from "@/lib/db";
+import { getLeaderboardEntries, getCategories, getPlatforms, runTypes, getLevels } from "@/lib/db";
 import { LeaderboardEntry } from "@/types/database";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +15,6 @@ import LegoGoldBrickIcon from "@/components/icons/LegoGoldBrickIcon";
 const Leaderboards = () => {
   const [leaderboardType, setLeaderboardType] = useState<'regular' | 'individual-level' | 'community-golds'>('regular');
   const [availableCategories, setAvailableCategories] = useState<{ id: string; name: string }[]>([]);
-  const [categoriesWithSRC, setCategoriesWithSRC] = useState<{ id: string; srcCategoryId?: string | null }[]>([]);
   const [availableLevels, setAvailableLevels] = useState<{ id: string; name: string }[]>([]);
   const [availablePlatforms, setAvailablePlatforms] = useState<{ id: string; name: string }[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -45,15 +44,13 @@ const Leaderboards = () => {
         // For Regular: fetch regular categories
         const categoryType = leaderboardType;
         
-        const [fetchedCategories, fetchedLevels, fetchedPlatforms, fullCategories] = await Promise.all([
+        const [fetchedCategories, fetchedLevels, fetchedPlatforms] = await Promise.all([
           getCategories(categoryType),
           getLevels(),
-          getPlatforms(),
-          getCategoriesFromFirestore(categoryType) // Get full category objects with srcCategoryId
+          getPlatforms()
         ]);
         
         setAvailableCategories(fetchedCategories);
-        setCategoriesWithSRC(fullCategories.map(c => ({ id: c.id, srcCategoryId: c.srcCategoryId })));
         setAvailableLevels(fetchedLevels);
         setAvailablePlatforms(fetchedPlatforms);
         
@@ -299,20 +296,13 @@ const Leaderboards = () => {
                     <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
                       <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide rounded-none" style={{ minWidth: 'max-content' }}>
                         {filteredCategories.map((category) => {
-                          const categoryWithSRC = categoriesWithSRC.find(c => c.id === category.id);
-                          const isLinkedToSRC = categoryWithSRC?.srcCategoryId && categoryWithSRC.srcCategoryId.trim() !== '';
-                          
                           return (
                           <TabsTrigger 
                             key={category.id} 
                             value={category.id} 
                             className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-colors font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap rounded-none flex items-center gap-1.5"
-                            title={isLinkedToSRC ? "Linked to Speedrun.com" : undefined}
                           >
                             {category.name}
-                            {isLinkedToSRC && (
-                              <Link2 className="h-3 w-3 text-[#cba6f7] flex-shrink-0" title="Linked to Speedrun.com" />
-                            )}
                           </TabsTrigger>
                           );
                         })}
