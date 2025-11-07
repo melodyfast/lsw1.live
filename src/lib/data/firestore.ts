@@ -598,7 +598,7 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
   try {
     // Log entry before normalization for debugging imported runs
     if (entry.importedFromSRC) {
-      logger.debug("[addLeaderboardEntry] Before normalization:", {
+      console.debug("[addLeaderboardEntry] Before normalization:", {
         category: entry.category,
         platform: entry.platform,
         srcCategoryName: entry.srcCategoryName,
@@ -615,7 +615,7 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
     
     // Log normalized entry for debugging
     if (entry.importedFromSRC) {
-      logger.debug("[addLeaderboardEntry] After normalization:", {
+      console.debug("[addLeaderboardEntry] After normalization:", {
         category: normalized.category,
         platform: normalized.platform,
         leaderboardType: normalized.leaderboardType,
@@ -637,7 +637,7 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
     if (isImportedRun) {
       // For imported runs, only validate essential fields
       // Category and platform can be empty if SRC names exist, or even if they don't (admin can fix later)
-      logger.debug(`[addLeaderboardEntry] Imported run detected - using lenient validation`, {
+      console.debug(`[addLeaderboardEntry] Imported run detected - using lenient validation`, {
         hasCategory: !!normalized.category && normalized.category.trim() !== "",
         hasPlatform: !!normalized.platform && normalized.platform.trim() !== "",
         hasSRCCategory: !!normalized.srcCategoryName,
