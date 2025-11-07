@@ -11,22 +11,31 @@ import { RecentRuns } from "@/components/RecentRuns";
 import TwitchEmbed from "@/components/TwitchEmbed";
 import { parseTimeToSeconds, formatSecondsToTime } from "@/lib/utils";
 
-// Format seconds into days, hours, minutes, seconds with "days" as text
+// Format seconds into months, days, hours, minutes, seconds in compact format
 const formatTimeWithDays = (totalSeconds: number): string => {
-  const days = Math.floor(totalSeconds / 86400);
+  const months = Math.floor(totalSeconds / (30 * 86400)); // Approximate 30 days per month
+  const days = Math.floor((totalSeconds % (30 * 86400)) / 86400);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   
   const parts: string[] = [];
   
-  if (days > 0) {
-    parts.push(`${days} day${days !== 1 ? 's' : ''}`);
+  if (months > 0) {
+    parts.push(`${months}M`);
   }
-  
-  // Always show hours:minutes:seconds format
-  const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  parts.push(timeString);
+  if (days > 0) {
+    parts.push(`${days}D`);
+  }
+  if (hours > 0) {
+    parts.push(`${hours}h`);
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes}m`);
+  }
+  if (seconds > 0 || parts.length === 0) {
+    parts.push(`${seconds}s`);
+  }
   
   return parts.join(' ');
 };
