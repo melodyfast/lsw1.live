@@ -2719,7 +2719,12 @@ const Admin = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="flex w-full mb-6 p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide" style={{ minWidth: 'max-content' }}>
+          <div className="sticky top-0 z-50 bg-[#1e1e2e] pb-2 mb-4 shadow-lg border-b border-[hsl(235,13%,20%)]">
+            <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden mb-0" style={{ 
+              minWidth: 'max-content',
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(203, 166, 247, 0.3) transparent'
+            }}>
             <TabsTrigger 
               value="runs" 
               className="data-[state=active]:bg-[#f9e2af] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#f9e2af]/50 text-xs sm:text-sm py-1.5 sm:py-2 px-2 sm:px-3 whitespace-nowrap"
@@ -2768,7 +2773,8 @@ const Admin = () => {
             >
               Tools
             </TabsTrigger>
-          </TabsList>
+            </TabsList>
+          </div>
 
           {/* Tools Section */}
           <TabsContent value="tools" className="space-y-4 animate-fade-in">
@@ -4730,7 +4736,6 @@ const Admin = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-          </TabsContent>
 
         {/* Category Management Section */}
           <TabsContent value="categories" className="space-y-4 animate-fade-in">
@@ -6736,6 +6741,31 @@ const Admin = () => {
         .animate-gradient {
           background-size: 200% auto;
           animation: gradient 3s linear infinite;
+        }
+        
+        /* Smooth scrolling for tabs */
+        [role="tablist"] {
+          scroll-behavior: smooth;
+          -webkit-overflow-scrolling: touch;
+        }
+        
+        /* Custom scrollbar styling for tabs */
+        [role="tablist"]::-webkit-scrollbar {
+          height: 6px;
+        }
+        
+        [role="tablist"]::-webkit-scrollbar-track {
+          background: rgba(203, 166, 247, 0.1);
+          border-radius: 3px;
+        }
+        
+        [role="tablist"]::-webkit-scrollbar-thumb {
+          background: rgba(203, 166, 247, 0.4);
+          border-radius: 3px;
+        }
+        
+        [role="tablist"]::-webkit-scrollbar-thumb:hover {
+          background: rgba(203, 166, 247, 0.6);
         }
       `}</style>
     </div>
