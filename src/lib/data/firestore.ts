@@ -139,17 +139,15 @@ export const getLeaderboardEntriesFirestore = async (
 
     // Helper function to add shared filters to a constraint list
     const addSharedFilters = (constraintList: QueryConstraint[]) => {
-      // Add leaderboardType filter for non-regular types (required for composite indexes)
-      // NOTE: For individual-level queries, we don't filter by leaderboardType in the query
-      // because some IL runs might not have the field set. We'll filter client-side instead.
-      // This ensures backward compatibility with runs that have a level but no leaderboardType field.
+      // For individual-level queries, we need special handling:
+      // - Some IL runs have leaderboardType === 'individual-level'
+      // - Some older IL runs have a level field but no leaderboardType set
+      // We'll query for both cases separately and merge results
       if (leaderboardType && leaderboardType !== 'regular' && leaderboardType !== 'individual-level') {
         constraintList.push(where("leaderboardType", "==", leaderboardType));
       }
 
       // Add level filter for ILs and Community Golds (must come after leaderboardType for index)
-      // For individual-level, we can filter by level if provided, but we'll also include runs
-      // without leaderboardType set (they'll be filtered client-side based on having a level)
       if (normalizedLevelId && (leaderboardType === 'individual-level' || leaderboardType === 'community-golds')) {
         constraintList.push(where("level", "==", normalizedLevelId));
       }
@@ -174,15 +172,79 @@ export const getLeaderboardEntriesFirestore = async (
       // Firestore queries don't support OR conditions easily, so we'll filter after fetching
     };
 
-    // Add shared filters to query
-    addSharedFilters(constraints);
-
-    // Fetch more entries to account for filtering obsolete runs client-side
+    // For individual-level queries, we need to handle two cases:
+    // 1. Runs with leaderboardType === 'individual-level'
+    // 2. Runs with a level field but no leaderboardType set (backward compatibility)
+    // We'll make two queries and merge the results
     const fetchLimit = 500;
-    constraints.push(firestoreLimit(fetchLimit));
-    
-    // Execute query for verified runs only
-    const querySnapshot = await getDocs(query(collection(db, "leaderboardEntries"), ...constraints));
+    let querySnapshot;
+    if (leaderboardType === 'individual-level') {
+      // Query 1: Runs with leaderboardType === 'individual-level'
+      const constraints1: QueryConstraint[] = [
+        where("verified", "==", true),
+        where("leaderboardType", "==", "individual-level"),
+      ];
+      addSharedFilters(constraints1);
+      constraints1.push(firestoreLimit(fetchLimit));
+      
+      // Query 2: Runs with level field but no leaderboardType set to 'individual-level'
+      // This catches older IL runs that have a level but leaderboardType is undefined/null/regular
+      // We'll fetch verified runs with a level field and filter client-side to exclude
+      // runs that explicitly have leaderboardType === 'regular'
+      const constraints2: QueryConstraint[] = [
+        where("verified", "==", true),
+      ];
+      // Always filter by level field existence - IL runs must have a level
+      // If a specific level is selected, filter by that level
+      if (normalizedLevelId) {
+        constraints2.push(where("level", "==", normalizedLevelId));
+      } else {
+        // If no level is selected, we still need to filter to only runs with a level field
+        // However, Firestore doesn't support "field exists" queries directly
+        // So we'll fetch all verified runs and filter client-side
+        // The level filter will be applied client-side in the filter function
+      }
+      // Add other filters (category, platform, runType)
+      if (normalizedCategoryId) {
+        constraints2.push(where("category", "==", normalizedCategoryId));
+      }
+      if (normalizedPlatformId) {
+        constraints2.push(where("platform", "==", normalizedPlatformId));
+      }
+      if (runType && (runType === "solo" || runType === "co-op")) {
+        constraints2.push(where("runType", "==", runType));
+      }
+      constraints2.push(firestoreLimit(fetchLimit));
+      
+      // Execute both queries
+      const [snapshot1, snapshot2] = await Promise.all([
+        getDocs(query(collection(db, "leaderboardEntries"), ...constraints1)),
+        getDocs(query(collection(db, "leaderboardEntries"), ...constraints2))
+      ]);
+      
+      // Merge results, avoiding duplicates
+      const docMap = new Map();
+      snapshot1.docs.forEach(doc => docMap.set(doc.id, doc));
+      snapshot2.docs.forEach(doc => {
+        if (!docMap.has(doc.id)) {
+          docMap.set(doc.id, doc);
+        }
+      });
+      
+      // Create a merged query snapshot-like object
+      querySnapshot = {
+        docs: Array.from(docMap.values()),
+        empty: docMap.size === 0,
+        size: docMap.size,
+        metadata: snapshot1.metadata,
+        query: snapshot1.query,
+      } as any;
+    } else {
+      // For regular and community-golds, use the standard query
+      addSharedFilters(constraints);
+      constraints.push(firestoreLimit(fetchLimit));
+      querySnapshot = await getDocs(query(collection(db, "leaderboardEntries"), ...constraints));
+    }
     
     // Normalize and validate entries
     let entries: LeaderboardEntry[] = querySnapshot.docs
