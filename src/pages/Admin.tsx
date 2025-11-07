@@ -4377,11 +4377,24 @@ const Admin = () => {
                                   const categoryExists = firestoreCategories.some(c => c.id === run.category);
                                   const platformExists = firestorePlatforms.some(p => p.id === run.platform);
                                   const levelExists = run.level ? availableLevels.some(l => l.id === run.level) : true;
+                                  const isImportedWithSRCFallback = run.importedFromSRC && (run.srcCategoryName || run.srcPlatformName || run.srcLevelName);
                                   const issues: string[] = [];
-                                  if (!run.category || !categoryExists) issues.push("Invalid/Missing Category");
-                                  if (!run.platform || !platformExists) issues.push("Invalid/Missing Platform");
+                                  // For imported runs, only flag as invalid if no category ID AND no SRC fallback name
+                                  if (!run.category || (!categoryExists && run.category && run.category.trim() !== "")) {
+                                    if (!isImportedWithSRCFallback || !run.srcCategoryName) {
+                                      issues.push("Invalid/Missing Category");
+                                    }
+                                  }
+                                  // For imported runs, only flag as invalid if no platform ID AND no SRC fallback name
+                                  if (!run.platform || (!platformExists && run.platform && run.platform.trim() !== "")) {
+                                    if (!isImportedWithSRCFallback || !run.srcPlatformName) {
+                                      issues.push("Invalid/Missing Platform");
+                                    }
+                                  }
                                   if ((run.leaderboardType === 'individual-level' || run.leaderboardType === 'community-golds') && (!run.level || !levelExists)) {
-                                    issues.push("Invalid/Missing Level");
+                                    if (!isImportedWithSRCFallback || !run.srcLevelName) {
+                                      issues.push("Invalid/Missing Level");
+                                    }
                                   }
                                   
                                   // Check subcategory validity (only for regular leaderboard type)
@@ -5005,11 +5018,24 @@ const Admin = () => {
                         const categoryExists = firestoreCategories.some(c => c.id === run.category);
                         const platformExists = firestorePlatforms.some(p => p.id === run.platform);
                         const levelExists = run.level ? availableLevels.some(l => l.id === run.level) : true;
+                        const isImportedWithSRCFallback = run.importedFromSRC && (run.srcCategoryName || run.srcPlatformName || run.srcLevelName);
                         const issues: string[] = [];
-                        if (!run.category || !categoryExists) issues.push("Invalid/Missing Category");
-                        if (!run.platform || !platformExists) issues.push("Invalid/Missing Platform");
+                        // For imported runs, only flag as invalid if no category ID AND no SRC fallback name
+                        if (!run.category || (!categoryExists && run.category && run.category.trim() !== "")) {
+                          if (!isImportedWithSRCFallback || !run.srcCategoryName) {
+                            issues.push("Invalid/Missing Category");
+                          }
+                        }
+                        // For imported runs, only flag as invalid if no platform ID AND no SRC fallback name
+                        if (!run.platform || (!platformExists && run.platform && run.platform.trim() !== "")) {
+                          if (!isImportedWithSRCFallback || !run.srcPlatformName) {
+                            issues.push("Invalid/Missing Platform");
+                          }
+                        }
                         if ((run.leaderboardType === 'individual-level' || run.leaderboardType === 'community-golds') && (!run.level || !levelExists)) {
-                          issues.push("Invalid/Missing Level");
+                          if (!isImportedWithSRCFallback || !run.srcLevelName) {
+                            issues.push("Invalid/Missing Level");
+                          }
                         }
                         if (!run.playerName) issues.push("Missing Player Name");
                         if (!run.time) issues.push("Missing Time");
