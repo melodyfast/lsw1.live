@@ -117,6 +117,8 @@ const Admin = () => {
   // SRC categories with variables
   const [srcCategoriesWithVars, setSrcCategoriesWithVars] = useState<Array<SRCCategory & { variablesData?: Array<{ id: string; name: string; values: { values: Record<string, { label: string }> } }> }>>([]);
   const [loadingSRCCategories, setLoadingSRCCategories] = useState(false);
+  // All categories (regular and IL) for SRC linking
+  const [allCategoriesForSRCLinking, setAllCategoriesForSRCLinking] = useState<Category[]>([]);
   // Filters for imported runs
   const [importedRunsLeaderboardType, setImportedRunsLeaderboardType] = useState<'regular' | 'individual-level'>('regular');
   const [importedRunsCategory, setImportedRunsCategory] = useState("__all__"); // "__all__" = All Categories
@@ -1019,6 +1021,13 @@ const Admin = () => {
       );
 
       setSrcCategoriesWithVars(categoriesWithVars);
+      
+      // Fetch ALL categories (regular and IL) for linking
+      const [regularCats, ilCats] = await Promise.all([
+        getCategoriesFromFirestore('regular'),
+        getCategoriesFromFirestore('individual-level')
+      ]);
+      setAllCategoriesForSRCLinking([...regularCats, ...ilCats]);
     } catch (error: any) {
       console.error("Error fetching SRC categories:", error);
       toast({
@@ -4425,13 +4434,12 @@ const Admin = () => {
                       <TableBody>
                         {srcCategoriesWithVars.map((category) => {
                           // Find if this SRC category is already linked to any local category
-                          const linkedCategory = firestoreCategories.find(c => (c as Category).srcCategoryId === category.id) as Category | undefined;
+                          const linkedCategory = allCategoriesForSRCLinking.find(c => c.srcCategoryId === category.id);
                           const expectedLeaderboardType = category.type === 'per-game' ? 'regular' : 'individual-level';
-                          const matchingCategories = firestoreCategories.filter(c => {
-                            const cat = c as Category;
-                            const catType = cat.leaderboardType || 'regular';
+                          const matchingCategories = allCategoriesForSRCLinking.filter(c => {
+                            const catType = c.leaderboardType || 'regular';
                             return catType === expectedLeaderboardType;
-                          }) as Category[];
+                          });
                           
                           return (
                           <TableRow key={category.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200">
@@ -4486,14 +4494,16 @@ const Admin = () => {
                                       if (!window.confirm(`Unlink "${linkedCategory.name}" from this SRC category?`)) return;
                                       setUpdatingCategory(true);
                                       try {
-                                        const currentCategory = firestoreCategories.find(c => c.id === linkedCategory.id) as Category | undefined;
+                                        const currentCategory = allCategoriesForSRCLinking.find(c => c.id === linkedCategory.id);
                                         const subcategories = currentCategory?.subcategories || [];
                                         await updateCategory(linkedCategory.id, linkedCategory.name, subcategories, null);
                                         toast({
                                           title: "Unlinked",
                                           description: `Category "${linkedCategory.name}" has been unlinked from SRC category.`,
                                         });
+                                        // Refresh categories for the current leaderboard type
                                         await fetchCategories(categoryLeaderboardType);
+                                        // Refresh all categories for SRC linking
                                         await fetchSRCCategoriesWithVariables();
                                       } catch (error: any) {
                                         toast({
@@ -4518,7 +4528,7 @@ const Admin = () => {
                                     if (!categoryId) return;
                                     setUpdatingCategory(true);
                                     try {
-                                      const targetCategory = firestoreCategories.find(c => c.id === categoryId) as Category | undefined;
+                                      const targetCategory = allCategoriesForSRCLinking.find(c => c.id === categoryId);
                                       if (!targetCategory) return;
                                       const subcategories = targetCategory.subcategories || [];
                                       await updateCategory(categoryId, targetCategory.name, subcategories, category.id);
@@ -4526,7 +4536,9 @@ const Admin = () => {
                                         title: "Linked",
                                         description: `Category "${targetCategory.name}" has been linked to SRC category "${category.name}".`,
                                       });
+                                      // Refresh categories for the current leaderboard type
                                       await fetchCategories(categoryLeaderboardType);
+                                      // Refresh all categories for SRC linking
                                       await fetchSRCCategoriesWithVariables();
                                     } catch (error: any) {
                                       toast({

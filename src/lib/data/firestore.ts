@@ -9,7 +9,6 @@ import {
   normalizePlatformId,
   normalizeLevelId,
 } from "@/lib/dataValidation";
-import { logger } from "@/lib/logger";
 import { fetchPlayerById } from "@/lib/speedruncom";
 
 /**
@@ -333,10 +332,17 @@ export const getLeaderboardEntriesFirestore = async (
         }
         
         // Check if category is disabled for this level (for ILs and Community Golds)
+        // Only check if we have a category ID (not just SRC name)
         if (normalizedLevelId && selectedLevelData && (leaderboardType === 'individual-level' || leaderboardType === 'community-golds')) {
-          const isCategoryDisabled = selectedLevelData.disabledCategories?.[entry.category] === true;
-          if (isCategoryDisabled) {
-            return false; // Filter out entries where category is disabled for this level
+          // For imported runs with only SRC names, skip this check (category might not be mapped yet)
+          if (hasCategory && entry.category) {
+            const isCategoryDisabled = selectedLevelData.disabledCategories?.[entry.category] === true;
+            if (isCategoryDisabled) {
+              if (isILQuery) {
+                console.debug(`[getLeaderboardEntriesFirestore] Filtering out IL run ${entry.id}: category ${entry.category} is disabled for level ${normalizedLevelId}`);
+              }
+              return false; // Filter out entries where category is disabled for this level
+            }
           }
         }
         
