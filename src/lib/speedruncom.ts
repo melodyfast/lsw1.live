@@ -725,7 +725,7 @@ export async function mapSRCRunToLeaderboardEntry(
   // === Extract Level ===
   const levelData = extractIdAndName(run.level);
   const ourLevelId = levelData.id ? levelMapping.get(levelData.id) : undefined;
-  const levelName = levelData.name;
+  let levelName = levelData.name;
   
   // Fallback to ID->name map
   if (!levelName && levelData.id && srcLevelIdToName) {
@@ -751,7 +751,6 @@ export async function mapSRCRunToLeaderboardEntry(
   }
   
   const hasLevel = levelData.id && levelData.id.trim() !== '';
-  const levelName = levelData.name || (levelData.id && srcLevelIdToName?.get(levelData.id));
   
   // Determine leaderboard type based on category type and level presence
   // Per-level categories are always IL runs
