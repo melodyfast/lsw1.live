@@ -760,7 +760,7 @@ const Stats = () => {
                             value={category.id} 
                             className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-colors font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap rounded-none flex items-center gap-1.5"
                           >
-                            {getCategoryNameWithOverride(category.id, categories)}
+                            {category.name || getCategoryNameWithOverride(category.id, availableWrCategories)}
                           </TabsTrigger>
                         ))}
                       </TabsList>
