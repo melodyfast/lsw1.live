@@ -413,7 +413,7 @@ const UserSettings = () => {
 
   return (
     <div className="min-h-screen bg-[#1e1e2e] text-ctp-text py-8 overflow-x-hidden">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 w-full">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full">
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold mb-4 flex items-center justify-center gap-2">
             <Settings className="h-8 w-8 text-[#cba6f7]" />
@@ -433,8 +433,8 @@ const UserSettings = () => {
                 Profile Information
               </CardTitle>
             </CardHeader>
-            <CardContent>
-            <form onSubmit={handleUpdateProfile} className="space-y-4">
+            <CardContent className="max-h-[calc(100vh-200px)] overflow-y-auto">
+            <form onSubmit={handleUpdateProfile} className="space-y-3">
               <div>
                 <Label>Profile Picture</Label>
                 <div className="flex items-center gap-4 mb-2">
@@ -522,7 +522,7 @@ const UserSettings = () => {
                     )}
                   </div>
                 </div>
-                <p className="text-sm text-ctp-overlay0 mt-1">
+                <p className="text-xs text-ctp-overlay0 mt-1">
                   Upload a profile picture (max 4MB). Click "Save Profile" to apply changes.
                 </p>
               </div>
@@ -537,7 +537,7 @@ const UserSettings = () => {
                   className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                   required
                 />
-                <p className="text-sm text-ctp-overlay0 mt-1">
+                <p className="text-xs text-ctp-overlay0 mt-1">
                   Choose a display name that will be displayed on leaderboards and your profile.
                 </p>
               </div>
@@ -560,7 +560,7 @@ const UserSettings = () => {
                     className="flex-grow bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                   />
                 </div>
-                <p className="text-sm text-ctp-overlay0 mt-1">
+                <p className="text-xs text-ctp-overlay0 mt-1">
                   This color will be used for your name on leaderboards.
                 </p>
               </div>
@@ -575,7 +575,7 @@ const UserSettings = () => {
                   className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                   maxLength={50}
                 />
-                <p className="text-sm text-ctp-overlay0 mt-1">
+                <p className="text-xs text-ctp-overlay0 mt-1">
                   Your pronouns will be displayed next to your name on your profile.
                 </p>
               </div>
@@ -586,10 +586,11 @@ const UserSettings = () => {
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="Tell us about yourself..."
-                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] min-h-[100px]"
+                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] min-h-[60px]"
                   maxLength={500}
+                  rows={3}
                 />
-                <p className="text-sm text-ctp-overlay0 mt-1">
+                <p className="text-xs text-ctp-overlay0 mt-1">
                   {bio.length}/500 characters. Your bio will be displayed on your profile.
                 </p>
               </div>
@@ -604,7 +605,7 @@ const UserSettings = () => {
                   className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                   maxLength={50}
                 />
-                <p className="text-sm text-ctp-overlay0 mt-1">
+                <p className="text-xs text-ctp-overlay0 mt-1">
                   Your Twitch username (without @). If you're streaming, you'll appear on the live page when the official stream is offline.
                 </p>
               </div>
@@ -619,7 +620,7 @@ const UserSettings = () => {
                   className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
                   maxLength={50}
                 />
-                <p className="text-sm text-ctp-overlay0 mt-1">
+                <p className="text-xs text-ctp-overlay0 mt-1">
                   Your exact Speedrun.com username. This is required to claim runs imported from Speedrun.com. Make sure it matches exactly (case-sensitive).
                 </p>
               </div>
@@ -637,16 +638,16 @@ const UserSettings = () => {
               Claim Your Runs
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-[hsl(222,15%,60%)] mb-4">
+          <CardContent className="max-h-[calc(100vh-200px)] overflow-y-auto">
+            <p className="text-xs text-[hsl(222,15%,60%)] mb-3">
               If runs were imported from Speedrun.com, you can claim them here to link them to your profile. Make sure your Speedrun.com username matches exactly (case-sensitive).
             </p>
             
             {/* SRC Username Runs */}
             {srcUsername && (
               <>
-                <div className="flex items-center justify-between mb-4 mt-4">
-                  <h3 className="text-sm font-semibold text-ctp-text">Runs imported from Speedrun.com ({srcUsername})</h3>
+                <div className="flex items-center justify-between mb-3 mt-3">
+                  <h3 className="text-xs font-semibold text-ctp-text">Runs imported from Speedrun.com ({srcUsername})</h3>
                   {unclaimedSRCRuns.length > 0 && (
                     <Button
                       onClick={handleClaimAllRuns}
@@ -668,7 +669,7 @@ const UserSettings = () => {
                   </p>
                 ) : (
                   <Tabs value={unclaimedLeaderboardType} onValueChange={(value) => setUnclaimedLeaderboardType(value as 'regular' | 'individual-level' | 'community-golds')}>
-                    <TabsList className="grid w-full grid-cols-3 mb-4">
+                    <TabsList className="grid w-full grid-cols-3 mb-3">
                       <TabsTrigger value="regular" className="flex items-center gap-2">
                         <Trophy className="h-4 w-4" />
                         <span className="hidden sm:inline">Full Game</span>
