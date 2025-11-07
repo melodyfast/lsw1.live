@@ -61,7 +61,7 @@ export function LeaderboardTable({ data, platforms = [], categories = [], levels
             return (
             <TableRow 
               key={entry.id} 
-              className={`border-b border-ctp-surface1/20 hover:bg-ctp-surface0/80 hover:brightness-110 transition-all duration-150 cursor-pointer ${entry.isObsolete ? 'opacity-60 italic' : ''}`}
+              className={`border-b border-ctp-surface1/20 hover:bg-ctp-surface0 hover:brightness-125 transition-all duration-150 cursor-pointer ${entry.isObsolete ? 'opacity-60 italic' : ''}`}
             >
               <TableCell className="py-2.5 pl-3 pr-1">
                 <Link to={`/run/${entry.id}`} className="block">
