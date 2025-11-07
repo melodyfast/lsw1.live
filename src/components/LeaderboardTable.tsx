@@ -128,14 +128,18 @@ export function LeaderboardTable({ data, platforms = [], categories = [], levels
                         {entry.player2Name && (
                           <>
                             <span className="text-ctp-overlay0 text-sm"> & </span>
-                            <Link 
-                              to={`/player/${entry.player2Id || entry.playerId}`} 
-                              className="hover:opacity-80 inline-block"
-                              style={{ color: entry.player2Color || '#cba6f7' }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <span className="font-semibold text-sm whitespace-nowrap">{entry.player2Name}</span>
-                            </Link>
+                            {entry.player2Id && entry.player2Id.trim() !== "" ? (
+                              <Link 
+                                to={`/player/${entry.player2Id}`} 
+                                className="hover:opacity-80 inline-block"
+                                style={{ color: entry.player2Color || '#cba6f7' }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span className="font-semibold text-sm whitespace-nowrap">{entry.player2Name}</span>
+                              </Link>
+                            ) : (
+                              <span className="font-semibold text-sm whitespace-nowrap text-ctp-text">{entry.player2Name}</span>
+                            )}
                           </>
                         )}
                         <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
