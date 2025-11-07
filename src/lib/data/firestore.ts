@@ -519,6 +519,17 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
     // Imported runs can have empty category/platform IDs if SRC names exist
     const isImportedRun = normalized.importedFromSRC === true || normalized.importedFromSRC === Boolean(true) || !!normalized.importedFromSRC;
     
+    // CRITICAL: Check for duplicate runs before adding
+    // If this is an imported run with a srcRunId, check if it already exists
+    if (isImportedRun && normalized.srcRunId && normalized.srcRunId.trim() !== "") {
+      const existing = await checkSRCRunExistsFirestore(normalized.srcRunId);
+      if (existing) {
+        // Run with this srcRunId already exists - return null to indicate it wasn't added
+        // This prevents duplicate imports
+        throw new Error(`Run with srcRunId ${normalized.srcRunId} already exists`);
+      }
+    }
+    
     if (isImportedRun) {
       // For imported runs, only validate essential fields
       // Category and platform can be empty if SRC names exist, or even if they don't (admin can fix later)
@@ -1776,7 +1787,14 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
         rank = normalizeRank(calculatedRank);
       }
       
-      // Calculate points with rank (split for co-op runs)
+      // Calculate points with rank (split for co-op runs, reduced for ILs/community golds)
+      // CRITICAL: calculatePoints automatically splits points for co-op runs
+      // CRITICAL: calculatePoints automatically reduces points for ILs and community golds (half points)
+      // For co-op runs: points are divided by 2, so each player gets half
+      // For ILs/community golds: points are multiplied by 0.5
+      // For solo runs: points are full value
+      // The returned points value is already split for co-op runs and reduced for ILs/community golds
+      const runType = (runData.runType || 'solo') as 'solo' | 'co-op';
       const points = calculatePoints(
         runData.time, 
         categoryName, 
@@ -1784,7 +1802,8 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
         runData.category,
         runData.platform,
         rank,
-        runData.runType as 'solo' | 'co-op' | undefined
+        runType,
+        leaderboardType
       );
       
       // Update the document with calculated points and rank
@@ -2105,8 +2124,13 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
       const platformName = platformMap.get(runData.platform) || "Unknown";
       
       // Calculate points - CRITICAL: calculatePoints automatically splits for co-op runs
+      // CRITICAL: calculatePoints automatically reduces points for ILs and community golds (half points)
       // For co-op runs: points are divided by 2, so each player gets half
+      // For ILs/community golds: points are multiplied by 0.5
       // For solo runs: points are full value
+      // Ensure runType is properly set (default to 'solo' if missing)
+      const runType = (runData.runType || 'solo') as 'solo' | 'co-op';
+      const leaderboardType = runData.leaderboardType || 'regular';
       const points = calculatePoints(
         runData.time, 
         categoryName, 
@@ -2114,7 +2138,8 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
         runData.category,
         runData.platform,
         rank,
-        runData.runType as 'solo' | 'co-op' | undefined
+        runType,
+        leaderboardType
       );
       
       // Always update the run with recalculated points and rank
@@ -2135,7 +2160,7 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
     for (const run of runsToUpdate) {
       const runDocRef = doc(db, "leaderboardEntries", run.id);
       const updateData: { points: number; rank?: number | ReturnType<typeof deleteField> } = { 
-        points: run.points 
+        points: run.points // Use the recalculated points from runsToUpdate
       };
       // Store rank if it's 1, 2, or 3 (for bonus points), otherwise remove it
       const normalizedRank = normalizeRank(run.rank);
@@ -3838,8 +3863,11 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
             const platformName = platformMap.get(runData.platform) || "Unknown";
             
             // Calculate points - CRITICAL: calculatePoints automatically splits for co-op runs
+            // CRITICAL: calculatePoints automatically reduces points for ILs and community golds (half points)
             // For co-op runs: points are divided by 2, so each player gets half
+            // For ILs/community golds: points are multiplied by 0.5
             // For solo runs: points are full value
+            const leaderboardType = runData.leaderboardType || 'regular';
             const points = calculatePoints(
               runData.time, 
               categoryName, 
@@ -3847,7 +3875,8 @@ export const backfillPointsForAllRunsFirestore = async (): Promise<{
               runData.category,
               runData.platform,
               rank,
-              runData.runType as 'solo' | 'co-op' | undefined
+              runData.runType as 'solo' | 'co-op' | undefined,
+              leaderboardType
             );
             
             runsToUpdate.push({
@@ -4263,6 +4292,7 @@ export const checkSRCRunExistsFirestore = async (srcRunId: string): Promise<bool
  * Get all existing srcRunIds for duplicate checking
  * More efficient than fetching all runs
  * Checks both verified and unverified entries to prevent duplicate imports
+ * Uses pagination to fetch ALL runs, not just the first 5000
  * Note: Firestore doesn't support != queries with other filters without composite index
  * So we fetch entries and filter client-side
  */
@@ -4271,41 +4301,120 @@ export const getExistingSRCRunIdsFirestore = async (): Promise<Set<string>> => {
   try {
     const srcRunIds = new Set<string>();
     
-    // Query verified entries (anyone can read)
+    // Query verified entries (anyone can read) - use pagination to fetch ALL
     try {
-      const verifiedQuery = query(
-        collection(db, "leaderboardEntries"),
-        where("verified", "==", true),
-        firestoreLimit(5000)
-      );
-      const verifiedSnapshot = await getDocs(verifiedQuery);
-      verifiedSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        // Filter client-side for entries with srcRunId
-        if (data.srcRunId && data.srcRunId.trim() !== "") {
-          srcRunIds.add(data.srcRunId);
+      let lastDoc = null;
+      do {
+        let verifiedQuery;
+        try {
+          if (lastDoc) {
+            verifiedQuery = query(
+              collection(db, "leaderboardEntries"),
+              where("verified", "==", true),
+              orderBy("__name__"),
+              startAfter(lastDoc),
+              firestoreLimit(5000)
+            );
+          } else {
+            verifiedQuery = query(
+              collection(db, "leaderboardEntries"),
+              where("verified", "==", true),
+              orderBy("__name__"),
+              firestoreLimit(5000)
+            );
+          }
+          const verifiedSnapshot = await getDocs(verifiedQuery);
+          verifiedSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            // Filter client-side for entries with srcRunId
+            if (data.srcRunId && data.srcRunId.trim() !== "") {
+              srcRunIds.add(data.srcRunId);
+            }
+          });
+          if (verifiedSnapshot.docs.length > 0) {
+            lastDoc = verifiedSnapshot.docs[verifiedSnapshot.docs.length - 1];
+          } else {
+            lastDoc = null;
+          }
+        } catch (error) {
+          // If orderBy fails, fall back to simple query with higher limit
+          if (!lastDoc) {
+            const fallbackQuery = query(
+              collection(db, "leaderboardEntries"),
+              where("verified", "==", true),
+              firestoreLimit(10000)
+            );
+            const fallbackSnapshot = await getDocs(fallbackQuery);
+            fallbackSnapshot.docs.forEach(doc => {
+              const data = doc.data();
+              if (data.srcRunId && data.srcRunId.trim() !== "") {
+                srcRunIds.add(data.srcRunId);
+              }
+            });
+          }
+          lastDoc = null; // Break the loop
         }
-      });
+      } while (lastDoc);
     } catch (error) {
       
       // Continue with unverified check
     }
     
     // Query unverified entries (admin-only, but try anyway - will fail gracefully if not admin)
+    // Use pagination to fetch ALL
     try {
-      const unverifiedQuery = query(
-        collection(db, "leaderboardEntries"),
-        where("verified", "==", false),
-        firestoreLimit(5000)
-      );
-      const unverifiedSnapshot = await getDocs(unverifiedQuery);
-      unverifiedSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        // Filter client-side for entries with srcRunId
-        if (data.srcRunId && data.srcRunId.trim() !== "") {
-          srcRunIds.add(data.srcRunId);
+      let lastDoc = null;
+      do {
+        let unverifiedQuery;
+        try {
+          if (lastDoc) {
+            unverifiedQuery = query(
+              collection(db, "leaderboardEntries"),
+              where("verified", "==", false),
+              orderBy("__name__"),
+              startAfter(lastDoc),
+              firestoreLimit(5000)
+            );
+          } else {
+            unverifiedQuery = query(
+              collection(db, "leaderboardEntries"),
+              where("verified", "==", false),
+              orderBy("__name__"),
+              firestoreLimit(5000)
+            );
+          }
+          const unverifiedSnapshot = await getDocs(unverifiedQuery);
+          unverifiedSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            // Filter client-side for entries with srcRunId
+            if (data.srcRunId && data.srcRunId.trim() !== "") {
+              srcRunIds.add(data.srcRunId);
+            }
+          });
+          if (unverifiedSnapshot.docs.length > 0) {
+            lastDoc = unverifiedSnapshot.docs[unverifiedSnapshot.docs.length - 1];
+          } else {
+            lastDoc = null;
+          }
+        } catch (error) {
+          // If orderBy fails, fall back to simple query with higher limit
+          if (!lastDoc) {
+            const fallbackQuery = query(
+              collection(db, "leaderboardEntries"),
+              where("verified", "==", false),
+              firestoreLimit(10000)
+            );
+            const fallbackSnapshot = await getDocs(fallbackQuery);
+            fallbackSnapshot.docs.forEach(doc => {
+              const data = doc.data();
+              if (data.srcRunId && data.srcRunId.trim() !== "") {
+                srcRunIds.add(data.srcRunId);
+              }
+            });
+          }
+          lastDoc = null; // Break the loop
         }
-      });
+      } while (lastDoc);
     } catch (error: any) {
       // If permission denied, that's okay - we'll just use verified entries
       // This function is typically called by admins during import, but might be called elsewhere

@@ -96,19 +96,33 @@ export function formatTime(timeString: string): string {
  * Points calculation:
  * - Base points: 10 points for all verified runs
  * - Top 3 bonus: additional bonus points for runs ranked 1st, 2nd, or 3rd
+ * - IL/Community Gold reduction: Individual Levels and Community Golds give half points (0.5x multiplier)
+ * - Co-op split: Co-op runs split points equally between both players (0.5x multiplier)
  * 
- * Solo runs:
+ * Full Game Solo runs:
  * - Rank 1: 10 + 50 = 60 points
  * - Rank 2: 10 + 30 = 40 points
  * - Rank 3: 10 + 20 = 30 points
  * - All others: 10 points
  * 
- * Co-op runs:
+ * Full Game Co-op runs:
  * - Points are split equally between both players
  * - Rank 1: (10 + 50) / 2 = 30 points per player
  * - Rank 2: (10 + 30) / 2 = 20 points per player
  * - Rank 3: (10 + 20) / 2 = 15 points per player
  * - All others: 10 / 2 = 5 points per player
+ * 
+ * IL/Community Gold Solo runs (half points):
+ * - Rank 1: (10 + 50) * 0.5 = 30 points
+ * - Rank 2: (10 + 30) * 0.5 = 20 points
+ * - Rank 3: (10 + 20) * 0.5 = 15 points
+ * - All others: 10 * 0.5 = 5 points
+ * 
+ * IL/Community Gold Co-op runs (half points, then split):
+ * - Rank 1: (10 + 50) * 0.5 * 0.5 = 15 points per player
+ * - Rank 2: (10 + 30) * 0.5 * 0.5 = 10 points per player
+ * - Rank 3: (10 + 20) * 0.5 * 0.5 = 7.5 → 8 points per player (rounded)
+ * - All others: 10 * 0.5 * 0.5 = 2.5 → 3 points per player (rounded)
  * 
  * @param timeString - Time string in HH:MM:SS format (not used but kept for compatibility)
  * @param categoryName - Name of the category (not used but kept for compatibility)
@@ -117,7 +131,8 @@ export function formatTime(timeString: string): string {
  * @param platformId - Optional platform ID (not used but kept for compatibility)
  * @param rank - Optional rank of the run in its category (1-3 for bonus points)
  * @param runType - Optional run type ('solo' or 'co-op'). If 'co-op', points are split in half
- * @returns Points awarded for the run (already split for co-op runs)
+ * @param leaderboardType - Optional leaderboard type ('regular', 'individual-level', or 'community-golds'). ILs and community golds give half points
+ * @returns Points awarded for the run (already split for co-op runs and reduced for ILs/community golds)
  */
 export function calculatePoints(
   timeString: string, 
@@ -126,7 +141,8 @@ export function calculatePoints(
   categoryId?: string,
   platformId?: string,
   rank?: number,
-  runType?: 'solo' | 'co-op'
+  runType?: 'solo' | 'co-op',
+  leaderboardType?: 'regular' | 'individual-level' | 'community-golds'
 ): number {
   // Base points for all verified runs
   const basePoints = 10;
@@ -158,6 +174,13 @@ export function calculatePoints(
     } else if (numericRank === 3) {
       points += 20; // 3rd place bonus
     }
+  }
+
+  // Apply IL/Community Gold reduction: Individual Levels and Community Golds give half points
+  // This reduction happens BEFORE co-op split
+  const isILOrCommunityGold = leaderboardType === 'individual-level' || leaderboardType === 'community-golds';
+  if (isILOrCommunityGold) {
+    points = points * 0.5;
   }
 
   // CRITICAL: For co-op runs, ALWAYS split points equally between both players

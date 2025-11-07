@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trophy, CheckCircle, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Trophy, CheckCircle, Clock, ExternalLink } from "lucide-react";
 import { getRecentRuns, getAllVerifiedRuns } from "@/lib/db";
 import { LeaderboardEntry } from "@/types/database";
 import { Link } from "react-router-dom";
@@ -99,6 +100,21 @@ const Index = () => {
                   <p className="text-xs sm:text-sm lg:text-base text-muted-foreground mt-1.5 whitespace-nowrap">
                     Total verified speedruns
                   </p>
+                  <div className="mt-2">
+                    <Badge variant="outline" className="border-green-600/50 bg-green-600/10 text-green-400 text-xs px-2 py-0.5 flex items-center gap-1.5 w-fit">
+                      <CheckCircle className="h-3 w-3" />
+                      <span>Linked with Speedrun.com</span>
+                      <a
+                        href="https://www.speedrun.com/lsw1"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline flex items-center gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </Badge>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -137,7 +153,7 @@ const Index = () => {
                   {statsLoading ? (
                     <Skeleton className="h-10 w-36 mb-1 bg-ctp-surface0/50" />
                   ) : (
-                    <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-ctp-text transition-all duration-300 truncate font-mono">
+                    <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-ctp-text transition-all duration-300 truncate">
                       {totalTime}
                     </div>
                   )}

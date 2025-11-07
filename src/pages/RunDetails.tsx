@@ -463,7 +463,7 @@ const RunDetails = () => {
       
       // Obsolete runs get base points (10) but no rank bonus
 
-      // Calculate points using stored rank (split for co-op runs)
+      // Calculate points using stored rank (split for co-op runs, reduced for ILs/community golds)
       const category = categories.find((c) => c.id === run.category);
       const platform = platforms.find((p) => p.id === run.platform);
       
@@ -474,13 +474,14 @@ const RunDetails = () => {
         run.category,
         run.platform,
         run.rank,
-        run.runType as 'solo' | 'co-op' | undefined
+        run.runType as 'solo' | 'co-op' | undefined,
+        run.leaderboardType
       );
       setDisplayPoints(calculated);
     };
     
     calculateDisplayPoints();
-  }, [run?.points, run?.verified, run?.isObsolete, run?.rank, run?.time, run?.category, run?.platform, run?.runType, categories, platforms]);
+  }, [run?.points, run?.verified, run?.isObsolete, run?.rank, run?.time, run?.category, run?.platform, run?.runType, run?.leaderboardType, categories, platforms]);
 
   if (loading) {
     return (

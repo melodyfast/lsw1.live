@@ -759,7 +759,14 @@ export async function importSRCRuns(
           } catch (addError: any) {
             result.skipped++;
             const errorMsg = addError?.message || String(addError);
-            result.errors.push(`Run ${srcRun.id}: ${errorMsg}`);
+            // Check if this is a duplicate error - don't add to errors array for duplicates
+            // Duplicates are expected and handled gracefully
+            const isDuplicateError = errorMsg.includes('already exists') || 
+                                   errorMsg.includes('srcRunId') ||
+                                   errorMsg.includes('duplicate');
+            if (!isDuplicateError) {
+              result.errors.push(`Run ${srcRun.id}: ${errorMsg}`);
+            }
             onProgress?.({ total: srcRuns.length, imported: result.imported, skipped: result.skipped });
           }
 
