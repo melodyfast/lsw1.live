@@ -728,7 +728,7 @@ export const addLeaderboardEntryFirestore = async (entry: Omit<LeaderboardEntry,
     }
     
     await setDoc(newDocRef, newEntry);
-    logger.debug(`Saved entry with SRC names: category="${normalized.srcCategoryName}", platform="${normalized.srcPlatformName}", level="${normalized.srcLevelName}"`);
+    console.debug(`Saved entry with SRC names: category="${normalized.srcCategoryName}", platform="${normalized.srcPlatformName}", level="${normalized.srcLevelName}"`);
     return newDocRef.id;
   } catch (error) {
     console.error("Error adding leaderboard entry:", error);
@@ -1208,7 +1208,7 @@ export const updatePlayerProfileFirestore = async (uid: string, data: Partial<Pl
       // Run auto-claiming asynchronously (don't block the profile update)
       autoClaimRunsBySRCUsernameFirestore(uid, newSRCUsername).then(result => {
         if (result.claimed > 0) {
-          logger.debug(`Auto-claimed ${result.claimed} runs for SRC username: ${newSRCUsername}`);
+          console.debug(`Auto-claimed ${result.claimed} runs for SRC username: ${newSRCUsername}`);
         }
       }).catch(error => {
         console.error("Error auto-claiming runs after SRC username update:", error);
@@ -1217,7 +1217,7 @@ export const updatePlayerProfileFirestore = async (uid: string, data: Partial<Pl
       // If creating a new profile with SRC username, also auto-claim runs
       autoClaimRunsBySRCUsernameFirestore(uid, newSRCUsername).then(result => {
         if (result.claimed > 0) {
-          logger.debug(`Auto-claimed ${result.claimed} runs for new profile with SRC username: ${newSRCUsername}`);
+          console.debug(`Auto-claimed ${result.claimed} runs for new profile with SRC username: ${newSRCUsername}`);
         }
       }).catch(error => {
         console.error("Error auto-claiming runs after profile creation:", error);
@@ -1457,7 +1457,7 @@ export const getPlayerPendingRunsFirestore = async (playerId: string): Promise<L
         return dateB.localeCompare(dateA);
       });
 
-    logger.debug(`getPlayerPendingRunsFirestore: Found ${entries.length} pending runs for player ${playerId}`);
+    console.debug(`getPlayerPendingRunsFirestore: Found ${entries.length} pending runs for player ${playerId}`);
 
     // Enrich with player display name and color
     const player = await getPlayerByUidFirestore(playerId);
