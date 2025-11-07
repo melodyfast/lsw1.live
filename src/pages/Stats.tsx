@@ -393,63 +393,35 @@ const Stats = () => {
       .slice(0, 10);
   }, [stats, platforms]);
 
-  // Calculate Elo ratings for players based on their times
+  // Calculate rankings based on leaderboard positions in full game runs
   const eloRankings = useMemo(() => {
     if (!stats || !stats.allVerifiedRuns) return [];
 
-    // Initialize Elo ratings for all players (start at 1500)
-    const playerElo = new Map<string, number>();
+    // Only include full game runs (regular leaderboard type)
+    const fullGameRuns = stats.allVerifiedRuns.filter(run => {
+      const leaderboardType = run.leaderboardType || 'regular';
+      return leaderboardType === 'regular' && !run.isObsolete;
+    });
+
+    // Initialize player stats
     const playerStats = new Map<string, {
       name: string;
       totalRuns: number;
       worldRecords: number;
       bestTime: number;
       bestTimeString: string;
+      totalPoints: number;
+      topRanks: number[]; // Track ranks achieved
     }>();
 
-    // Track all unique players and their best times (excluding IL runs)
-    stats.allVerifiedRuns.forEach(run => {
-      // Exclude Individual Level runs from Elo calculation
-      if (run.leaderboardType === 'individual-level') return;
-      
-      const playerId = run.playerId || run.playerName;
-      if (!playerId) return;
-
-      if (!playerElo.has(playerId)) {
-        playerElo.set(playerId, 1500);
-        playerStats.set(playerId, {
-          name: run.playerName || 'Unknown',
-          totalRuns: 0,
-          worldRecords: 0,
-          bestTime: Infinity,
-          bestTimeString: '',
-        });
-      }
-
-      const playerStat = playerStats.get(playerId)!;
-      playerStat.totalRuns++;
-      
-      const runTime = parseTimeToSeconds(run.time) || Infinity;
-      if (runTime < playerStat.bestTime) {
-        playerStat.bestTime = runTime;
-        playerStat.bestTimeString = run.time;
-      }
-    });
-
-    // Group runs by leaderboard group (category/platform/runType/level)
-    // Exclude Individual Level runs from Elo calculation
+    // Group runs by category/platform/runType
     const runsByGroup = new Map<string, LeaderboardEntry[]>();
     
-    stats.allVerifiedRuns.forEach(run => {
-      // Exclude Individual Level runs from Elo calculation
-      if (run.leaderboardType === 'individual-level') return;
-      
-      const leaderboardType = run.leaderboardType || 'regular';
+    fullGameRuns.forEach(run => {
       const category = run.category || '';
       const platform = run.platform || '';
       const runType = run.runType || 'solo';
-      const level = run.level || '';
-      const groupKey = `${leaderboardType}_${category}_${platform}_${runType}_${level}`;
+      const groupKey = `${category}_${platform}_${runType}`;
       
       if (!runsByGroup.has(groupKey)) {
         runsByGroup.set(groupKey, []);
@@ -457,8 +429,7 @@ const Stats = () => {
       runsByGroup.get(groupKey)!.push(run);
     });
 
-    // Calculate Elo for each group
-    // For each group, compare all players' times
+    // Calculate points for each group based on rankings
     runsByGroup.forEach((runs, groupKey) => {
       // Get unique players in this group with their best times
       const playerTimes = new Map<string, { time: number; run: LeaderboardEntry }>();
@@ -475,84 +446,84 @@ const Stats = () => {
         }
       });
 
-      // Convert to array and sort by time (fastest first)
+      // Sort players by time (fastest first) to determine ranks
       const sortedPlayers = Array.from(playerTimes.entries())
         .map(([playerId, data]) => ({ playerId, time: data.time, run: data.run }))
         .sort((a, b) => a.time - b.time);
 
-      // Calculate average time for this group to normalize comparisons
-      // This accounts for different time scales (short vs long runs)
-      const avgTime = sortedPlayers.reduce((sum, p) => sum + p.time, 0) / sortedPlayers.length;
-      const minTime = sortedPlayers[0]?.time || 1;
-      const maxTime = sortedPlayers[sortedPlayers.length - 1]?.time || 1;
-      const timeScale = Math.max(avgTime, minTime, 1); // Use average as scale reference
+      // Award points based on rank
+      // Points system: Rank 1 = 100, Rank 2 = 75, Rank 3 = 55, Rank 4 = 40, Rank 5 = 30,
+      // Rank 6-10 = 20, Rank 11-20 = 10, Rank 21+ = 5
+      const getPointsForRank = (rank: number): number => {
+        if (rank === 1) return 100;
+        if (rank === 2) return 75;
+        if (rank === 3) return 55;
+        if (rank === 4) return 40;
+        if (rank === 5) return 30;
+        if (rank >= 6 && rank <= 10) return 20;
+        if (rank >= 11 && rank <= 20) return 10;
+        if (rank >= 21) return 5;
+        return 0;
+      };
 
-      // Calculate Elo changes by comparing each player with all others
-      // Players with faster times "win" against players with slower times
-      const K_FACTOR = 32; // Standard Elo K-factor
-      
-      sortedPlayers.forEach((playerA, indexA) => {
-        const eloA = playerElo.get(playerA.playerId) || 1500;
-        let totalEloChange = 0;
+      // Assign points and track stats for each player
+      sortedPlayers.forEach((player, index) => {
+        const rank = index + 1;
+        const points = getPointsForRank(rank);
+        const playerId = player.playerId;
 
-        sortedPlayers.forEach((playerB, indexB) => {
-          if (indexA === indexB) return;
+        // Initialize player stats if needed
+        if (!playerStats.has(playerId)) {
+          playerStats.set(playerId, {
+            name: player.run.playerName || 'Unknown',
+            totalRuns: 0,
+            worldRecords: 0,
+            bestTime: Infinity,
+            bestTimeString: '',
+            totalPoints: 0,
+            topRanks: [],
+          });
+        }
 
-          const eloB = playerElo.get(playerB.playerId) || 1500;
-          
-          // Calculate expected score (probability of winning)
-          const expectedA = 1 / (1 + Math.pow(10, (eloB - eloA) / 400));
-          
-          // Determine actual outcome: playerA wins if they have a faster time
-          const actualA = playerA.time < playerB.time ? 1 : 0;
-          
-          // Calculate Elo change
-          // Normalize time difference by time scale to account for different run lengths
-          // A 1% improvement in a short run should be weighted similarly to a 1% improvement in a long run
-          const timeDiff = Math.abs(playerA.time - playerB.time);
-          const relativeTimeDiff = timeScale > 0 ? timeDiff / timeScale : 0;
-          
-          // Adjust K-factor based on relative time difference (percentage-based)
-          // Bigger relative gaps = more confidence, but normalized by the time scale
-          const adjustedK = K_FACTOR * (1 + Math.min(relativeTimeDiff * 2, 1.0)); // Cap at 2x K-factor
-          
-          const eloChange = adjustedK * (actualA - expectedA);
-          totalEloChange += eloChange;
-        });
+        const playerStat = playerStats.get(playerId)!;
+        playerStat.totalPoints += points;
+        playerStat.topRanks.push(rank);
+        
+        // Track best time
+        if (player.time < playerStat.bestTime) {
+          playerStat.bestTime = player.time;
+          playerStat.bestTimeString = player.run.time;
+        }
 
-        // Update player's Elo
-        const newElo = Math.max(100, Math.round(eloA + totalEloChange));
-        playerElo.set(playerA.playerId, newElo);
+        // Count world records (rank 1)
+        if (rank === 1) {
+          playerStat.worldRecords++;
+        }
       });
+    });
 
-      // Count world records for players in this group
-      if (sortedPlayers.length > 0) {
-        const wrTime = sortedPlayers[0].time;
-        sortedPlayers.forEach((player, index) => {
-          if (player.time === wrTime && index === 0) {
-            const playerStat = playerStats.get(player.playerId);
-            if (playerStat) {
-              playerStat.worldRecords++;
-            }
-          }
-        });
+    // Count total runs per player
+    fullGameRuns.forEach(run => {
+      const playerId = run.playerId || run.playerName;
+      if (!playerId) return;
+      
+      if (playerStats.has(playerId)) {
+        playerStats.get(playerId)!.totalRuns++;
       }
     });
 
-    // Convert to array and sort by Elo (highest first)
-    return Array.from(playerElo.entries())
-      .map(([playerId, elo]) => {
-        const playerStat = playerStats.get(playerId);
-        return {
-          playerId,
-          playerName: playerStat?.name || 'Unknown',
-          elo: Math.round(elo),
-          totalRuns: playerStat?.totalRuns || 0,
-          worldRecords: playerStat?.worldRecords || 0,
-          bestTime: playerStat?.bestTime || Infinity,
-          bestTimeString: playerStat?.bestTimeString || '',
-        };
-      })
+    // Convert to array and sort by total points (highest first)
+    return Array.from(playerStats.entries())
+      .map(([playerId, stat]) => ({
+        playerId,
+        playerName: stat.name,
+        elo: stat.totalPoints, // Using "elo" field name for compatibility with existing UI
+        totalRuns: stat.totalRuns,
+        worldRecords: stat.worldRecords,
+        bestTime: stat.bestTime,
+        bestTimeString: stat.bestTimeString,
+        topRanks: stat.topRanks.sort((a, b) => a - b), // Sort ranks ascending
+      }))
       .sort((a, b) => b.elo - a.elo)
       .map((player, index) => ({
         ...player,
@@ -1305,17 +1276,16 @@ const Stats = () => {
                 Elo Rankings
               </CardTitle>
               <CardDescription>
-                Player rankings based on an Elo rating system comparing times across all categories (Individual Level runs excluded)
+                Player rankings based on leaderboard positions in full game runs
               </CardDescription>
             </CardHeader>
             <CardContent>
               {eloRankings.length > 0 ? (
                 <div className="space-y-4">
                   <div className="text-sm text-muted-foreground">
-                    Players are ranked using an Elo system where faster times result in higher ratings. 
-                    All players start at 1500 Elo. Rankings are calculated by comparing players' best times 
-                    within each category/platform/level combination. Individual Level runs are excluded from Elo calculations, 
-                    and time differences are normalized to account for different run lengths (short vs long runs).
+                    Players are ranked by their positions on full game leaderboards. Points are awarded based on rank:
+                    Rank 1 = 100 points, Rank 2 = 75, Rank 3 = 55, Rank 4 = 40, Rank 5 = 30, 
+                    Ranks 6-10 = 20, Ranks 11-20 = 10, Rank 21+ = 5. Only full game runs (not Individual Levels) are counted.
                   </div>
                   <div className="rounded-md border">
                     <Table>
@@ -1352,17 +1322,18 @@ const Stats = () => {
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">
                                 <span className="font-bold text-lg">{player.elo}</span>
-                                {player.elo >= 1800 && (
+                                <span className="text-xs text-muted-foreground">pts</span>
+                                {player.elo >= 500 && (
                                   <Badge variant="default" className="bg-yellow-500">
                                     Master
                                   </Badge>
                                 )}
-                                {player.elo >= 1600 && player.elo < 1800 && (
+                                {player.elo >= 300 && player.elo < 500 && (
                                   <Badge variant="secondary">
                                     Expert
                                   </Badge>
                                 )}
-                                {player.elo < 1600 && player.elo >= 1400 && (
+                                {player.elo < 300 && player.elo >= 150 && (
                                   <Badge variant="outline">
                                     Advanced
                                   </Badge>
