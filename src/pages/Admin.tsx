@@ -64,6 +64,7 @@ import {
   getAllPlayers,
   updatePlayer,
   deletePlayer,
+  getIlRunsToFix,
 } from "@/lib/db";
 import { importSRCRuns, type ImportResult } from "@/lib/speedruncom/importService";
 import { fetchCategoryVariables, getLSWGameId, fetchCategories as fetchSRCCategories, type SRCCategory } from "@/lib/speedruncom";
@@ -86,7 +87,12 @@ const Admin = () => {
   const [importedSRCRuns, setImportedSRCRuns] = useState<LeaderboardEntry[]>([]);
   const [verifiedRunsWithInvalidData, setVerifiedRunsWithInvalidData] = useState<LeaderboardEntry[]>([]);
   const [importingRuns, setImportingRuns] = useState(false);
+  const [loadingImportedRuns, setLoadingImportedRuns] = useState(false);
   const [importProgress, setImportProgress] = useState({ total: 0, imported: 0, skipped: 0 });
+  // IL runs fix tooling
+  const [ilRunsToFix, setIlRunsToFix] = useState<LeaderboardEntry[]>([]);
+  const [loadingIlRunsToFix, setLoadingIlRunsToFix] = useState(false);
+  const [fixingIlRuns, setFixingIlRuns] = useState(false);
   const [editingImportedRun, setEditingImportedRun] = useState<LeaderboardEntry | null>(null);
   const [editingImportedRunForm, setEditingImportedRunForm] = useState<Partial<LeaderboardEntry>>({});
   const [savingImportedRun, setSavingImportedRun] = useState(false);
@@ -260,6 +266,24 @@ const Admin = () => {
     };
     fetchData();
   }, [importedRunsLeaderboardType]);
+
+  // Refresh imported runs when switching to SRC Tools tab or switching between Full Game and Individual Level tabs
+  useEffect(() => {
+    if (activeTab === "src") {
+      const fetchImportedRuns = async () => {
+        setLoadingImportedRuns(true);
+        try {
+          const importedData = await getImportedSRCRuns();
+          setImportedSRCRuns(importedData);
+        } catch (error) {
+          console.error("Error fetching imported runs:", error);
+        } finally {
+          setLoadingImportedRuns(false);
+        }
+      };
+      fetchImportedRuns();
+    }
+  }, [activeTab, importedRunsLeaderboardType]);
 
   // Fetch categories for level management when levelLeaderboardType changes
   useEffect(() => {
@@ -3085,6 +3109,203 @@ const Admin = () => {
               </CardContent>
             </Card>
 
+            {/* IL Runs Fix Card */}
+            <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
+              <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
+                <CardTitle className="flex items-center gap-2 text-xl text-[#f2cdcd]">
+                  <Wrench className="h-5 w-5" />
+                  <span>Fix Individual Level Runs</span>
+                </CardTitle>
+                <p className="text-sm text-ctp-subtext1 mt-2">
+                  Find and fix verified runs that have a level field but incorrect leaderboardType. These runs should be marked as 'individual-level' but may have been saved with 'regular' or missing leaderboardType.
+                </p>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                  <Button
+                    onClick={async () => {
+                      setLoadingIlRunsToFix(true);
+                      try {
+                        const runs = await getIlRunsToFix();
+                        setIlRunsToFix(runs);
+                        if (runs.length === 0) {
+                          toast({
+                            title: "No Issues Found",
+                            description: "All IL runs have the correct leaderboardType set.",
+                          });
+                        } else {
+                          toast({
+                            title: "Issues Found",
+                            description: `Found ${runs.length} run(s) that need to be fixed.`,
+                          });
+                        }
+                      } catch (error: any) {
+                        toast({
+                          title: "Error",
+                          description: error.message || "Failed to find IL runs to fix.",
+                          variant: "destructive",
+                        });
+                      } finally {
+                        setLoadingIlRunsToFix(false);
+                      }
+                    }}
+                    disabled={loadingIlRunsToFix}
+                    className="bg-gradient-to-r from-[#cba6f7] to-[#b4a0e2] hover:from-[#b4a0e2] hover:to-[#cba6f7] text-[hsl(240,21%,15%)] font-semibold transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#cba6f7]/50"
+                  >
+                    {loadingIlRunsToFix ? (
+                      <>
+                        <LoadingSpinner size="sm" className="mr-2" />
+                        Scanning...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Find IL Runs to Fix
+                      </>
+                    )}
+                  </Button>
+                  {ilRunsToFix.length > 0 && (
+                    <Button
+                      onClick={async () => {
+                        if (!window.confirm(
+                          `This will update ${ilRunsToFix.length} run(s) to set leaderboardType='individual-level'. Continue?`
+                        )) {
+                          return;
+                        }
+                        setFixingIlRuns(true);
+                        try {
+                          let fixed = 0;
+                          let errors = 0;
+                          for (const run of ilRunsToFix) {
+                            try {
+                              await updateLeaderboardEntry(run.id, {
+                                leaderboardType: 'individual-level'
+                              });
+                              fixed++;
+                            } catch (error) {
+                              console.error(`Error fixing run ${run.id}:`, error);
+                              errors++;
+                            }
+                          }
+                          if (errors > 0) {
+                            toast({
+                              title: "Fix Complete with Errors",
+                              description: `Fixed ${fixed} run(s). ${errors} error(s) occurred.`,
+                              variant: "destructive",
+                            });
+                          } else {
+                            toast({
+                              title: "Runs Fixed",
+                              description: `Successfully fixed ${fixed} run(s). They should now appear on IL leaderboards.`,
+                            });
+                          }
+                          setIlRunsToFix([]);
+                          // Refresh all run data
+                          await refreshAllRunData();
+                        } catch (error: any) {
+                          toast({
+                            title: "Error",
+                            description: error.message || "Failed to fix IL runs.",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setFixingIlRuns(false);
+                        }
+                      }}
+                      disabled={fixingIlRuns}
+                      className="bg-gradient-to-r from-[#94e2d5] to-[#74c7b0] hover:from-[#74c7b0] hover:to-[#94e2d5] text-[hsl(240,21%,15%)] font-semibold transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-[#94e2d5]/50"
+                    >
+                      {fixingIlRuns ? (
+                        <>
+                          <LoadingSpinner size="sm" className="mr-2" />
+                          Fixing...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Fix All ({ilRunsToFix.length})
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+
+                {ilRunsToFix.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-[hsl(240,21%,12%)] rounded-lg border border-[hsl(235,13%,30%)]">
+                      <p className="text-sm font-semibold text-ctp-text mb-2">
+                        Found {ilRunsToFix.length} run(s) that need fixing
+                      </p>
+                      <p className="text-xs text-ctp-subtext1">
+                        These runs have a level field but leaderboardType is not set to 'individual-level'. They will be updated to leaderboardType='individual-level'.
+                      </p>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
+                            <TableHead className="py-3 px-4 text-left">Player(s)</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Category</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Platform</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Level</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Time</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Current Type</TableHead>
+                            <TableHead className="py-3 px-4 text-left">Will Fix To</TableHead>
+                            <TableHead className="py-3 px-4 text-center">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {ilRunsToFix.map((run) => {
+                            const categoryName = getCategoryName(run.category, firestoreCategories, run.srcCategoryName);
+                            const platformName = getPlatformName(run.platform, firestorePlatforms, run.srcPlatformName);
+                            const levelName = getLevelName(run.level || '', availableLevels, run.srcLevelName);
+                            return (
+                              <TableRow key={run.id} className="border-b border-[hsl(235,13%,30%)] hover:bg-[hsl(235,19%,13%)] transition-all duration-200">
+                                <TableCell className="py-3 px-4 font-medium">
+                                  <span style={{ color: run.nameColor || 'inherit' }}>{run.playerName}</span>
+                                  {run.player2Name && (
+                                    <>
+                                      <span className="text-muted-foreground"> & </span>
+                                      <span style={{ color: run.player2Color || 'inherit' }}>{run.player2Name}</span>
+                                    </>
+                                  )}
+                                </TableCell>
+                                <TableCell className="py-3 px-4">{categoryName || "—"}</TableCell>
+                                <TableCell className="py-3 px-4">{platformName || "—"}</TableCell>
+                                <TableCell className="py-3 px-4">{levelName || run.level || "—"}</TableCell>
+                                <TableCell className="py-3 px-4 font-mono">{formatTime(run.time || '00:00:00')}</TableCell>
+                                <TableCell className="py-3 px-4">
+                                  <Badge variant="outline" className="text-xs">
+                                    {run.leaderboardType || 'regular'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="py-3 px-4">
+                                  <Badge variant="default" className="bg-green-600/20 text-green-400 border-green-600/50 text-xs">
+                                    individual-level
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="py-3 px-4 text-center">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => navigate(`/run/${run.id}`)}
+                                    className="text-blue-500 hover:bg-blue-900/20"
+                                  >
+                                    <ExternalLink className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Recent Runs Card */}
             <Card className="bg-gradient-to-br from-[hsl(240,21%,16%)] via-[hsl(240,21%,14%)] to-[hsl(235,19%,13%)] border-[hsl(235,13%,30%)] shadow-xl">
               <CardHeader className="bg-gradient-to-r from-[hsl(240,21%,18%)] to-[hsl(240,21%,15%)] border-b border-[hsl(235,13%,30%)]">
@@ -3849,7 +4070,62 @@ const Admin = () => {
                       </div>
                       
                       {/* Imported Runs Table */}
-                      {unverifiedImported.length === 0 ? (
+                      {loadingImportedRuns ? (
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="border-b border-[hsl(235,13%,30%)] hover:bg-transparent">
+                                <TableHead className="py-3 px-4 text-left">Player(s)</TableHead>
+                                <TableHead className="py-3 px-4 text-left">Category</TableHead>
+                                <TableHead className="py-3 px-4 text-left">Platform</TableHead>
+                                <TableHead className="py-3 px-4 text-left">Level</TableHead>
+                                <TableHead className="py-3 px-4 text-left">Time</TableHead>
+                                <TableHead className="py-3 px-4 text-left">Date</TableHead>
+                                <TableHead className="py-3 px-4 text-left">Type</TableHead>
+                                <TableHead className="py-3 px-4 text-left">SRC Link</TableHead>
+                                <TableHead className="py-3 px-4 text-left">Issues</TableHead>
+                                <TableHead className="py-3 px-4 text-center">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {Array.from({ length: 5 }).map((_, index) => (
+                                <TableRow key={index} className="border-b border-[hsl(235,13%,30%)]">
+                                  <TableCell className="py-3 px-4">
+                                    <div className="h-4 bg-[hsl(240,21%,18%)] rounded animate-pulse w-24"></div>
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4">
+                                    <div className="h-4 bg-[hsl(240,21%,18%)] rounded animate-pulse w-32"></div>
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4">
+                                    <div className="h-4 bg-[hsl(240,21%,18%)] rounded animate-pulse w-20"></div>
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4">
+                                    <div className="h-4 bg-[hsl(240,21%,18%)] rounded animate-pulse w-28"></div>
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4">
+                                    <div className="h-4 bg-[hsl(240,21%,18%)] rounded animate-pulse w-16"></div>
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4">
+                                    <div className="h-4 bg-[hsl(240,21%,18%)] rounded animate-pulse w-20"></div>
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4">
+                                    <div className="h-4 bg-[hsl(240,21%,18%)] rounded animate-pulse w-12"></div>
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4">
+                                    <div className="h-4 bg-[hsl(240,21%,18%)] rounded animate-pulse w-20"></div>
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4">
+                                    <div className="h-4 bg-[hsl(240,21%,18%)] rounded animate-pulse w-16"></div>
+                                  </TableCell>
+                                  <TableCell className="py-3 px-4 text-center">
+                                    <div className="h-8 bg-[hsl(240,21%,18%)] rounded animate-pulse w-20 mx-auto"></div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : unverifiedImported.length === 0 ? (
                         <p className="text-[hsl(222,15%,60%)] text-center py-8">No unverified imported runs found for the selected filters.</p>
                       ) : (
                         <>

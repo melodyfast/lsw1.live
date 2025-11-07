@@ -3010,6 +3010,37 @@ export const getAllVerifiedRunsFirestore = async (): Promise<LeaderboardEntry[]>
 };
 
 /**
+ * Find runs that have a level field but incorrect leaderboardType
+ * These are IL runs that were incorrectly saved with leaderboardType='regular' or missing leaderboardType
+ */
+export const getIlRunsToFixFirestore = async (): Promise<LeaderboardEntry[]> => {
+  if (!db) return [];
+  try {
+    // Fetch all verified runs with a level field
+    const q = query(
+      collection(db, "leaderboardEntries"),
+      where("verified", "==", true),
+      firestoreLimit(5000)
+    );
+    const querySnapshot = await getDocs(q);
+    const allRuns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
+    
+    // Filter for runs that have a level but wrong/missing leaderboardType
+    const runsToFix = allRuns.filter(run => {
+      const hasLevel = run.level && run.level.trim() !== '';
+      const leaderboardType = run.leaderboardType || 'regular';
+      // IL runs should have leaderboardType='individual-level' if they have a level
+      return hasLevel && leaderboardType !== 'individual-level';
+    });
+    
+    return runsToFix;
+  } catch (error) {
+    console.error("Error finding IL runs to fix:", error);
+    return [];
+  }
+};
+
+/**
  * Get unassigned runs (runs that haven't been assigned to any user)
  * Only includes verified runs that are unclaimed
  * Excludes:
