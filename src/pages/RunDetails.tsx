@@ -464,6 +464,7 @@ const RunDetails = () => {
       // Obsolete runs get base points (10) but no rank bonus
 
       // Calculate points using stored rank (split for co-op runs, reduced for ILs/community golds)
+      // CRITICAL: Obsolete runs only receive base points (no rank bonuses)
       const category = categories.find((c) => c.id === run.category);
       const platform = platforms.find((p) => p.id === run.platform);
       
@@ -475,7 +476,8 @@ const RunDetails = () => {
         run.platform,
         run.rank,
         run.runType as 'solo' | 'co-op' | undefined,
-        run.leaderboardType
+        run.leaderboardType,
+        run.isObsolete
       );
       setDisplayPoints(calculated);
     };

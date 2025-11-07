@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlayerProfile } from "@/components/PlayerProfile";
-import { ArrowLeft, Trophy, User, Users, Clock, Star, Gem, CheckCircle } from "lucide-react";
+import { ArrowLeft, Trophy, User, Users, Clock, Star, Gem, CheckCircle, Filter, Gamepad2, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
-import { getPlayerRuns, getPlayerByUid, getCategories, getPlatforms, getPlayerPendingRuns, getLevels, getCategoriesFromFirestore, getUnclaimedRunsBySRCUsername, claimRun } from "@/lib/db";
+import { getPlayerRuns, getPlayerByUid, getCategories, getPlatforms, getPlayerPendingRuns, getLevels, getCategoriesFromFirestore, getUnclaimedRunsBySRCUsername, claimRun, runTypes } from "@/lib/db";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import LegoStudIcon from "@/components/icons/LegoStudIcon";
 import { Player, LeaderboardEntry } from "@/types/database";
 import { formatDate, formatTime } from "@/lib/utils";
@@ -30,6 +31,12 @@ const PlayerDetails = () => {
   const [platforms, setPlatforms] = useState<{ id: string; name: string }[]>([]);
   const [levels, setLevels] = useState<{ id: string; name: string }[]>([]);
   const [leaderboardType, setLeaderboardType] = useState<'regular' | 'individual-level' | 'community-golds'>('regular');
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedPlatform, setSelectedPlatform] = useState("");
+  const [selectedRunType, setSelectedRunType] = useState("");
+  const [selectedLevel, setSelectedLevel] = useState("");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("");
+  const [availableSubcategories, setAvailableSubcategories] = useState<Array<{ id: string; name: string }>>([]);
   const isOwnProfile = currentUser?.uid === playerId;
 
   useEffect(() => {
@@ -74,6 +81,17 @@ const PlayerDetails = () => {
         setPlatforms(fetchedPlatforms);
         setLevels(fetchedLevels);
         
+        // Initialize filter defaults
+        if (fetchedPlatforms.length > 0) {
+          setSelectedPlatform(fetchedPlatforms[0].id);
+        }
+        if (runTypes.length > 0) {
+          setSelectedRunType(runTypes[0].id);
+        }
+        if (fetchedLevels.length > 0) {
+          setSelectedLevel(fetchedLevels[0].id);
+        }
+        
         // Only fetch pending runs and unclaimed runs if viewing own profile
         // Check both currentUser exists and uid matches playerId
         if (currentUser && currentUser.uid && currentUser.uid === playerId) {
@@ -110,6 +128,74 @@ const PlayerDetails = () => {
 
     fetchPlayerData();
   }, [playerId, currentUser?.uid]);
+
+  // Update selected category when leaderboard type changes
+  useEffect(() => {
+    if (categories.length > 0 && playerRuns.length > 0) {
+      // Get categories that have runs for this leaderboard type
+      const runsForType = playerRuns.filter(run => {
+        const runLeaderboardType = run.leaderboardType || 'regular';
+        return runLeaderboardType === leaderboardType;
+      });
+      
+      const categoriesWithRuns = new Set(runsForType.map(run => run.category));
+      const availableCategories = categories.filter(cat => 
+        categoriesWithRuns.has(cat.id)
+      );
+      
+      if (availableCategories.length > 0) {
+        // Select first category that has runs, or keep current if it's still valid
+        const firstCategoryWithRuns = availableCategories[0];
+        const currentCategoryStillValid = availableCategories.some(cat => cat.id === selectedCategory);
+        
+        if (!currentCategoryStillValid) {
+          setSelectedCategory(firstCategoryWithRuns.id);
+        }
+      } else {
+        setSelectedCategory("");
+      }
+    } else if (categories.length === 0 || playerRuns.length === 0) {
+      setSelectedCategory("");
+    }
+  }, [leaderboardType, categories, playerRuns, selectedCategory]);
+
+  // Fetch subcategories when category changes (only for regular leaderboard type)
+  useEffect(() => {
+    const fetchSubcategories = async () => {
+      if (leaderboardType === 'regular' && selectedCategory) {
+        try {
+          const regularCategories = await getCategories('regular');
+          const category = regularCategories.find(c => c.id === selectedCategory);
+          if (category && category.subcategories && category.subcategories.length > 0) {
+            // Sort subcategories by order
+            const sorted = [...category.subcategories].sort((a, b) => {
+              const orderA = a.order ?? Infinity;
+              const orderB = b.order ?? Infinity;
+              return orderA - orderB;
+            });
+            setAvailableSubcategories(sorted);
+            // Automatically select the first subcategory when category changes
+            if (sorted.length > 0) {
+              setSelectedSubcategory(sorted[0].id);
+            } else {
+              setSelectedSubcategory("");
+            }
+          } else {
+            setAvailableSubcategories([]);
+            setSelectedSubcategory("");
+          }
+        } catch (error) {
+          setAvailableSubcategories([]);
+          setSelectedSubcategory("");
+        }
+      } else {
+        setAvailableSubcategories([]);
+        setSelectedSubcategory("");
+      }
+    };
+    
+    fetchSubcategories();
+  }, [selectedCategory, leaderboardType]);
 
   const handleClaimRun = async (runId: string, e?: React.MouseEvent) => {
     if (e) {
@@ -311,31 +397,183 @@ const PlayerDetails = () => {
 
               <TabsContent value={leaderboardType} className="mt-0">
                 {(() => {
+                  // Get categories that have runs for this leaderboard type
+                  const runsForType = playerRuns.filter(run => {
+                    const runLeaderboardType = run.leaderboardType || 'regular';
+                    return runLeaderboardType === leaderboardType;
+                  });
+                  
+                  const categoriesWithRuns = categories.filter(cat => 
+                    runsForType.some(run => run.category === cat.id)
+                  );
+                  
                   // Filter verified runs by leaderboard type
-                  const filteredVerifiedRuns = playerRuns.filter(run => {
+                  let filteredVerifiedRuns = playerRuns.filter(run => {
                     const runLeaderboardType = run.leaderboardType || 'regular';
                     return runLeaderboardType === leaderboardType;
                   });
                   
                   // Filter unclaimed runs by leaderboard type (only show on own profile)
-                  const filteredUnclaimedRuns = isOwnProfile ? unclaimedRuns.filter(run => {
+                  let filteredUnclaimedRuns = isOwnProfile ? unclaimedRuns.filter(run => {
                     const runLeaderboardType = run.leaderboardType || 'regular';
                     return runLeaderboardType === leaderboardType;
                   }) : [];
                   
+                  // Apply filters
+                  if (selectedCategory) {
+                    filteredVerifiedRuns = filteredVerifiedRuns.filter(run => run.category === selectedCategory);
+                    filteredUnclaimedRuns = filteredUnclaimedRuns.filter(run => run.category === selectedCategory);
+                  }
+                  
+                  if (selectedPlatform) {
+                    filteredVerifiedRuns = filteredVerifiedRuns.filter(run => run.platform === selectedPlatform);
+                    filteredUnclaimedRuns = filteredUnclaimedRuns.filter(run => run.platform === selectedPlatform);
+                  }
+                  
+                  if (selectedRunType) {
+                    filteredVerifiedRuns = filteredVerifiedRuns.filter(run => run.runType === selectedRunType);
+                    filteredUnclaimedRuns = filteredUnclaimedRuns.filter(run => run.runType === selectedRunType);
+                  }
+                  
+                  if (selectedLevel && (leaderboardType === 'individual-level' || leaderboardType === 'community-golds')) {
+                    filteredVerifiedRuns = filteredVerifiedRuns.filter(run => run.level === selectedLevel);
+                    filteredUnclaimedRuns = filteredUnclaimedRuns.filter(run => run.level === selectedLevel);
+                  }
+                  
+                  if (selectedSubcategory && leaderboardType === 'regular') {
+                    filteredVerifiedRuns = filteredVerifiedRuns.filter(run => run.subcategory === selectedSubcategory);
+                    filteredUnclaimedRuns = filteredUnclaimedRuns.filter(run => run.subcategory === selectedSubcategory);
+                  }
+                  
                   // Combine verified and unclaimed runs
                   const allRuns = [...filteredVerifiedRuns, ...filteredUnclaimedRuns];
 
-                  if (allRuns.length === 0) {
-                    return (
-                      <div className="text-center py-8">
-                        <p className="text-ctp-overlay0">No {leaderboardType === 'regular' ? 'Full Game' : leaderboardType === 'individual-level' ? 'Individual Level' : 'Community Gold'} runs submitted yet</p>
-                      </div>
-                    );
-                  }
+                  // Category tabs
+                  const categoryTabs = categoriesWithRuns.length > 0 ? (
+                    <div className="mb-4">
+                      <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
+                        <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide rounded-none" style={{ minWidth: 'max-content' }}>
+                          {categoriesWithRuns.map((category) => (
+                            <TabsTrigger 
+                              key={category.id} 
+                              value={category.id} 
+                              className="data-[state=active]:bg-[#94e2d5] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-colors font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#94e2d5]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap rounded-none flex items-center gap-1.5"
+                            >
+                              {category.name}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                      </Tabs>
+                    </div>
+                  ) : null;
+                  
+                  // Subcategory tabs (only for regular leaderboard type)
+                  const subcategoryTabs = leaderboardType === 'regular' && availableSubcategories.length > 0 ? (
+                    <div className="mb-4">
+                      <Tabs value={selectedSubcategory} onValueChange={setSelectedSubcategory}>
+                        <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide rounded-none" style={{ minWidth: 'max-content' }}>
+                          {availableSubcategories.map((subcategory) => (
+                            <TabsTrigger 
+                              key={subcategory.id} 
+                              value={subcategory.id} 
+                              className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-colors font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#cba6f7]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap rounded-none"
+                            >
+                              {subcategory.name}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                      </Tabs>
+                    </div>
+                  ) : null;
 
                   return (
-                    <div className="overflow-x-auto scrollbar-custom rounded-none">
+                    <>
+                      {categoryTabs}
+                      {subcategoryTabs}
+                      
+                      {/* Filters */}
+                      <Card className="bg-gradient-to-br from-ctp-base to-ctp-mantle border-ctp-surface1 shadow-xl mb-4 rounded-none">
+                        <CardHeader className="bg-gradient-to-r from-ctp-base to-ctp-mantle border-b border-ctp-surface1 py-3">
+                          <CardTitle className="flex items-center gap-2 text-lg">
+                            <Filter className="h-4 w-4 text-ctp-mauve" />
+                            <span className="text-ctp-text">Filter Results</span>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-3 sm:p-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            {(leaderboardType === 'individual-level' || leaderboardType === 'community-golds') && (
+                              <div>
+                                <label className="block text-sm font-semibold mb-1.5 text-ctp-text flex items-center gap-2">
+                                  <Sparkles className="h-3.5 w-3.5 text-ctp-mauve" />
+                                  Levels
+                                </label>
+                                <Select value={selectedLevel} onValueChange={setSelectedLevel}>
+                                  <SelectTrigger className="bg-ctp-base border-ctp-surface1 h-9 text-sm rounded-none">
+                                    <SelectValue placeholder="Select level" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {levels.map((level) => (
+                                      <SelectItem key={level.id} value={level.id} className="text-sm">
+                                        {level.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                            <div>
+                              <label className="block text-sm font-semibold mb-1.5 text-ctp-text flex items-center gap-2">
+                                <Gamepad2 className="h-3.5 w-3.5 text-ctp-mauve" />
+                                Platform
+                              </label>
+                              <Select value={selectedPlatform} onValueChange={setSelectedPlatform}>
+                                <SelectTrigger className="bg-ctp-base border-ctp-surface1 h-9 text-sm rounded-none">
+                                  <SelectValue placeholder="Select platform" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {platforms.map((platform) => (
+                                    <SelectItem key={platform.id} value={platform.id} className="text-sm">
+                                      {platform.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold mb-1.5 text-ctp-text flex items-center gap-2">
+                                {selectedRunType === 'solo' ? (
+                                  <User className="h-3.5 w-3.5 text-ctp-mauve" />
+                                ) : (
+                                  <Users className="h-3.5 w-3.5 text-ctp-mauve" />
+                                )}
+                                Run Type
+                              </label>
+                              <Select value={selectedRunType} onValueChange={setSelectedRunType}>
+                                <SelectTrigger className="bg-ctp-base border-ctp-surface1 h-9 text-sm rounded-none">
+                                  <SelectValue placeholder="Select run type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {runTypes.map((type) => (
+                                    <SelectItem key={type.id} value={type.id} className="text-sm">
+                                      <div className="flex items-center gap-2">
+                                        {type.id === 'solo' ? <User className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+                                        {type.name}
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {allRuns.length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-ctp-overlay0">No runs found matching the selected filters</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto scrollbar-custom rounded-none">
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-[hsl(235,13%,30%)]">
@@ -460,6 +698,8 @@ const PlayerDetails = () => {
                         </tbody>
                       </table>
                     </div>
+                      )}
+                    </>
                   );
                 })()}
               </TabsContent>

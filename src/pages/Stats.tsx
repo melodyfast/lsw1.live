@@ -22,6 +22,24 @@ import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { Line, LineChart, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Link } from "react-router-dom";
 
+// Category name overrides for stats page
+const CATEGORY_NAME_OVERRIDES: Record<string, string> = {
+  'GdR0b0zs2ZFVVvjsglIL': 'Story Mode - IL',
+  'zRhqEIO8iXYUiHoW5qIp': 'Free Play - IL',
+};
+
+// Helper function to get category name with overrides
+const getCategoryNameWithOverride = (
+  categoryId: string | undefined | null,
+  categories: Array<{ id: string; name: string }>,
+  srcCategoryName?: string | null
+): string => {
+  if (categoryId && CATEGORY_NAME_OVERRIDES[categoryId]) {
+    return CATEGORY_NAME_OVERRIDES[categoryId];
+  }
+  return getCategoryName(categoryId, categories, srcCategoryName);
+};
+
 interface StatsData {
   totalRuns: number;
   verifiedRuns: number;
@@ -170,7 +188,7 @@ const Stats = () => {
     return Array.from(stats.runsByCategory.entries())
       .map(([id, count]) => ({
         id,
-        name: getCategoryName(id, categories),
+        name: getCategoryNameWithOverride(id, categories),
         count,
       }))
       .sort((a, b) => b.count - a.count)
@@ -453,7 +471,7 @@ const Stats = () => {
                   {Array.from(stats.runsByCategory.entries())
                     .map(([id, count]) => ({
                       id,
-                      name: getCategoryName(id, categories),
+                      name: getCategoryNameWithOverride(id, categories),
                       count,
                     }))
                     .sort((a, b) => b.count - a.count)
@@ -525,7 +543,7 @@ const Stats = () => {
                   </TableHeader>
                   <TableBody>
                     {stats.recentWorldRecords.map((wr) => {
-                      const categoryName = getCategoryName(wr.category, categories);
+                      const categoryName = getCategoryNameWithOverride(wr.category, categories);
                       const platformName = getPlatformName(wr.platform, platforms);
                       const levelName = wr.level ? getLevelName(wr.level, levels) : null;
                       const leaderboardTypeName = 

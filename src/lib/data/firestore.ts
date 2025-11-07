@@ -1790,6 +1790,7 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
       // Calculate points with rank (split for co-op runs, reduced for ILs/community golds)
       // CRITICAL: calculatePoints automatically splits points for co-op runs
       // CRITICAL: calculatePoints automatically reduces points for ILs and community golds (half points)
+      // CRITICAL: Obsolete runs only receive base points (no rank bonuses)
       // For co-op runs: points are divided by 2, so each player gets half
       // For ILs/community golds: points are multiplied by 0.5
       // For solo runs: points are full value
@@ -1803,7 +1804,8 @@ export const updateRunVerificationStatusFirestore = async (runId: string, verifi
         runData.platform,
         rank,
         runType,
-        leaderboardType
+        leaderboardType,
+        runData.isObsolete
       );
       
       // Update the document with calculated points and rank
@@ -2125,6 +2127,7 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
       
       // Calculate points - CRITICAL: calculatePoints automatically splits for co-op runs
       // CRITICAL: calculatePoints automatically reduces points for ILs and community golds (half points)
+      // CRITICAL: Obsolete runs only receive base points (no rank bonuses)
       // For co-op runs: points are divided by 2, so each player gets half
       // For ILs/community golds: points are multiplied by 0.5
       // For solo runs: points are full value
@@ -2139,7 +2142,8 @@ export const recalculatePlayerPointsFirestore = async (playerId: string): Promis
         runData.platform,
         rank,
         runType,
-        leaderboardType
+        leaderboardType,
+        runData.isObsolete
       );
       
       // Always update the run with recalculated points and rank

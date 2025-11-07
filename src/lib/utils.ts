@@ -95,9 +95,10 @@ export function formatTime(timeString: string): string {
  * 
  * Points calculation:
  * - Base points: 10 points for all verified runs
- * - Top 3 bonus: additional bonus points for runs ranked 1st, 2nd, or 3rd
+ * - Top 3 bonus: additional bonus points for runs ranked 1st, 2nd, or 3rd (NOT applied to obsolete runs)
  * - IL/Community Gold reduction: Individual Levels and Community Golds give half points (0.5x multiplier)
  * - Co-op split: Co-op runs split points equally between both players (0.5x multiplier)
+ * - Obsolete runs: Only receive base points (no rank bonuses), but still subject to IL/CG reduction and co-op split
  * 
  * Full Game Solo runs:
  * - Rank 1: 10 + 50 = 60 points
@@ -132,6 +133,7 @@ export function formatTime(timeString: string): string {
  * @param rank - Optional rank of the run in its category (1-3 for bonus points)
  * @param runType - Optional run type ('solo' or 'co-op'). If 'co-op', points are split in half
  * @param leaderboardType - Optional leaderboard type ('regular', 'individual-level', or 'community-golds'). ILs and community golds give half points
+ * @param isObsolete - Optional flag indicating if the run is obsolete. Obsolete runs only receive base points (no rank bonuses)
  * @returns Points awarded for the run (already split for co-op runs and reduced for ILs/community golds)
  */
 export function calculatePoints(
@@ -142,10 +144,34 @@ export function calculatePoints(
   platformId?: string,
   rank?: number,
   runType?: 'solo' | 'co-op',
-  leaderboardType?: 'regular' | 'individual-level' | 'community-golds'
+  leaderboardType?: 'regular' | 'individual-level' | 'community-golds',
+  isObsolete?: boolean
 ): number {
   // Base points for all verified runs
   const basePoints = 10;
+  
+  // Obsolete runs only get base points (no rank bonuses)
+  if (isObsolete === true) {
+    let points = basePoints;
+    
+    // Apply IL/Community Gold reduction: Individual Levels and Community Golds give half points
+    const isILOrCommunityGold = leaderboardType === 'individual-level' || leaderboardType === 'community-golds';
+    if (isILOrCommunityGold) {
+      points = points * 0.5;
+    }
+    
+    // CRITICAL: For co-op runs, ALWAYS split points equally between both players
+    const isCoOp = runType === 'co-op' || 
+                   (typeof runType === 'string' && runType.toLowerCase().includes('co-op')) ||
+                   (typeof runType === 'string' && runType.toLowerCase() === 'coop');
+    
+    if (isCoOp) {
+      points = points / 2;
+    }
+    
+    // Round to nearest integer to avoid floating point issues
+    return Math.round(points);
+  }
   
   // Ensure rank is a number for comparison
   // Handle null, undefined, and non-number values
