@@ -267,9 +267,9 @@ export const getLeaderboardEntriesFirestore = async (
         }
         
         // Filter by subcategory (client-side, only for regular leaderboard type)
-        if (leaderboardType === 'regular' && subcategoryId && subcategoryId !== 'all') {
-          // If subcategoryId is specified and not "all", filter to that subcategory
-          // Also include runs without a subcategory (undefined/null) in the "all" view
+        // Subcategory selection is now required - no "all" option
+        if (leaderboardType === 'regular' && subcategoryId) {
+          // Special case: __none__ means show only runs without a subcategory
           if (subcategoryId === '__none__') {
             // Show only runs without subcategory
             if (entry.subcategory && entry.subcategory.trim() !== '') {

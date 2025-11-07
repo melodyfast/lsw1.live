@@ -22,7 +22,7 @@ const Leaderboards = () => {
   const [selectedLevel, setSelectedLevel] = useState("");
   const [selectedPlatform, setSelectedPlatform] = useState("");
   const [selectedRunType, setSelectedRunType] = useState(runTypes[0]?.id || "");
-  const [selectedSubcategory, setSelectedSubcategory] = useState<string>("all");
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string>("");
   const [showObsoleteRuns, setShowObsoleteRuns] = useState("false");
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,19 +98,23 @@ const Leaderboards = () => {
               return orderA - orderB;
             });
             setAvailableSubcategories(sorted);
-            // Reset to "all" when category changes
-            setSelectedSubcategory("all");
+            // Automatically select the first subcategory when category changes
+            if (sorted.length > 0) {
+              setSelectedSubcategory(sorted[0].id);
+            } else {
+              setSelectedSubcategory("");
+            }
           } else {
             setAvailableSubcategories([]);
-            setSelectedSubcategory("all");
+            setSelectedSubcategory("");
           }
         } catch (error) {
           setAvailableSubcategories([]);
-          setSelectedSubcategory("all");
+          setSelectedSubcategory("");
         }
       } else {
         setAvailableSubcategories([]);
-        setSelectedSubcategory("all");
+        setSelectedSubcategory("");
       }
     };
     
@@ -140,7 +144,7 @@ const Leaderboards = () => {
           showObsoleteRuns === "true",
           leaderboardType,
           (leaderboardType === 'individual-level' || leaderboardType === 'community-golds') ? selectedLevel : undefined,
-          (leaderboardType === 'regular' && selectedSubcategory && selectedSubcategory !== 'all') ? selectedSubcategory : undefined
+          (leaderboardType === 'regular' && selectedSubcategory) ? selectedSubcategory : undefined
         );
         
         // Only update state if this is still the latest request
@@ -204,7 +208,7 @@ const Leaderboards = () => {
                   showObsoleteRuns === "true",
                   leaderboardType,
                   (leaderboardType === 'individual-level' || leaderboardType === 'community-golds') ? selectedLevel : undefined,
-                  (leaderboardType === 'regular' && selectedSubcategory && selectedSubcategory !== 'all') ? selectedSubcategory : undefined
+                  (leaderboardType === 'regular' && selectedSubcategory) ? selectedSubcategory : undefined
                 );
                 setLeaderboardData(data);
                 setCurrentPage(1);
@@ -322,18 +326,12 @@ const Leaderboards = () => {
                     <div className="mb-6 animate-slide-up">
                       <Tabs value={selectedSubcategory} onValueChange={setSelectedSubcategory}>
                         <TabsList className="flex w-full p-0.5 gap-1 overflow-x-auto overflow-y-hidden scrollbar-hide rounded-none" style={{ minWidth: 'max-content' }}>
-                          <TabsTrigger 
-                            value="all" 
-                            className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#cba6f7]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap rounded-none"
-                          >
-                            All
-                          </TabsTrigger>
                           {availableSubcategories.map((subcategory, index) => (
                             <TabsTrigger 
                               key={subcategory.id} 
                               value={subcategory.id} 
                               className="data-[state=active]:bg-[#cba6f7] data-[state=active]:text-[#11111b] bg-ctp-surface0 text-ctp-text transition-all duration-300 font-medium border border-transparent hover:bg-ctp-surface1 hover:border-[#cba6f7]/50 py-1.5 sm:py-2 px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap rounded-none"
-                              style={{ animationDelay: `${(index + 1) * 50}ms` }}
+                              style={{ animationDelay: `${index * 50}ms` }}
                             >
                               {subcategory.name}
                             </TabsTrigger>
