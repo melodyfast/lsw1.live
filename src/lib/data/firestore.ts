@@ -830,9 +830,9 @@ export const createPlayerFirestore = async (player: Omit<Player, 'id'>): Promise
 };
 
 /**
- * Automatically claim runs by SRC username matching
- * This finds all imported runs where srcPlayerName or srcPlayer2Name matches the SRC username
- * and automatically claims them for the user
+ * Simplified auto-claim: Automatically assign runs to users based on SRC username matching
+ * Finds all imported runs where srcPlayerName or srcPlayer2Name matches the user's SRC username
+ * and assigns them to the user
  */
 export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUsername: string): Promise<{ claimed: number; errors: string[] }> => {
   if (!db || !srcUsername || !srcUsername.trim()) {
@@ -840,90 +840,56 @@ export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUse
   }
   
   const result = { claimed: 0, errors: [] as string[] };
-  // Use the same normalization function as import and claiming for consistency
   const { normalizeSRCUsername } = await import("@/lib/speedruncom");
   const normalizedSrcUsername = normalizeSRCUsername(srcUsername);
   
   try {
-    // Get all runs (verified and unverified) to check for matches
-    // Note: Non-admin users can only read verified entries, so we'll handle permission errors gracefully
-    let verifiedSnapshot;
-    let unverifiedSnapshot;
+    // Get player data
+    const player = await getPlayerByUidFirestore(userId);
+    if (!player) {
+      return result;
+    }
     
+    // Get all verified runs (unverified runs will be claimed when verified)
+    let verifiedSnapshot;
     try {
       const verifiedQuery = query(
         collection(db, "leaderboardEntries"), 
         where("verified", "==", true), 
-        firestoreLimit(1000)
+        firestoreLimit(2000)
       );
       verifiedSnapshot = await getDocs(verifiedQuery);
     } catch (error) {
-      
       verifiedSnapshot = { docs: [] } as any;
     }
     
-    try {
-      const unverifiedQuery = query(
-        collection(db, "leaderboardEntries"), 
-        where("verified", "==", false), 
-        firestoreLimit(1000)
-      );
-      unverifiedSnapshot = await getDocs(unverifiedQuery);
-    } catch (error: any) {
-      // Non-admin users can't read unverified entries - that's okay, we'll just use verified entries
-      const errorCode = error?.code || error?.message || '';
-      const isPermissionError = errorCode === 'permission-denied' || 
-                                errorCode === 'missing-or-insufficient-permissions' ||
-                                (typeof errorCode === 'string' && errorCode.toLowerCase().includes('permission'));
-      
-      if (!isPermissionError) {
-        
-      }
-      unverifiedSnapshot = { docs: [] } as any;
-    }
+    const allRuns = verifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
     
-    const allRuns = [
-      ...verifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry)),
-      ...unverifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
-    ];
-    
-    // Find imported runs where srcPlayerName or srcPlayer2Name matches (case-insensitive)
-    // Use the same normalization function as import and claiming for consistency
+    // Find imported runs where srcPlayerName or srcPlayer2Name matches
     const runsToClaim = allRuns.filter(run => {
       if (!run.importedFromSRC) return false;
       
-      // Check if srcPlayerName or srcPlayer2Name exist and are not empty
+      // Must be unclaimed
+      const currentPlayerId = run.playerId || "";
+      if (currentPlayerId && currentPlayerId.trim() !== "") return false;
+      
+      // Check if srcPlayerName or srcPlayer2Name exist and match
       const hasSrcPlayerName = run.srcPlayerName && run.srcPlayerName.trim() !== "";
       const hasSrcPlayer2Name = run.srcPlayer2Name && run.srcPlayer2Name.trim() !== "";
       
-      // If neither field exists, skip this run
       if (!hasSrcPlayerName && !hasSrcPlayer2Name) return false;
       
-      // Use the same normalization function as import and claiming for consistency
       const runSRCPlayerName = hasSrcPlayerName ? normalizeSRCUsername(run.srcPlayerName) : "";
       const runSRCPlayer2Name = hasSrcPlayer2Name ? normalizeSRCUsername(run.srcPlayer2Name) : "";
       
-      // Match if either SRC player name matches (case-insensitive)
-      const matches = (runSRCPlayerName && runSRCPlayerName === normalizedSrcUsername) || 
-                     (runSRCPlayer2Name && runSRCPlayer2Name === normalizedSrcUsername);
-      
-      if (!matches) return false;
-      
-      const currentPlayerId = run.playerId || "";
-      // Skip if already claimed by this user
-      if (currentPlayerId === userId) return false;
-      
-      // Only claim if unclaimed (empty/null playerId)
-      return !currentPlayerId || currentPlayerId.trim() === "";
+      // Match if either SRC player name matches
+      return (runSRCPlayerName && runSRCPlayerName === normalizedSrcUsername) || 
+             (runSRCPlayer2Name && runSRCPlayer2Name === normalizedSrcUsername);
     });
     
     if (runsToClaim.length === 0) {
       return result;
     }
-    
-    // Get the player's display name for updating playerName
-    const player = await getPlayerByUidFirestore(userId);
-    const playerDisplayName = player?.displayName || "";
     
     // Batch update runs
     let batch = writeBatch(db);
@@ -932,31 +898,23 @@ export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUse
     
     for (const run of runsToClaim) {
       const runDocRef = doc(db, "leaderboardEntries", run.id);
-      // Update both playerId and playerName
-      const updateData: Partial<LeaderboardEntry> = { playerId: userId };
-      if (playerDisplayName) {
-        // Determine if this is player1 or player2
-        // Use the same normalization function as import and claiming for consistency
-        const runSRCPlayerName = normalizeSRCUsername(run.srcPlayerName);
-        const runSRCPlayer2Name = normalizeSRCUsername(run.srcPlayer2Name);
-        
-        if (runSRCPlayerName === normalizedSrcUsername) {
-          // This is player1
-          updateData.playerName = playerDisplayName;
-        } else if (runSRCPlayer2Name === normalizedSrcUsername && run.runType === 'co-op') {
-          // This is player2
-          updateData.player2Id = userId;
-          updateData.player2Name = playerDisplayName;
-        } else {
-          // Fallback: update playerName if it's a solo run
-          if (run.runType === 'solo') {
-            updateData.playerName = playerDisplayName;
-          }
-        }
+      const updateData: Partial<LeaderboardEntry> = {};
+      
+      // Determine which player slot to assign
+      const runSRCPlayerName = normalizeSRCUsername(run.srcPlayerName);
+      const runSRCPlayer2Name = normalizeSRCUsername(run.srcPlayer2Name);
+      const isCoOp = run.runType === 'co-op';
+      
+      if (runSRCPlayerName === normalizedSrcUsername) {
+        updateData.playerId = userId;
+        updateData.playerName = player.displayName;
       }
       
-      // If run is verified but doesn't have points, we'll calculate them after batch update
-      // For now, just update player assignment
+      if (runSRCPlayer2Name === normalizedSrcUsername && isCoOp) {
+        updateData.player2Id = userId;
+        updateData.player2Name = player.displayName;
+      }
+      
       batch.update(runDocRef, updateData);
       batchCount++;
       
@@ -971,27 +929,13 @@ export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUse
       await batch.commit();
     }
     
-    // For verified runs that don't have points, calculate them now
-    const verifiedRunsWithoutPoints = runsToClaim.filter(run => 
-      run.verified && (run.points === undefined || run.points === null)
-    );
-    
-    if (verifiedRunsWithoutPoints.length > 0) {
-      // Calculate points for runs that need them
-      for (const run of verifiedRunsWithoutPoints) {
+    // Calculate points for verified runs that need them
+    for (const run of runsToClaim) {
+      if (run.verified && (run.points === undefined || run.points === null)) {
         try {
-          // Use updateRunVerificationStatus to calculate points (it will handle already-verified runs)
-          const runDocRef = doc(db, "leaderboardEntries", run.id);
-          const runDocSnap = await getDoc(runDocRef);
-          if (runDocSnap.exists()) {
-            const runData = runDocSnap.data() as LeaderboardEntry;
-            // Only calculate if still missing points (might have been calculated by another process)
-            if (runData.verified && (runData.points === undefined || runData.points === null)) {
-              await updateRunVerificationStatusFirestore(run.id, true, player?.displayName || userId);
-            }
-          }
+          const verifiedBy = player.displayName || player.email || userId;
+          await updateRunVerificationStatusFirestore(run.id, true, verifiedBy);
         } catch (error) {
-          
           result.errors.push(`Failed to calculate points for run ${run.id}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
@@ -999,35 +943,17 @@ export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUse
     
     result.claimed = runsToClaim.length;
     
-    // Recalculate points for the user if any verified runs were claimed
-    const verifiedRunsClaimed = runsToClaim.filter(run => run.verified).length;
-    if (verifiedRunsClaimed > 0) {
+    // Recalculate points for the user
+    if (runsToClaim.length > 0) {
       try {
         await recalculatePlayerPointsFirestore(userId);
       } catch (error) {
-        
         result.errors.push(`Failed to recalculate points: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-    
-    // For co-op runs, also recalculate player2's points if they have a different userId
-    const coOpRuns = runsToClaim.filter(run => run.runType === 'co-op' && run.verified);
-    for (const run of coOpRuns) {
-      if (run.player2Name) {
-        try {
-          const player2 = await getPlayerByDisplayNameFirestore(run.player2Name);
-          if (player2 && player2.uid !== userId) {
-            await recalculatePlayerPointsFirestore(player2.uid);
-          }
-        } catch (error) {
-          
-        }
       }
     }
     
     return result;
   } catch (error) {
-    
     result.errors.push(error instanceof Error ? error.message : String(error));
     return result;
   }
@@ -3054,82 +2980,65 @@ export const getUnassignedRunsFirestore = async (limit: number = 500): Promise<L
 };
 
 /**
- * Get unclaimed runs by SRC username (for claiming imported runs)
- * Only returns verified imported runs - unverified runs must be verified first
+ * Simplified: Get unclaimed runs that match user's SRC username
+ * Only returns verified imported runs where srcPlayerName or srcPlayer2Name matches
  */
 export const getUnclaimedRunsBySRCUsernameFirestore = async (srcUsername: string, currentUserId?: string): Promise<LeaderboardEntry[]> => {
   if (!db || !srcUsername || !srcUsername.trim()) return [];
   try {
     // Try to query with importedFromSRC filter first (requires composite index)
-    // If that fails, fall back to fetching all verified runs and filtering in memory
     let verifiedSnapshot;
     try {
       const qWithImported = query(
         collection(db, "leaderboardEntries"),
         where("verified", "==", true),
         where("importedFromSRC", "==", true),
-        firestoreLimit(1000)
+        firestoreLimit(2000)
       );
       verifiedSnapshot = await getDocs(qWithImported);
     } catch (error: any) {
-      // If composite index doesn't exist, fall back to querying all verified runs
-      // This matches the approach used in autoClaimRunsBySRCUsernameFirestore
+      // Fall back to querying all verified runs
       const q = query(
         collection(db, "leaderboardEntries"),
         where("verified", "==", true),
-        firestoreLimit(1000)
+        firestoreLimit(2000)
       );
       verifiedSnapshot = await getDocs(q);
     }
     
     const allRuns = verifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
     
-    // Use the same normalization function as import and claiming for consistency
+    // Normalize SRC username for matching
     const { normalizeSRCUsername } = await import("@/lib/speedruncom");
     const normalizedSrcUsername = normalizeSRCUsername(srcUsername);
     
-    // Filter runs where srcPlayerName or srcPlayer2Name matches SRC username
-    // Only match by SRC username, not display name
+    // Filter: imported runs, unclaimed, and SRC username matches
     const matchingRuns = allRuns.filter(run => {
-      // Only process imported runs
       if (!run.importedFromSRC) return false;
       
-      // Check if srcPlayerName or srcPlayer2Name exist and are not empty
-      const hasSrcPlayerName = run.srcPlayerName && run.srcPlayerName.trim() !== "";
-      const hasSrcPlayer2Name = run.srcPlayer2Name && run.srcPlayer2Name.trim() !== "";
-      
-      // If neither field exists, skip this run
-      if (!hasSrcPlayerName && !hasSrcPlayer2Name) return false;
-      
-      // Use the same normalization function as import and claiming for consistency
-      const runSRCPlayerName = hasSrcPlayerName ? normalizeSRCUsername(run.srcPlayerName) : "";
-      const runSRCPlayer2Name = hasSrcPlayer2Name ? normalizeSRCUsername(run.srcPlayer2Name) : "";
-      
-      // Match by SRC username only (case-insensitive comparison)
-      const nameMatches = (runSRCPlayerName && runSRCPlayerName === normalizedSrcUsername) ||
-                        (runSRCPlayer2Name && runSRCPlayer2Name === normalizedSrcUsername);
-      
-      if (!nameMatches) return false;
-      
-      // Check if already assigned
+      // Must be unclaimed
       const playerId = run.playerId || "";
+      if (playerId && playerId.trim() !== "") return false;
       if (currentUserId && playerId === currentUserId) return false;
       
-      // Only return unassigned runs (empty/null playerId)
-      return !playerId || playerId.trim() === "";
+      // Check if srcPlayerName or srcPlayer2Name match
+      const runSRCPlayerName = normalizeSRCUsername(run.srcPlayerName);
+      const runSRCPlayer2Name = normalizeSRCUsername(run.srcPlayer2Name);
+      
+      return (runSRCPlayerName && runSRCPlayerName === normalizedSrcUsername) ||
+             (runSRCPlayer2Name && runSRCPlayer2Name === normalizedSrcUsername);
     });
     
     return matchingRuns;
   } catch (error) {
-    
     return [];
   }
 };
 
 /**
- * Claim a run for a user
- * Only allows claiming runs imported from Speedrun.com that match user's SRC username
- * For co-op runs, both players can claim their portion
+ * Simplified claim system: Assign a run to a user if their SRC username matches
+ * Only works for imported runs from Speedrun.com
+ * For co-op runs, assigns to the matching player slot (player1 or player2)
  */
 export const claimRunFirestore = async (runId: string, userId: string): Promise<boolean> => {
   if (!db) return false;
@@ -3138,7 +3047,7 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
     const runDoc = await getDoc(runDocRef);
     
     if (!runDoc.exists()) {
-      return false;
+      throw new Error("Run not found");
     }
     
     const runData = runDoc.data() as LeaderboardEntry;
@@ -3146,314 +3055,76 @@ export const claimRunFirestore = async (runId: string, userId: string): Promise<
     // Get the user's player data
     const player = await getPlayerByUidFirestore(userId);
     if (!player) {
-      
-      return false;
+      throw new Error("Player profile not found");
     }
     
     // Only allow claiming runs imported from Speedrun.com
     if (!runData.importedFromSRC) {
-      throw new Error("Cannot claim run: Only runs imported from Speedrun.com can be claimed. Manual runs are automatically assigned to the submitting user.");
+      throw new Error("Only runs imported from Speedrun.com can be claimed. Manual runs are automatically assigned.");
     }
     
-    // Import normalizeSRCUsername for consistent normalization
-    const { normalizeSRCUsername } = await import("@/lib/speedruncom");
+    // User must have SRC username set
+    if (!player.srcUsername || !player.srcUsername.trim()) {
+      throw new Error("Please set your Speedrun.com username in Settings to claim runs.");
+    }
     
+    // Check if run is already claimed
+    const isUnclaimed = !runData.playerId || runData.playerId.trim() === "";
+    if (!isUnclaimed) {
+      throw new Error("This run is already claimed.");
+    }
+    
+    // Normalize SRC usernames for comparison
+    const { normalizeSRCUsername } = await import("@/lib/speedruncom");
     const normalizedUserSRCUsername = normalizeSRCUsername(player.srcUsername);
-    const normalizedRunPlayerName = (runData.playerName || "").trim().toLowerCase();
-    const normalizedRunPlayer2Name = (runData.player2Name || "").trim().toLowerCase();
-    // Use the same normalization function as import for consistency
+    
+    // Get normalized SRC player names from the run
     const normalizedRunSRCPlayerName = normalizeSRCUsername(runData.srcPlayerName);
     const normalizedRunSRCPlayer2Name = normalizeSRCUsername(runData.srcPlayer2Name);
     
-    // Check if run is unclaimed - simply check if playerId is empty/null
-    const isUnclaimed = !runData.playerId || runData.playerId.trim() === "";
+    // Check if user's SRC username matches either player
+    const matchesPlayer1 = normalizedRunSRCPlayerName && normalizedRunSRCPlayerName === normalizedUserSRCUsername;
+    const matchesPlayer2 = normalizedRunSRCPlayer2Name && normalizedRunSRCPlayer2Name === normalizedUserSRCUsername;
     
-    // Must be unclaimed to claim
-    if (!isUnclaimed) {
-      throw new Error("Cannot claim run: This run is already claimed by another user.");
+    if (!matchesPlayer1 && !matchesPlayer2) {
+      throw new Error(`Your Speedrun.com username "${player.srcUsername}" does not match this run's player.`);
     }
     
-    // Initialize actual SRC player names (will be fetched if needed)
-    let actualSRCPlayerName = normalizedRunSRCPlayerName;
-    let actualSRCPlayer2Name = normalizedRunSRCPlayer2Name;
-    
-    // SRC username is required for claiming imported runs
-    if (!normalizedUserSRCUsername) {
-      throw new Error("Cannot claim imported run: You need to set your Speedrun.com username in Settings. Go to Settings > Profile Information and enter your exact Speedrun.com username.");
-    }
-    
-    // If srcPlayerName is "Unknown" or empty but srcPlayerId exists, fetch from SRC API
-    // Use the same fetchPlayerById function and normalization as during import
-    if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && runData.srcPlayerId) {
-      try {
-        
-        const { fetchPlayerById } = await import("@/lib/speedruncom");
-        const fetchedName = await fetchPlayerById(runData.srcPlayerId);
-        if (fetchedName) {
-          // Use the same normalization function as import for consistency
-          actualSRCPlayerName = normalizeSRCUsername(fetchedName);
-          
-        } else {
-          
-        }
-      } catch (error) {
-        
-        // Continue with "Unknown" - will fail validation below with helpful error
-      }
-    }
-    
-    // Fallback: If srcPlayerName is "Unknown" but playerName might have the actual SRC username
-    // This can happen if the run was imported and playerName was set correctly but srcPlayerName wasn't
-    // Use the same normalization function for consistency
-    if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && runData.playerName && 
-        normalizeSRCUsername(runData.playerName) !== "unknown" && 
-        normalizeSRCUsername(runData.playerName) === normalizedUserSRCUsername) {
-      
-      actualSRCPlayerName = normalizeSRCUsername(runData.playerName);
-    }
-    
-    if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && !runData.srcPlayerId) {
-      // Run has "Unknown" player name but no srcPlayerId
-    }
-    
-    if ((!actualSRCPlayer2Name || actualSRCPlayer2Name === "unknown") && runData.srcPlayer2Id) {
-      try {
-        
-        const { fetchPlayerById } = await import("@/lib/speedruncom");
-        const fetchedName = await fetchPlayerById(runData.srcPlayer2Id);
-        if (fetchedName) {
-          // Use the same normalization function as import for consistency
-          actualSRCPlayer2Name = normalizeSRCUsername(fetchedName);
-          
-        } else {
-          
-        }
-      } catch (error) {
-        
-      }
-    }
-    
-    // Fallback: If srcPlayer2Name is "Unknown" but player2Name might have the actual SRC username
-    // Use the same normalization function for consistency
-    if ((!actualSRCPlayer2Name || actualSRCPlayer2Name === "unknown") && runData.player2Name && 
-        normalizeSRCUsername(runData.player2Name) !== "unknown" && 
-        normalizeSRCUsername(runData.player2Name) === normalizedUserSRCUsername) {
-      
-      actualSRCPlayer2Name = normalizeSRCUsername(runData.player2Name);
-    }
-    
-    const srcNameMatches = actualSRCPlayerName === normalizedUserSRCUsername ||
-                          (actualSRCPlayer2Name && actualSRCPlayer2Name === normalizedUserSRCUsername);
-    
-    if (!srcNameMatches) {
-      // If we couldn't fetch the name and srcPlayerId exists, provide more helpful error
-      if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && runData.srcPlayerId) {
-        throw new Error(`Cannot claim run: Your Speedrun.com username "${player.srcUsername}" does not match this run's player. The run's player name could not be fetched from Speedrun.com (ID: ${runData.srcPlayerId}). Please contact an admin or try again later.`);
-      }
-      
-      // If srcPlayerId doesn't exist, the run might have been imported incorrectly
-      if ((!actualSRCPlayerName || actualSRCPlayerName === "unknown") && !runData.srcPlayerId) {
-        throw new Error(`Cannot claim run: This run was imported from Speedrun.com but is missing player information. The run shows player name "Unknown" and has no player ID. Please contact an admin to fix this run.`);
-      }
-      
-      const displayName1 = actualSRCPlayerName && actualSRCPlayerName !== "unknown" ? actualSRCPlayerName : (runData.srcPlayerName || 'Unknown');
-      const displayName2 = actualSRCPlayer2Name && actualSRCPlayer2Name !== "unknown" ? actualSRCPlayer2Name : (runData.srcPlayer2Name || 'Unknown');
-      throw new Error(`Cannot claim run: Your Speedrun.com username "${player.srcUsername}" does not match this run's player name "${displayName1 || displayName2 || 'Unknown'}". Make sure your SRC username in Settings matches exactly (case-sensitive).`);
-    }
-    
-    const oldPlayerId = runData.playerId;
-    const oldPlayer2Id = runData.player2Id;
-    
-    // Determine if this is a co-op run and which player is claiming
+    // Determine which player slot to assign
     const isCoOp = runData.runType === 'co-op';
-    
-    // Use the actual SRC player names (fetched if needed)
-    let checkSRCPlayerName = normalizedRunSRCPlayerName;
-    let checkSRCPlayer2Name = normalizedRunSRCPlayer2Name;
-    // Use the actual names we fetched (or original if they were valid)
-    if (actualSRCPlayerName && actualSRCPlayerName !== "unknown") {
-      checkSRCPlayerName = actualSRCPlayerName;
-    }
-    if (actualSRCPlayer2Name && actualSRCPlayer2Name !== "unknown") {
-      checkSRCPlayer2Name = actualSRCPlayer2Name;
-    }
-    
-    const isPlayer1 = checkSRCPlayerName === normalizedUserSRCUsername;
-    const isPlayer2 = checkSRCPlayer2Name === normalizedUserSRCUsername;
-    
-    // Update the run with the new playerId(s) and player names
     const updateData: Partial<LeaderboardEntry> = {};
     
-    if (isCoOp) {
-      // For co-op runs, update the appropriate player slot
-      if (isPlayer1) {
-        updateData.playerId = userId;
-        // Update playerName to the player's displayName
-        updateData.playerName = player.displayName;
-      }
-      if (isPlayer2) {
-        updateData.player2Id = userId;
-        // Player2 is claiming - update player2Name to their displayName
-        updateData.player2Name = player.displayName;
-      } else if (isPlayer1) {
-        // Player1 is claiming, but player2 might exist - try to find player2's profile by SRC username
-        if (runData.srcPlayer2Name && runData.srcPlayer2Name.trim() !== '') {
-          // Try to find player2 by matching their SRC username
-          const allPlayers = await getDocs(collection(db, "players"));
-          const player2Match = allPlayers.docs.find(doc => {
-            const p = doc.data();
-            return normalizeSRCUsername(p.srcUsername) === checkSRCPlayer2Name;
-          });
-          if (player2Match) {
-            updateData.player2Name = player2Match.data().displayName;
-          }
-        }
-      }
-      // If both players are claiming, update both
-      if (isPlayer1 && isPlayer2) {
-        updateData.playerId = userId;
-        updateData.player2Id = userId;
-        updateData.playerName = player.displayName;
-        updateData.player2Name = player.displayName; // Same player claiming both slots
-      }
-    } else {
-      // For solo runs, update playerId and playerName
+    if (matchesPlayer1) {
       updateData.playerId = userId;
       updateData.playerName = player.displayName;
     }
     
-    // Update player assignment and names
+    if (matchesPlayer2 && isCoOp) {
+      updateData.player2Id = userId;
+      updateData.player2Name = player.displayName;
+    }
+    
+    // Update the run
     await updateDoc(runDocRef, updateData);
     
-    // Refresh runData to get the updated playerId before verification
-    const updatedRunDoc = await getDoc(runDocRef);
-    if (updatedRunDoc.exists()) {
-      Object.assign(runData, updatedRunDoc.data());
-    }
-    
-    // If run is not verified, verify it now (claiming verifies the run)
+    // If run is not verified, verify it now
     if (!runData.verified) {
-      // Get the user's display name for verifiedBy
       const verifiedBy = player.displayName || player.email || userId;
-      
-      // Verify the run (this will calculate points and rank now that it's claimed)
-      const verificationSuccess = await updateRunVerificationStatusFirestore(runId, true, verifiedBy);
-      if (!verificationSuccess) {
-        
-        // Continue anyway - the run is still assigned to the user
-      }
-      
-      // Refresh runData after verification to get updated points/rank
-      const updatedRunDoc = await getDoc(runDocRef);
-      if (updatedRunDoc.exists()) {
-        Object.assign(runData, updatedRunDoc.data());
-      }
+      await updateRunVerificationStatusFirestore(runId, true, verifiedBy);
     } else {
-      // Run is already verified - ensure it has points calculated
-      // Refresh runData to get current state
+      // Run is verified - ensure points are calculated
       const updatedRunDoc = await getDoc(runDocRef);
       if (updatedRunDoc.exists()) {
-        Object.assign(runData, updatedRunDoc.data());
-      }
-      
-      // If run doesn't have points, calculate them now
-      if (runData.verified && (runData.points === undefined || runData.points === null)) {
-        // Calculate points for the verified run
-        let categoryName = runData.srcCategoryName || "Unknown";
-        let platformName = runData.srcPlatformName || "Unknown";
-        
-        // Try to fetch category/platform by ID if they exist
-        if (runData.category && runData.category.trim() !== "") {
-          try {
-            const categoryDocSnap = await getDoc(doc(db, "categories", runData.category));
-            if (categoryDocSnap?.exists()) {
-              categoryName = categoryDocSnap.data().name || categoryName;
-            }
-          } catch (error) {
-            
-          }
+        const updatedRunData = updatedRunDoc.data() as LeaderboardEntry;
+        if (updatedRunData.verified && (updatedRunData.points === undefined || updatedRunData.points === null)) {
+          const verifiedBy = player.displayName || player.email || userId;
+          await updateRunVerificationStatusFirestore(runId, true, verifiedBy);
         }
-        
-        if (runData.platform && runData.platform.trim() !== "") {
-          try {
-            const platformDocSnap = await getDoc(doc(db, "platforms", runData.platform));
-            if (platformDocSnap?.exists()) {
-              platformName = platformDocSnap.data().name || platformName;
-            }
-          } catch (error) {
-            
-          }
-        }
-        
-        // Calculate rank
-        const leaderboardType = runData.leaderboardType || 'regular';
-        const currentRunWithVerified: LeaderboardEntry = { ...runData, id: runId, verified: true };
-        const rankMap = await calculateRanksForGroup(
-          leaderboardType,
-          runData.category,
-          runData.platform,
-          (runData.runType || 'solo') as 'solo' | 'co-op',
-          runData.level,
-          currentRunWithVerified
-        );
-        
-        let rank: number | undefined = undefined;
-        if (!runData.isObsolete) {
-          const calculatedRank = rankMap.get(runId);
-          rank = normalizeRank(calculatedRank);
-        }
-        
-        // Calculate points
-        const points = calculatePoints(
-          runData.time,
-          categoryName,
-          platformName,
-          runData.category,
-          runData.platform,
-          rank,
-          runData.runType as 'solo' | 'co-op' | undefined
-        );
-        
-        // Update run with points and rank
-        const pointsUpdateData: { points: number; rank?: number | ReturnType<typeof deleteField> } = { points };
-        if (rank !== undefined) {
-          pointsUpdateData.rank = rank;
-        } else {
-          pointsUpdateData.rank = deleteField();
-        }
-        await updateDoc(runDocRef, pointsUpdateData);
-        
-        // Update runData with calculated points
-        runData.points = points;
-        runData.rank = rank;
       }
     }
     
-    // Recalculate points for affected players
-    const playerIds: string[] = [];
-    
-    // Always add the claiming user (run is now verified and assigned)
-    if (userId && userId.trim() !== "") {
-      playerIds.push(userId);
-    }
-    
-    // For co-op runs, also add player2 if they're different
-    if (isCoOp && updateData.player2Id && updateData.player2Id !== userId && updateData.player2Id.trim() !== "") {
-      playerIds.push(updateData.player2Id);
-    }
-    
-    // Add old player(s) if they had accounts (for points recalculation)
-    if (oldPlayerId && oldPlayerId !== userId && oldPlayerId.trim() !== "") {
-      playerIds.push(oldPlayerId);
-    }
-    if (oldPlayer2Id && oldPlayer2Id !== userId && oldPlayer2Id !== updateData.player2Id && oldPlayer2Id.trim() !== "") {
-      playerIds.push(oldPlayer2Id);
-    }
-    
-    // Recalculate points for all affected players
-    if (playerIds.length > 0) {
-      await recalculatePointsForPlayers(playerIds, runData);
-    }
+    // Recalculate points for the user
+    await recalculatePointsForPlayers([userId], runData);
     
     return true;
   } catch (error) {
