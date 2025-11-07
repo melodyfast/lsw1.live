@@ -364,6 +364,45 @@ const UserSettings = () => {
     }
   };
 
+  const handleClaimAllRuns = async () => {
+    if (!currentUser?.uid || !srcUsername) return;
+    
+    try {
+      // Use autoClaimRunsBySRCUsername which claims all matching runs
+      const { autoClaimRunsBySRCUsername } = await import("@/lib/db");
+      const result = await autoClaimRunsBySRCUsername(currentUser.uid, srcUsername);
+      
+      if (result.claimed > 0) {
+        toast({
+          title: "Runs Claimed",
+          description: `Successfully claimed ${result.claimed} run${result.claimed === 1 ? '' : 's'}!`,
+        });
+        // Refresh unclaimed runs list
+        fetchUnclaimedSRCRuns(srcUsername);
+      } else {
+        toast({
+          title: "No Runs to Claim",
+          description: "No unclaimed runs found matching your SRC username.",
+        });
+      }
+      
+      if (result.errors.length > 0) {
+        console.error("Claim errors:", result.errors);
+        toast({
+          title: "Some Errors Occurred",
+          description: `${result.errors.length} error${result.errors.length === 1 ? '' : 's'} occurred while claiming runs.`,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to claim runs.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (authLoading || pageLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-[hsl(240,21%,15%)] to-[hsl(235,19%,13%)] text-ctp-text flex items-center justify-center">
@@ -385,14 +424,16 @@ const UserSettings = () => {
           </p>
         </div>
 
-        {/* Profile Settings */}
-        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-ctp-text">
-              Profile Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        {/* Profile Settings and Claim Runs - Side by Side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Profile Information */}
+          <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-ctp-text">
+                Profile Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
             <form onSubmit={handleUpdateProfile} className="space-y-4">
               <div>
                 <Label>Profile Picture</Label>
@@ -589,76 +630,8 @@ const UserSettings = () => {
           </CardContent>
         </Card>
 
-        {/* Email Settings */}
-        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-ctp-text">
-              Change Email
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleUpdateEmail} className="space-y-4">
-              <div>
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                />
-              </div>
-              <Button type="submit" className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold">
-                Update Email
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        {/* Password Settings */}
-        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-ctp-text">
-              Change Password
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleUpdatePassword} className="space-y-4">
-              <div>
-                <Label htmlFor="newPassword">New Password</Label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                />
-                <p className="text-xs text-[hsl(222,15%,60%)] mt-1">
-                  Password must be at least 8 characters with uppercase, lowercase, and a number.
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
-                />
-              </div>
-              <Button type="submit" className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold">
-                Update Password
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
         {/* Claim Runs */}
-        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
+        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-ctp-text">
               Claim Your Runs
@@ -672,7 +645,19 @@ const UserSettings = () => {
             {/* SRC Username Runs */}
             {srcUsername && (
               <>
-                <h3 className="text-sm font-semibold text-ctp-text mb-4 mt-4">Runs imported from Speedrun.com ({srcUsername})</h3>
+                <div className="flex items-center justify-between mb-4 mt-4">
+                  <h3 className="text-sm font-semibold text-ctp-text">Runs imported from Speedrun.com ({srcUsername})</h3>
+                  {unclaimedSRCRuns.length > 0 && (
+                    <Button
+                      onClick={handleClaimAllRuns}
+                      className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold"
+                      disabled={loadingSRCUnclaimed}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Claim All Runs ({unclaimedSRCRuns.length})
+                    </Button>
+                  )}
+                </div>
                 {loadingSRCUnclaimed ? (
                   <div className="text-center py-4">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#cba6f7] mx-auto"></div>
@@ -802,6 +787,75 @@ const UserSettings = () => {
                 Set your Speedrun.com username above to find unclaimed runs imported from Speedrun.com.
               </p>
             )}
+          </CardContent>
+        </Card>
+        </div>
+
+        {/* Email Settings */}
+        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-ctp-text">
+              Change Email
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpdateEmail} className="space-y-4">
+              <div>
+                <Label htmlFor="email">Email Address</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                />
+              </div>
+              <Button type="submit" className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold">
+                Update Email
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Password Settings */}
+        <Card className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)] mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-ctp-text">
+              Change Password
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div>
+                <Label htmlFor="newPassword">New Password</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                />
+                <p className="text-xs text-[hsl(222,15%,60%)] mt-1">
+                  Password must be at least 8 characters with uppercase, lowercase, and a number.
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  className="bg-[hsl(240,21%,15%)] border-[hsl(235,13%,30%)]"
+                />
+              </div>
+              <Button type="submit" className="bg-[#cba6f7] hover:bg-[#b4a0e2] text-[hsl(240,21%,15%)] font-bold">
+                Update Password
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </div>

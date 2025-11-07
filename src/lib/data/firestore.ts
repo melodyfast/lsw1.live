@@ -959,26 +959,94 @@ export const autoClaimRunsBySRCUsernameFirestore = async (userId: string, srcUse
     // We'll process them all and match by SRC username
     const allRuns: LeaderboardEntry[] = [];
     
-    // Get verified runs
+    // Get verified runs - fetch ALL runs by paginating through results
     try {
-      const verifiedQuery = query(collection(db, "leaderboardEntries"), where("verified", "==", true), firestoreLimit(5000));
-      const verifiedSnapshot = await getDocs(verifiedQuery);
-      verifiedSnapshot.docs.forEach(doc => {
-        allRuns.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
-      });
+      let verifiedSnapshot;
+      let lastDoc = null;
+      do {
+        let verifiedQuery;
+        if (lastDoc) {
+          verifiedQuery = query(
+            collection(db, "leaderboardEntries"), 
+            where("verified", "==", true),
+            orderBy("__name__"),
+            startAfter(lastDoc),
+            firestoreLimit(5000)
+          );
+        } else {
+          verifiedQuery = query(
+            collection(db, "leaderboardEntries"), 
+            where("verified", "==", true),
+            orderBy("__name__"),
+            firestoreLimit(5000)
+          );
+        }
+        verifiedSnapshot = await getDocs(verifiedQuery);
+        verifiedSnapshot.docs.forEach(doc => {
+          allRuns.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
+        });
+        if (verifiedSnapshot.docs.length > 0) {
+          lastDoc = verifiedSnapshot.docs[verifiedSnapshot.docs.length - 1];
+        } else {
+          lastDoc = null;
+        }
+      } while (verifiedSnapshot.docs.length === 5000 && lastDoc);
     } catch (error) {
-      // Continue
+      // If orderBy fails, fall back to simple query with limit
+      try {
+        const verifiedQuery = query(collection(db, "leaderboardEntries"), where("verified", "==", true), firestoreLimit(10000));
+        const verifiedSnapshot = await getDocs(verifiedQuery);
+        verifiedSnapshot.docs.forEach(doc => {
+          allRuns.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
+        });
+      } catch (error2) {
+        // Continue
+      }
     }
     
-    // Get unverified runs too (they'll be claimed when verified)
+    // Get unverified runs too (they'll be claimed when verified) - fetch ALL runs
     try {
-      const unverifiedQuery = query(collection(db, "leaderboardEntries"), where("verified", "==", false), firestoreLimit(5000));
-      const unverifiedSnapshot = await getDocs(unverifiedQuery);
-      unverifiedSnapshot.docs.forEach(doc => {
-        allRuns.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
-      });
+      let unverifiedSnapshot;
+      let lastDoc = null;
+      do {
+        let unverifiedQuery;
+        if (lastDoc) {
+          unverifiedQuery = query(
+            collection(db, "leaderboardEntries"), 
+            where("verified", "==", false),
+            orderBy("__name__"),
+            startAfter(lastDoc),
+            firestoreLimit(5000)
+          );
+        } else {
+          unverifiedQuery = query(
+            collection(db, "leaderboardEntries"), 
+            where("verified", "==", false),
+            orderBy("__name__"),
+            firestoreLimit(5000)
+          );
+        }
+        unverifiedSnapshot = await getDocs(unverifiedQuery);
+        unverifiedSnapshot.docs.forEach(doc => {
+          allRuns.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
+        });
+        if (unverifiedSnapshot.docs.length > 0) {
+          lastDoc = unverifiedSnapshot.docs[unverifiedSnapshot.docs.length - 1];
+        } else {
+          lastDoc = null;
+        }
+      } while (unverifiedSnapshot.docs.length === 5000 && lastDoc);
     } catch (error) {
-      // Continue - non-admin users might not have permission
+      // If orderBy fails, fall back to simple query with limit
+      try {
+        const unverifiedQuery = query(collection(db, "leaderboardEntries"), where("verified", "==", false), firestoreLimit(10000));
+        const unverifiedSnapshot = await getDocs(unverifiedQuery);
+        unverifiedSnapshot.docs.forEach(doc => {
+          allRuns.push({ id: doc.id, ...doc.data() } as LeaderboardEntry);
+        });
+      } catch (error2) {
+        // Continue - non-admin users might not have permission
+      }
     }
     
     console.log(`[AutoClaim] Searching ${allRuns.length} total runs for SRC username: ${searchUsername}`);
