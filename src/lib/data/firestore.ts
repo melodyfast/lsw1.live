@@ -187,11 +187,31 @@ export const getLeaderboardEntriesFirestore = async (
       .map(doc => {
         const data = doc.data();
         
+        // Debug: Log raw data for IL queries
+        if (leaderboardType === 'individual-level') {
+          console.debug(`[getLeaderboardEntriesFirestore] Raw doc ${doc.id}:`, {
+            leaderboardType: data.leaderboardType,
+            level: data.level,
+            verified: data.verified,
+            category: data.category,
+            platform: data.platform,
+          });
+        }
+        
         // Normalize the entry data
         const normalized = normalizeLeaderboardEntry({ 
           id: doc.id, 
           ...data 
         } as LeaderboardEntry);
+        
+        // Debug: Log normalized data for IL queries
+        if (leaderboardType === 'individual-level') {
+          console.debug(`[getLeaderboardEntriesFirestore] Normalized doc ${doc.id}:`, {
+            leaderboardType: normalized.leaderboardType,
+            level: normalized.level,
+            verified: normalized.verified,
+          });
+        }
         
         // Ensure id is always present
         return {
@@ -200,14 +220,23 @@ export const getLeaderboardEntriesFirestore = async (
         } as LeaderboardEntry;
       })
       .filter(entry => {
+        // Debug: Track filtering for IL queries
+        const isILQuery = leaderboardType === 'individual-level';
+        
         // Validate entry
         const validation = validateLeaderboardEntry(entry);
         if (!validation.valid) {
+          if (isILQuery) {
+            console.debug(`[getLeaderboardEntriesFirestore] Filtering out IL run ${entry.id}: validation failed:`, validation.errors);
+          }
           return false;
         }
         
         // Ensure entry is verified (double-check, though query already filters this)
         if (entry.verified !== true) {
+          if (isILQuery) {
+            console.debug(`[getLeaderboardEntriesFirestore] Filtering out IL run ${entry.id}: not verified (verified=${entry.verified})`);
+          }
           return false;
         }
         
@@ -233,9 +262,16 @@ export const getLeaderboardEntriesFirestore = async (
           
           // IL runs must have a level field
           if (!entry.level || entry.level.trim() === '') {
-            console.debug(`[getLeaderboardEntriesFirestore] Filtering out IL run ${entry.id}: missing level field`);
+            console.debug(`[getLeaderboardEntriesFirestore] Filtering out IL run ${entry.id}: missing level field (level='${entry.level}')`);
             return false;
           }
+          
+          // Debug: Log successful IL run
+          console.debug(`[getLeaderboardEntriesFirestore] IL run ${entry.id} passed all filters:`, {
+            leaderboardType: entry.leaderboardType,
+            level: entry.level,
+            verified: entry.verified,
+          });
         }
         
         // For community-golds queries: ensure entry is actually a community-golds run
