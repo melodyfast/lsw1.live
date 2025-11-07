@@ -177,7 +177,13 @@ export const getLeaderboardEntriesFirestore = async (
     
     // Debug logging for IL queries
     if (leaderboardType === 'individual-level') {
-      console.debug(`[getLeaderboardEntriesFirestore] IL query found ${querySnapshot.size} documents before filtering`);
+      console.debug(`[getLeaderboardEntriesFirestore] IL query found ${querySnapshot.size} documents before filtering`, {
+        categoryId: normalizedCategoryId,
+        platformId: normalizedPlatformId,
+        levelId: normalizedLevelId,
+        runType,
+        constraints: constraints.length
+      });
     }
     
     // Normalize and validate entries
@@ -264,12 +270,18 @@ export const getLeaderboardEntriesFirestore = async (
             return false;
           }
           
-          // Debug: Log successful IL run
-          console.debug(`[getLeaderboardEntriesFirestore] IL run ${entry.id} passed all filters:`, {
-            leaderboardType: entry.leaderboardType,
-            level: entry.level,
-            verified: entry.verified,
-          });
+          // Debug: Log successful IL run (only log first few to avoid spam)
+          if (querySnapshot.size <= 10 || Math.random() < 0.1) {
+            console.debug(`[getLeaderboardEntriesFirestore] IL run ${entry.id} passed all filters:`, {
+              leaderboardType: entry.leaderboardType,
+              level: entry.level,
+              verified: entry.verified,
+              category: entry.category,
+              platform: entry.platform,
+              srcCategoryName: entry.srcCategoryName,
+              srcPlatformName: entry.srcPlatformName,
+            });
+          }
         }
         
         // For community-golds queries: ensure entry is actually a community-golds run
@@ -4926,15 +4938,33 @@ export const getUnclaimedImportedRunsFirestore = async (): Promise<LeaderboardEn
   if (!db) return [];
   
   try {
-    // Query for all imported runs
-    const q = query(
+    // Query for verified imported runs (unclaimed verified runs)
+    const verifiedQuery = query(
       collection(db, "leaderboardEntries"),
+      where("verified", "==", true),
       where("importedFromSRC", "==", true),
       firestoreLimit(5000)
     );
     
-    const querySnapshot = await getDocs(q);
-    const allImportedRuns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry));
+    // Query for unverified imported runs (all unverified imported runs are unclaimed)
+    const unverifiedQuery = query(
+      collection(db, "leaderboardEntries"),
+      where("verified", "==", false),
+      where("importedFromSRC", "==", true),
+      firestoreLimit(5000)
+    );
+    
+    // Fetch both queries in parallel
+    const [verifiedSnapshot, unverifiedSnapshot] = await Promise.all([
+      getDocs(verifiedQuery),
+      getDocs(unverifiedQuery)
+    ]);
+    
+    // Combine all imported runs
+    const allImportedRuns = [
+      ...verifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry)),
+      ...unverifiedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaderboardEntry))
+    ];
     
     // Filter for runs that are missing playerId (unclaimed)
     const unclaimedRuns = allImportedRuns.filter(run => {

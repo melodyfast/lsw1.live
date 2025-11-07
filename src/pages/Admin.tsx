@@ -294,7 +294,11 @@ const Admin = () => {
         }
       };
       fetchImportedRuns();
+      
+      // Also fetch unclaimed runs when switching to SRC Tools tab
+      fetchUnclaimedRuns();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, importedRunsLeaderboardType]);
 
   // Fetch categories for level management when levelLeaderboardType changes
